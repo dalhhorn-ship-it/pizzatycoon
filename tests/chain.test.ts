@@ -96,11 +96,11 @@ describe('opening another restaurant', () => {
   test('a better manager serves more guests and runs a tighter kitchen (before their higher wage)', () => {
     const run = (skill: number): { covers: number; gross: number; waste: number } => {
       const s = established();
-      // Still building its following, so extra guests find a free table.
-      s.rep = 35;
-      s.following = 0.4;
       s.staff.push(manager(900, skill));
       let t = apply(s, { type: 'openRestaurant', venueId: other }).state;
+      // Still building its following, so extra guests find a free table.
+      t.branches[0]!.rep = 35;
+      t.branches[0]!.following = 0.4;
       for (let i = 0; i < 7; i++) t = apply(t, { type: 'runDay' }, { noise: false }).state;
       const week = t.branches[0]!.history.slice(-7);
       return {
@@ -161,4 +161,17 @@ test('fast forward keeps going while the new restaurant is being set up', () => 
   const ev = apply(t, { type: 'runWeek' }).events.find((e) => e.kind === 'weekCompleted');
   expect(ev?.reports).toHaveLength(7);
   expect(ev?.reports?.every((r) => (r.branches?.[0]?.covers ?? 0) > 0)).toBe(true);
+});
+
+test('opening another restaurant needs reputation 50 at a restaurant you run', () => {
+  const s = established();
+  s.staff.push(manager(900, 6));
+  s.rep = 45;
+  expect(apply(s, { type: 'openRestaurant', venueId: other }).error).toMatch(/reputation 50/);
+  s.rep = 50;
+  const t = apply(s, { type: 'openRestaurant', venueId: other });
+  expect(t.error).toBeUndefined();
+  // The new place starts at 30, but the first restaurant still counts for a third one.
+  t.state.staff.push(manager(901, 5));
+  expect(apply(t.state, { type: 'openRestaurant', venueId: 'marketHall' }).error).toBeUndefined();
 });

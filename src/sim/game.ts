@@ -16,7 +16,7 @@ import { type DayOptions, simulateDay } from './day';
 import { buyPrice, clampEconomy, type Economy, economyOf, sellPrice, startFollowing } from './economy';
 import { autoLayout, bestSpot, kitchenDims, layoutProblem, rectOf } from './kitchen';
 import { locationFacts } from './location';
-import { applyLocation, extractLocation, locationName, managerOf, ownedVenues, runBranchDay } from './chain';
+import { applyLocation, bestRep, extractLocation, locationName, managerOf, ownedVenues, runBranchDay } from './chain';
 import { Rng } from './rng';
 import { type DayReport, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION, type Staff } from './state';
 
@@ -655,6 +655,9 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       if (!venue) return fail(input, 'Unknown venue.');
       if (ownedVenues(state).has(venue.id)) return fail(input, 'You already run a restaurant here.');
       const here = locationName(state);
+      if (bestRep(state) < T.manager.openRep) {
+        return fail(input, `Build your name first: opening another restaurant needs reputation ${T.manager.openRep} at one you run (now ${Math.floor(bestRep(state))}).`);
+      }
       if (!managerOf(state.staff)) return fail(input, `Hire a restaurant manager for ${here} first, so it keeps running while you open the new one.`);
       const deposit = venueDeposit(venue.id);
       if (state.cash < deposit) return fail(input, `The deposit is ${money0(deposit)}; you need ${money0(deposit - state.cash)} more.`);

@@ -49,6 +49,11 @@ export function applyLocation(state: GameState, loc: Location): void {
   state.locationId = loc.id;
 }
 
+/** Best reputation among the restaurants the player owns: the gate for opening another (prd.md 5.12). */
+export function bestRep(state: GameState): number {
+  return Math.max(state.rep, ...state.branches.map((b) => b.rep));
+}
+
 /** Every venue the player rents right now. */
 export function ownedVenues(state: GameState): Set<string> {
   return new Set([state.venueId, ...state.branches.map((b) => b.venueId)].filter((v): v is string => !!v));

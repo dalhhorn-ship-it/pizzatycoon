@@ -650,4 +650,6 @@ A frugal manager buys 5% cheaper. Without a manager (caretaker mode): 20% fewer 
 
 **Each day** every managed restaurant runs the same day model with those effects (its own randomness, no loan interest). Sales and daily costs settle into the shared cash; wages and rent on Sunday. Its reputation, following, days open and last 28 days of reports update. Staff at a managed restaurant do not grow or change morale yet. The day and week reports list the other restaurants; "Run a week" no longer stops for a closed day when other restaurants are earning.
 
-Not in this slice (prd.md 5.9): manager policies (strategy, price band, tier floor), manager pricing, hiring and equipment proposals, weekly manager report card, Rep 50 gate for opening, cannibalisation in the same district, chain menu and central purchasing.
+Not in this slice (prd.md 5.9): manager policies (strategy, price band, tier floor), manager pricing, hiring and equipment proposals, weekly manager report card, cannibalisation in the same district, chain menu and central purchasing.
+
+**Reputation gate** (`T.manager.openRep`, prd.md 5.12): opening another restaurant needs reputation 50 (2.5 stars) at a restaurant you already run. The city map says so and shows your current reputation. Measured at fair prices: the cheapest opening in Canal Quarter reaches 50 on day 17, a cosy starter on day 12. Reputation still climbs generously for an average restaurant (it settles around 65); tightening that would make this gate take longer.

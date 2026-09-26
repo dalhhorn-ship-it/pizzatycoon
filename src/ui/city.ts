@@ -5,7 +5,7 @@ import { SEGMENTS, SEGMENT_IDS } from '../data/segments';
 import type { SegmentId, Venue } from '../data/types';
 import { T } from '../data/tunables';
 import { VENUES } from '../data/venues';
-import { CARETAKER_TEXT, locationName, managerOf, ownedVenues } from '../sim/chain';
+import { bestRep, CARETAKER_TEXT, locationName, managerOf, ownedVenues } from '../sim/chain';
 import { moveQuote, seatLimit, venueDeposit } from '../sim/game';
 import { bestFor, type LocationFacts, locationFacts, stateLocation } from '../sim/location';
 import type { GameState } from '../sim/state';
@@ -309,14 +309,19 @@ export class CityView {
     const deposit = venueDeposit(v.id);
     const manager = managerOf(state.staff);
     const short = state.cash < deposit;
+    const rep = bestRep(state);
+    const repOk = rep >= T.manager.openRep;
     return h('div', { class: 'stack', style: 'margin-top:10px' },
       h('h3', null, 'Or open it as a new restaurant'),
       h('div', { class: 'small muted' }, `Keep ${locationName(state)} and open here as well. The new place starts empty, with your recipes and menu. Deposit ${money(deposit)}; the rest comes from shared cash.`),
+      repOk
+        ? null
+        : h('div', { class: 'small warn' }, `Build your name first: you need reputation ${T.manager.openRep} (${(T.manager.openRep / 20).toFixed(1)} stars) at a restaurant you run before a landlord takes you on for a second one. Now ${Math.floor(rep)}.`),
       manager
         ? h('div', { class: 'small good' }, `${manager.name} (skill ${manager.skill}) will run ${locationName(state)} while you are here.`)
         : h('div', { class: 'small warn' }, `First hire a restaurant manager for ${locationName(state)} in the Staff tab, to keep it running while you are away.`),
       short ? h('div', { class: 'small bad' }, `You need ${money(deposit - state.cash)} more cash.`) : null,
-      h('button', { disabled: !manager || short, onclick: () => ctx.onOpen?.(v.id) }, 'Open a new restaurant here'));
+      h('button', { disabled: !repOk || !manager || short, onclick: () => ctx.onOpen?.(v.id) }, 'Open a new restaurant here'));
   }
 }
 

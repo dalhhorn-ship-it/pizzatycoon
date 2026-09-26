@@ -278,6 +278,8 @@ export const T = {
     caretakerWaste: 1.5,
     /** A frugal manager buys 5% cheaper. */
     frugalIngredients: 0.95,
+    /** Opening another restaurant needs this reputation at one you already run (prd.md 5.12). */
+    openRep: 50,
     /** Manager candidates on the weekly board: skill range. */
     candidateSkill: [3, 9] as readonly [number, number],
   },
