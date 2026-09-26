@@ -13,6 +13,7 @@ import type { EquipmentItem, MainKind, Role } from '../data/types';
 import { ADDONS, addonEffectText, UPGRADE_PATHS } from '../data/addons';
 import { T } from '../data/tunables';
 import { analyse, roomStats } from '../sim/analysis';
+import { wineListScore } from '../sim/day';
 import { addonProblem, type Command, fireSafetyUnlocked, isUnlocked, seatLimit, loanPayment, RANK_NAMES, suppliersFor, tiersFor, unlockText } from '../sim/game';
 import { buyPrice, sellPrice } from '../sim/economy';
 import { kitchenDims, layoutProblem } from '../sim/kitchen';
@@ -179,8 +180,10 @@ export function menuPanel(ctx: PanelCtx): HTMLElement {
 /** The bar's share of the bill (balance.md 4.7): wine list, aperitivi and digestivi. */
 function barCard(state: GameState): HTMLElement {
   const on = state.recipes.filter((r) => r.onMenu);
-  const wines = on.filter((r) => WINE_IDS.has(r.id)).length;
+  const wineList = on.filter((r) => WINE_IDS.has(r.id));
+  const wines = wineList.length;
   const second = Math.min(T.attach.wineListCap, T.attach.wineListPerWine * Math.max(0, wines - 1));
+  const score = wineListScore(wineList, analyse(state));
   const has = (k: Recipe['kind']): boolean => on.some((r) => r.kind === k);
   const last = [...state.history].reverse().find((d) => d.open);
   let barSales = 0;
@@ -194,10 +197,14 @@ function barCard(state: GameState): HTMLElement {
       : null),
     h('div', { class: 'kv' },
       h('span', null, 'Wines on the list'), h('b', { class: second > 0 ? 'good' : '' }, `${wines}${second > 0 ? ` · +${Math.round(second * 100)}% second glasses` : ''}`),
+      h('span', null, 'Wine list score'), h('b', { class: score > 0 ? 'good' : '' }, score > 0
+        ? `${Math.round(score * 100)}% · +${Math.round((T.attach.wineDemand.foodies ?? 0) * score * 100)}% foodies · tastier meals`
+        : 'add a second wine'),
       h('span', null, 'Aperitivi'), h('b', null, has('aperitivo') ? 'on the menu' : 'none yet'),
       h('span', null, 'Digestivi and coffee'), h('b', null, has('digestivo') ? 'on the menu' : 'none yet')),
     h('div', { class: 'small muted' },
       'Drinks raise what every guest spends and need no kitchen work. Each wine beyond the first gets more guests ordering a second glass. ' +
+      `A good wine list (${T.attach.wineListFull + 1} wines, better tiers count more) draws foodies and wine loving tourists and makes guests rate the meal higher. ` +
       'Aperitivi and digestivi sell best at dinner, in a lovely room and to foodies, tourists and professionals; guests linger a little longer over them. ' +
       'Students and families stick to cheaper drinks.'));
 }

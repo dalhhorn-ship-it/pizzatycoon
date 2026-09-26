@@ -52,6 +52,14 @@ export function queueDelay(rho: number): number {
   return Math.min(T.service.queueCap, (2 * rho) / (1 - rho));
 }
 
+/** How good the wine list is, 0..1 (balance.md 4.9): its length beyond the house wine and the quality of what is on it. */
+export function wineListScore(wines: readonly Recipe[], a: Analysis): number {
+  if (wines.length < 2) return 0;
+  const avgQ = wines.reduce((x, r) => x + (a.dishes[r.id]?.quality ?? 60), 0) / wines.length;
+  const breadth = (wines.length - 1) / T.attach.wineListFull;
+  return clamp(breadth * clamp(avgQ / 60, 0.7, 1.3), 0, 1);
+}
+
 /** Logit dish choice for one segment among dishes of one kind (prd.md 5.7 "Dish choice"). */
 export function chooseDishes(recipes: Recipe[], a: Analysis, segment: SegmentId, wealth?: number, budgetShare = 1): Choice | null {
   if (!recipes.length) return null;
@@ -105,6 +113,11 @@ export function closedReason(state: GameState, a: Analysis): string | null {
   return null;
 }
 
+const WINE_PRAISE: readonly string[] = [
+  'The wine list is a real treat.', 'They found us the perfect Chianti.', 'A glass of Barolo made the evening.',
+  'Lovely little wine list for a pizzeria.',
+];
+
 const REVIEW_TEXT: Record<string, { high: readonly string[]; low: readonly string[] }> = {
   food: {
     high: ['The pizza was wonderful.', 'Best crust I have had in ages.', 'You can taste the good ingredients.', 'Perfectly blistered, perfectly topped.'],
@@ -152,8 +165,9 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   const ambience = a.room.ambience;
   const attach = Object.fromEntries(SIDE_KINDS.map((k) => [k, sidesByKind[k].length ? attachRate(k, ambience) : 0])) as Record<SideKind, number>;
   // A wider wine list: more guests order a second glass (balance.md 4.7).
-  const wines = sidesByKind.drink.filter((r) => WINE_IDS.has(r.id)).length;
-  attach.drink *= 1 + Math.min(T.attach.wineListCap, T.attach.wineListPerWine * Math.max(0, wines - 1));
+  const wineList = sidesByKind.drink.filter((r) => WINE_IDS.has(r.id));
+  attach.drink *= 1 + Math.min(T.attach.wineListCap, T.attach.wineListPerWine * Math.max(0, wineList.length - 1));
+  const wine = wineListScore(wineList, a);
   const kitchenBy = { lunch: kitchenStats(state, 'lunch'), dinner: kitchenStats(state, 'dinner') };
   const sideLoad = T.kitchen.prepLoadFactor * (attach.starter + attach.dessert);
 
@@ -204,7 +218,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const noise = opts.noise ? clamp(1 + 0.06 * rng.normal(), 0.8, 1.2) : 1;
     const base =
       district.footTraffic * district.visibility * district.shares[id] * T.demand.captureBase * repMult * weekdayMult *
-      fit * priceMult * budgetMult * qualityMult * fameMult * followMult * (1 - T.demand.competitionFactor * cEff) * noise * economyOf(state).demand;
+      fit * priceMult * budgetMult * qualityMult * fameMult * followMult * (1 + (T.attach.wineDemand[id] ?? 0) * wine) * (1 - T.demand.competitionFactor * cEff) * noise * economyOf(state).demand;
     const sides: Record<string, Choice | null> = {};
     const demandBy = { lunch: base * district.lunchShare * speedMult, dinner: base * (1 - district.lunchShare) };
     const dinnerFrac = demandBy.lunch + demandBy.dinner > 0 ? demandBy.dinner / (demandBy.lunch + demandBy.dinner) : 1;
@@ -314,7 +328,8 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const food = clamp(
       T.satisfaction.foodQualityShare * (s.choice.avgQuality / 100) + (1 - T.satisfaction.foodQualityShare) * s.choice.avgTaste +
         // Guests who care about quality taste a better kitchen most: foodies more than students.
-        T.satisfaction.equipmentFood * Math.max(0, a.kitchen.equipmentE) * (T.satisfaction.equipmentFoodBase + seg.qualityAppeal),
+        T.satisfaction.equipmentFood * Math.max(0, a.kitchen.equipmentE) * (T.satisfaction.equipmentFoodBase + seg.qualityAppeal) +
+        T.attach.wineFood * wine * (T.satisfaction.equipmentFoodBase + seg.qualityAppeal),
       0,
       1,
     );
@@ -364,7 +379,8 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
       const lo = entries.reduce((x, y) => (y[1] < x[1] ? y : x));
       const good = REVIEW_TEXT[hi[0]]?.high ?? [''];
       const bad = REVIEW_TEXT[lo[0]]?.low ?? [''];
-      const text = s >= 85 ? `${rng.pick(good)} ${rng.pick(REVIEW_TEXT.food?.high ?? good)}` : s < 40 ? `${rng.pick(bad)}` : `${rng.pick(good)} ${rng.pick(bad)}`;
+      const winePraise = wine > 0 && s >= 60 && rng.chance(wine * 0.5) ? ` ${rng.pick(WINE_PRAISE)}` : '';
+      const text = (s >= 85 ? `${rng.pick(good)} ${rng.pick(REVIEW_TEXT.food?.high ?? good)}` : s < 40 ? `${rng.pick(bad)}` : `${rng.pick(good)} ${rng.pick(bad)}`) + winePraise;
       reviews.push({ segment: sr.segment, stars: clamp(Math.round(1 + (4 * s) / 100), 1, 5), text });
     }
   }

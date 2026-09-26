@@ -52,6 +52,14 @@ export const T = {
     /** Every wine on the menu beyond the first: this many more drinks per guest (a second glass), up to wineListCap. */
     wineListPerWine: 0.05,
     wineListCap: 0.25,
+    /**
+     * Wine list score 0..1 (balance.md 4.9): wines beyond the first / wineListFull, x wine quality / 60 (0.7 to 1.3), capped at 1.
+     * It draws wine lovers (demand x (1 + wineDemand[segment] x score)) and lifts the food score by
+     * wineFood x score x (equipmentFoodBase + segment quality appeal): a good bottle makes the meal.
+     */
+    wineListFull: 6,
+    wineDemand: { students: 0, families: 0, professionals: 0.08, foodies: 0.25, seniors: 0.05, tourists: 0.1 } as Record<string, number>,
+    wineFood: 0.1,
     /** Drinks are chosen against this share of the segment's meal budget: students skip the Barolo. */
     barBudgetShare: 0.4,
     /** Extra minutes at the table per aperitivo and per digestivo ordered. */

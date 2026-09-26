@@ -692,3 +692,15 @@ Founder request: more, smaller decorations to make the room beautiful without sa
 `src/data/roomTouches.ts`: 13 one time purchases for the whole room that take no floor tile, grouped as walls (bunting, chalkboard, family photos, gilded mirror, grapevine trellis, Amalfi coast mural), tables (candles, checked tablecloths, fresh flowers, seat cushions), lighting (brass wall sconces, pendant lights) and atmosphere (Italian music). Each adds decor points, lighting and or comfort to ambience exactly like floor decor; fresh flowers ($25), music ($10) and candles ($5) cost a little each week. They move with you; removing one sells it at 80%. The dining room view draws them: wall pieces on the back wall, candles, flowers and pendant light glow on every table.
 
 With everything installed the cosy starter room reaches ambience 94 (from 57), which lifts satisfaction and how many guests order drinks, starters, desserts, aperitivi and digestivi.
+
+### 4.9 A good wine list draws foodies and lifts the rating (2026-09-26)
+
+Founder request: a larger wine list should mean higher spend per guest, more foodies and a higher rating.
+
+**Wine list score** (`wineListScore` in `src/sim/day.ts`, 0 to 1): wines beyond the first / 6, x average wine quality / 60 (clamped 0.7 to 1.3), capped at 1. So the house wine plus six more at Standard tier scores 1; better tiers reach it sooner.
+
+* **Spend per guest:** second glasses, +5% drinks per wine beyond the first, up to +25% (4.7).
+* **More foodies:** demand x (1 + wineDemand x score): foodies +25%, tourists +10%, professionals +8%, seniors +5%, students and families 0.
+* **Higher rating:** food score + 0.10 x score x (0.5 + segment quality appeal): foodies +0.15, students +0.05 at a full list. Reviews sometimes praise the wine list.
+
+Measured at steady reputation, cosy shop, adding six wines to the house wine: Canal Quarter reputation 61.7 to 64.3, satisfaction 65.1 to 67.3, foodies wanting in 4.3 to 5.4, spend per guest $19.08 to $21.50, profit $411 to $562 a day. Old Harbour (foodie district): reputation 60.4 to 64.4, foodies 14.1 to 18.3, spend $19.13 to $23.30, profit $186 to $399. The reference builds carry only the house wine (score 0), so the strategy table is unchanged.

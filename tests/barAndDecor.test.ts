@@ -95,3 +95,40 @@ describe('room touches', () => {
     expect(deserialise(serialise(s as never, 0)).state.roomTouches).toEqual([]);
   });
 });
+
+describe('a larger wine list', () => {
+  const list = ['prosecco', 'chianti', 'pinotGrigio', 'montepulciano', 'barolo', 'brunello'];
+
+  test('draws more foodies, raises spend per guest and satisfaction', () => {
+    const s = base();
+    s.following = 1;
+    const wide = withMenu(s, list);
+    const foodies = (st: GameState): number => day(st).segments.find((x) => x.segment === 'foodies')!.demand;
+    expect(foodies(wide)).toBeGreaterThan(foodies(s) * 1.2);
+    expect(spend(wide)).toBeGreaterThan(spend(s) + 1.5);
+    expect(day(wide).satisfaction).toBeGreaterThan(day(s).satisfaction + 1.5);
+  });
+
+  test('a rating that settles higher', () => {
+    const settle = (s0: GameState): number => {
+      const s = structuredClone(s0);
+      s.following = 1;
+      const a = analyse(s);
+      for (let i = 0; i < 800; i++) s.rep = simulateDay(s, a, { noise: false }).repAfter;
+      return s.rep;
+    };
+    expect(settle(withMenu(base(), list))).toBeGreaterThan(settle(base()) + 2);
+  });
+
+  test('better wines make the list count for more', async () => {
+    const { wineListScore } = await import('../src/sim/day');
+    const s = withMenu(base(), ['prosecco', 'chianti', 'barolo']);
+    const wines = s.recipes.filter((r) => ['houseWine', 'prosecco', 'chianti', 'barolo'].includes(r.id));
+    const plain = wineListScore(wines, analyse(s));
+    const fine = structuredClone(s);
+    for (const r of fine.recipes) if (['houseWine', 'prosecco', 'chianti', 'barolo'].includes(r.id)) for (const l of r.lines) l.tier = 'premium';
+    const fineWines = fine.recipes.filter((r) => ['houseWine', 'prosecco', 'chianti', 'barolo'].includes(r.id));
+    expect(wineListScore(fineWines, analyse(fine))).toBeGreaterThan(plain);
+    expect(wineListScore(wines.slice(0, 1), analyse(s))).toBe(0);
+  });
+});
