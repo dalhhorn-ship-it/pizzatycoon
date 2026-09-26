@@ -1,0 +1,23 @@
+/* Kitchen builder: service pipeline */
+.pipeline { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 10px 14px 4px; background: var(--panel); border-top: 1px solid var(--line); }
+.pipeline.empty { display: block; font-size: 14px; color: var(--muted); padding: 12px 16px; }
+.pstage { display: grid; gap: 4px; text-align: left; padding: 8px 10px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); min-height: 0; }
+.pstage.worst { border-color: #d9822b; box-shadow: 0 0 0 2px rgb(217 130 43 / 35%); }
+.phead { display: flex; justify-content: space-between; font-weight: 700; font-size: 13px; }
+.parrow { color: var(--muted); }
+.pbar { display: grid; grid-template-columns: 14px 1fr 30px; gap: 6px; align-items: center; font-size: 12px; }
+.pbar b { text-align: right; font-variant-numeric: tabular-nums; }
+.plabel { color: var(--muted); font-weight: 700; }
+.ptrack { position: relative; height: 10px; border-radius: 999px; background: var(--panel-2); }
+.pfill { height: 100%; border-radius: 999px; background: var(--basil); }
+.pstage.worst .pfill { background: #d9822b; }
+.pdemand { position: absolute; top: -3px; width: 3px; height: 16px; background: var(--ink); border-radius: 2px; transform: translateX(-1px); }
+.ptip { font-size: 12px; color: #b0661f; }
+.plegend { grid-column: 1 / -1; padding-bottom: 4px; }
+.fitlist { display: grid; gap: 8px; }
+.fit { display: grid; gap: 6px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); }
+.fit.locked { opacity: 0.6; }
+.group-title { font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-top: 6px; }
+@media (max-width: 860px) {
+  .pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

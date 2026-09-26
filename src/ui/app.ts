@@ -10,6 +10,8 @@ import { type GameEvent, RANK_NAMES } from '../sim/game';
 import type { DayReport, GameState } from '../sim/state';
 import { h, modal, money, signed, stars, toast } from './dom';
 import { Floor } from './floor';
+import { KitchenView } from './kitchenView';
+import { pipelineStrip } from './pipeline';
 import { kitchenPanel, menuPanel, moneyPanel, type PanelCtx, roomPanel, staffPanel } from './panels';
 
 type Tab = 'menu' | 'kitchen' | 'room' | 'staff' | 'money';
@@ -20,6 +22,8 @@ const clockText = (m: number): string => `${String(Math.floor(m / 60)).padStart(
 
 export class App {
   private floor = new Floor();
+  private kitchen = new KitchenView();
+  private pipelineHost = h('div', { class: 'pipeline-host' });
   private hud = h('header', { class: 'hud' });
   private panel = h('div', { class: 'panel' });
   private tabs = h('nav', { class: 'tabs', role: 'tablist' });
@@ -36,7 +40,16 @@ export class App {
     } catch {
       // Private mode: default tab.
     }
-    const stage = h('section', { class: 'stage' }, this.floor.canvas, this.bar);
+    const stage = h('section', { class: 'stage', style: 'grid-template-rows: minmax(0, 1fr) auto auto' }, this.floor.canvas, this.kitchen.canvas, this.pipelineHost, this.bar);
+    this.kitchen.isServing = () => this.floor.playing;
+    this.kitchen.onSelect = () => this.renderPanel();
+    this.kitchen.onMove = (uid, x, y, rot) => {
+      const err = this.game.dispatch({ type: 'moveEquipment', uid, x, y, rot });
+      if (err) {
+        toast(err, 'warn');
+        this.kitchen.invalidate();
+      }
+    };
     const side = h('aside', { class: 'side' }, this.tabs, this.panel);
     root.append(this.hud, h('main', { class: 'main' }, stage, side));
 
@@ -55,7 +68,7 @@ export class App {
       return;
     }
     this.shown = this.game.state;
-    this.floor.setState(this.game.state);
+    this.setViews(this.game.state);
     this.renderAll();
     if (this.game.saves.conflict) this.showConflict();
   }
@@ -75,6 +88,7 @@ export class App {
       this.pending = { report: day.report, events: events.filter((e) => e.kind !== 'dayCompleted') };
       if (day.report.open) {
         this.floor.play(state, day.report);
+        this.kitchen.invalidate();
         this.renderBar();
         return;
       }
@@ -82,7 +96,7 @@ export class App {
       return;
     }
     this.shown = state;
-    this.floor.setState(state);
+    this.setViews(state);
     for (const e of events) toast(e.text, e.kind === 'unlocked' || e.kind === 'rankUp' ? 'good' : 'info');
     this.renderAll();
   }
@@ -98,12 +112,32 @@ export class App {
     this.pending = null;
     const state = this.game.state as GameState;
     this.shown = state;
-    this.floor.setState(state);
+    this.setViews(state);
     this.renderAll();
     if (p) this.showReport(p.report, p.events);
   }
 
+  private setViews(state: GameState): void {
+    this.floor.setState(state);
+    this.kitchen.setState(state);
+  }
+
+  /** The Kitchen tab shows the kitchen floor plan and pipeline; every other tab shows the dining room. */
+  private applyStageMode(): void {
+    const kitchen = this.tab === 'kitchen';
+    this.floor.canvas.style.display = kitchen ? 'none' : 'block';
+    this.kitchen.canvas.style.display = kitchen ? 'block' : 'none';
+    this.pipelineHost.style.display = kitchen ? 'block' : 'none';
+    if (kitchen && this.game.state) {
+      this.pipelineHost.replaceChildren(pipelineStrip(this.game.state));
+      this.kitchen.invalidate();
+    } else {
+      this.floor.invalidate();
+    }
+  }
+
   private renderAll(): void {
+    this.applyStageMode();
     this.renderHud();
     this.renderTabs();
     this.renderBar();
@@ -144,6 +178,7 @@ export class App {
           this.floor.invalidate();
         }
         this.renderTabs();
+        this.applyStageMode();
         this.renderPanel();
       },
     }, label)));
@@ -180,7 +215,7 @@ export class App {
     let content: HTMLElement;
     switch (this.tab) {
       case 'menu': content = menuPanel(ctx); break;
-      case 'kitchen': content = kitchenPanel(ctx); break;
+      case 'kitchen': content = kitchenPanel(ctx, this.kitchen); break;
       case 'room': content = roomPanel(ctx); break;
       case 'staff': content = staffPanel(ctx); break;
       case 'money': content = moneyPanel(ctx, this.settingsCard()); break;
@@ -280,7 +315,7 @@ export class App {
             close();
             this.game.start(Math.floor(Math.random() * 2 ** 31), district, premises);
             this.shown = this.game.state;
-            this.floor.setState(this.game.state as GameState);
+            this.setViews(this.game.state as GameState);
             this.renderAll();
           } }, 'Open my pizzeria')));
     };

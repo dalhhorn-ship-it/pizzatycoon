@@ -5,14 +5,16 @@ import { EQUIPMENT } from '../data/equipment';
 import { FURNITURE } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
 import { ROLE_NAMES, TRAITS } from '../data/staff';
-import type { Role } from '../data/types';
+import type { EquipmentItem, Role } from '../data/types';
 import { T } from '../data/tunables';
 import { analyse } from '../sim/analysis';
 import { type Command, isUnlocked, loanPayment, RANK_NAMES, suppliersFor, tiersFor, unlockText } from '../sim/game';
-import type { GameState, Recipe } from '../sim/state';
+import { kitchenDims, layoutProblem } from '../sim/kitchen';
+import type { GameState, OwnedEquipment, Recipe } from '../sim/state';
 import { h, meter, money, signed, toast } from './dom';
 import type { Floor } from './floor';
 import { compare } from './impact';
+import type { KitchenView } from './kitchenView';
 
 export interface PanelCtx {
   state: GameState;
@@ -118,67 +120,160 @@ export function menuPanel(ctx: PanelCtx): HTMLElement {
     creator);
 }
 
-// ---------- Kitchen ----------
+// ---------- Kitchen (kitchen-builder.md 7) ----------
 
-export function kitchenPanel(ctx: PanelCtx): HTMLElement {
+const GROUPS: [string, (it: EquipmentItem) => boolean][] = [
+  ['Ovens', (it) => it.role === 'oven'],
+  ['Prep', (it) => it.role === 'counter' || it.role === 'sheeter' || it.role === 'proving'],
+  ['Cold', (it) => it.role === 'cold'],
+  ['Wash and pass', (it) => it.role === 'sink' || it.role === 'dishMachine' || it.role === 'pass'],
+];
+
+function itemStats(it: EquipmentItem): string {
+  const stats: string[] = [];
+  if (it.role === 'oven') {
+    const perHour = ((it.slots ?? 0) * 60) / (12 * (it.bakeMult ?? 1)) * (it.family === 'volume' ? 0.9 + 0.02 * 5 : 0.7 + 0.06 * 5);
+    stats.push(`${perHour.toFixed(0)} pizzas/h at skill 5`);
+  }
+  if (it.role === 'counter') stats.push(`prep station${it.prepMult && it.prepMult !== 1 ? ` x${it.prepMult}` : ''}`);
+  if (it.role === 'sheeter') stats.push(`x${it.prepMult} prep at the station it touches`);
+  if (it.cold) stats.push('keeps dough cold');
+  if (it.effectMult) stats.push(it.role === 'pass' ? `serving x${it.effectMult}` : `dishwashing x${it.effectMult}`);
+  if (it.qualityMod) stats.push(`quality ${signed(it.qualityMod)}`);
+  if (it.skillNeeded) stats.push(`needs cook skill ${it.skillNeeded}`);
+  stats.push(`${it.w}x${it.h} tiles`);
+  if (it.maintenance) stats.push(`${money(it.maintenance)}/week upkeep`);
+  return stats.join(' · ');
+}
+
+/** Where the item can go with its top left on this tile, either orientation. */
+function fitAt(state: GameState, itemId: string, x: number, y: number): OwnedEquipment | null {
+  const dims = kitchenDims(state.premisesId);
+  for (const rot of [0, 1] as const) {
+    const cand = { uid: -1, itemId, x, y, rot };
+    if (!layoutProblem([...state.equipment, cand], dims)) return cand;
+  }
+  // The pass only fits on the hatch: offer it from either hatch tile.
+  if (EQUIPMENT[itemId]?.role === 'pass' && dims.pass.some(([px, py]) => px === x && py === y)) {
+    const cand = { uid: -1, itemId, x: dims.pass[0]?.[0] ?? x, y: 0, rot: 0 as const };
+    if (!layoutProblem([...state.equipment, cand], dims)) return cand;
+  }
+  return null;
+}
+
+export function kitchenPanel(ctx: PanelCtx, view: KitchenView): HTMLElement {
   const { state } = ctx;
   const a = analyse(state);
   const k = a.kitchen;
-  const last = state.history.at(-1);
+  const sel = view.selection;
+  const clear = (): void => {
+    view.select({ kind: 'none' });
+    ctx.rerender();
+  };
+
+  if (sel.kind === 'tile') {
+    const groups = GROUPS.map(([title, test]) => {
+      const rows = Object.values(EQUIPMENT).filter(test).map((it) => {
+        const spot = fitAt(state, it.id, sel.x, sel.y);
+        if (!spot) return null;
+        const unlocked = isUnlocked(state, it.unlock);
+        let impact: HTMLElement | null = null;
+        if (unlocked) {
+          const hyp = structuredClone(state);
+          hyp.equipment.push(spot);
+          const d = compare(state, hyp);
+          impact = impactLine(d, d.profit > 1 ? `pays back in about ${Math.ceil(it.price / d.profit)} days` : 'does not raise your bottleneck today');
+        }
+        return h('div', { class: `fit ${unlocked ? '' : 'locked'}` },
+          h('div', { class: 'spread' }, h('b', null, it.name), h('b', null, money(it.price))),
+          h('div', { class: 'row' }, h('span', { class: `chip family-${it.family}` }, it.family), h('span', { class: 'small muted' }, it.blurb)),
+          h('div', { class: 'small' }, itemStats(it)),
+          impact,
+          unlocked
+            ? h('button', { class: 'primary small', disabled: state.cash < it.price, onclick: () => {
+              const err = ctx.dispatch({ type: 'buyEquipment', itemId: it.id, x: spot.x, y: spot.y, rot: spot.rot });
+              if (err) toast(err, 'warn');
+              else {
+                toast(`${it.name} installed`, 'good');
+                const added = ctx.state.equipment.at(-1);
+                view.select(added ? { kind: 'station', uid: added.uid } : { kind: 'none' });
+                ctx.rerender();
+              }
+            } }, state.cash < it.price ? `Need ${money(it.price - state.cash)} more` : 'Buy and install here')
+            : h('span', { class: 'small muted' }, `🔒 ${unlockText(it.unlock)}`));
+      }).filter((x) => x !== null) as HTMLElement[];
+      return rows.length ? [h('div', { class: 'group-title' }, title), ...rows] : [];
+    }).flat();
+    return h('div', { class: 'stack' },
+      h('div', { class: 'spread' }, h('h2', null, 'Add equipment'), h('button', { class: 'small', onclick: clear }, 'Close')),
+      h('div', { class: 'small muted' }, `Things that fit with their corner on this spot. Cash ${money(state.cash)}.`),
+      groups.length ? h('div', { class: 'fitlist' }, ...groups) : h('div', { class: 'muted' }, 'Nothing fits here. Try another spot, or move something to make room.'));
+  }
+
+  if (sel.kind === 'station') {
+    const e = state.equipment.find((x) => x.uid === sel.uid);
+    const it = e ? EQUIPMENT[e.itemId] : undefined;
+    if (e && it) {
+      const st = k.flow.stations[e.uid];
+      const lines: string[] = [];
+      if (it.role === 'oven') {
+        lines.push(`Bakes ${(k.ovenOutput[e.uid] ?? 0).toFixed(1)} pizzas an hour with your cooks.`);
+        const dPass = k.flow.ovenDPass[e.uid] ?? 0;
+        lines.push(dPass <= T.kitchenFlow.passFreeTiles ? `${dPass} tiles from the pass: no walking delay.` : `${dPass} tiles from the pass: plates take ${Math.min(T.kitchenFlow.plateWalkCap, T.kitchenFlow.plateWalkPerTile * (dPass - T.kitchenFlow.passFreeTiles)).toFixed(1)} min longer. Move it closer.`);
+      }
+      if (st) {
+        const out = k.stationPrep[e.uid] ?? 0;
+        lines.push(out > 0 ? `Preps ${out.toFixed(1)} dishes an hour.` : 'No cook free for this station. Hire another cook.');
+        lines.push(st.reachMult < 1 ? `${st.dOven} tiles to the nearest oven: ${Math.round((1 - st.reachMult) * 100)}% slower. Keep it within ${T.kitchenFlow.prepFreeTiles}.` : `${st.dOven} tile${st.dOven === 1 ? '' : 's'} to the nearest oven: no walking delay.`);
+        if (st.coldMult > 1) lines.push(`A fridge is right next to it: ${Math.round((st.coldMult - 1) * 100)}% faster.`);
+        else if (!it.cold) lines.push('Tip: put a Dough Fridge right next to it for 5% faster prep.');
+        if (st.sheeter) lines.push('A dough sheeter is attached.');
+      }
+      if (it.role === 'sheeter' && k.flow.unattachedSheeters.includes(e.uid)) lines.push('Not attached: put it right next to a prep station without a sheeter.');
+      if (it.role === 'sink' || it.role === 'dishMachine') lines.push(k.flow.washMult < 1 ? `${k.flow.dWash} tiles from the pass: dishwashing ${Math.round((1 - k.flow.washMult) * 100)}% slower.` : 'Close enough to the pass.');
+      return h('div', { class: 'stack' },
+        h('div', { class: 'spread' }, h('h2', null, it.name), h('button', { class: 'small', onclick: clear }, 'Close')),
+        h('div', { class: 'row' }, h('span', { class: `chip family-${it.family}` }, it.family), h('span', { class: 'small muted' }, it.blurb)),
+        h('div', { class: 'card' }, h('div', { class: 'small' }, itemStats(it)), ...lines.map((l) => h('div', null, l))),
+        h('div', { class: 'small muted' }, 'Drag it on the plan to move it. Moving is free.'),
+        h('div', { class: 'row' },
+          it.role !== 'pass' && it.w !== it.h
+            ? h('button', { onclick: () => act(ctx, { type: 'moveEquipment', uid: e.uid, x: e.x, y: e.y, rot: e.rot ? 0 : 1 }) }, 'Rotate')
+            : null,
+          h('button', { onclick: () => {
+            if (!confirm(`Sell the ${it.name} for ${money(it.price * T.kitchen.resale)}?`)) return;
+            view.select({ kind: 'none' });
+            act(ctx, { type: 'sellEquipment', uid: e.uid }, `Sold for ${money(it.price * T.kitchen.resale)}`);
+          } }, `Sell ${money(it.price * T.kitchen.resale)}`)));
+    }
+  }
+
+  const last = [...state.history].reverse().find((d) => d.open);
   const bottlenecks = last?.services.filter((s) => s.bottleneck !== 'none').map((s) => `${s.service}: ${s.bottleneck}`) ?? [];
-  const owned = h('div', { class: 'stack' }, ...state.equipment.map((e) => {
-    const it = EQUIPMENT[e.itemId];
-    if (!it) return h('div');
-    return h('div', { class: 'spread card', style: 'padding:8px 12px' },
-      h('div', null, h('b', null, it.name), ' ', h('span', { class: `chip family-${it.family}` }, it.family)),
-      h('button', { class: 'small', onclick: () => act(ctx, { type: 'sellEquipment', uid: e.uid }, `Sold for ${money(it.price * T.kitchen.resale)}`) }, `Sell ${money(it.price * T.kitchen.resale)}`));
-  }));
-  const catalogue = Object.values(EQUIPMENT).map((it) => {
-    const unlocked = isUnlocked(state, it.unlock);
-    const fits = k.footprintUsed + it.footprint <= k.footprintMax;
-    let impact: HTMLElement | null = null;
-    if (unlocked && fits) {
-      const hyp = structuredClone(state);
-      hyp.equipment.push({ uid: -1, itemId: it.id, x: -9, y: -9, rot: 0 });
-      const d = compare(state, hyp);
-      impact = impactLine(d, d.profit > 1 ? `pays back in about ${Math.ceil(it.price / d.profit)} days` : 'no payback at today\'s trade');
-    }
-    const stats: string[] = [];
-    if (it.role === 'oven') {
-      const perHour = ((it.slots ?? 0) * 60) / (12 * (it.bakeMult ?? 1)) * (it.family === 'volume' ? 0.9 + 0.02 * 5 : 0.7 + 0.06 * 5);
-      stats.push(`${perHour.toFixed(0)} pizzas/h at skill 5`);
-    }
-    if (it.prepMult && it.prepMult !== 1) stats.push(`prep x${it.prepMult}`);
-    if (it.effectMult) stats.push(it.role === 'pass' ? `serving x${it.effectMult}` : `dishwashing x${it.effectMult}`);
-    if (it.qualityMod) stats.push(`quality ${signed(it.qualityMod)}`);
-    if (it.skillNeeded) stats.push(`needs cook skill ${it.skillNeeded}`);
-    stats.push(`${it.footprint} tiles · ${money(it.maintenance)}/week upkeep`);
-    return h('div', { class: `card ${unlocked ? '' : 'off'}` },
-      h('h3', null, h('span', null, it.name), h('span', null, money(it.price))),
-      h('div', { class: 'row' }, h('span', { class: `chip family-${it.family}` }, it.family), h('span', { class: 'small muted' }, it.blurb)),
-      h('div', { class: 'small' }, stats.join(' · ')),
-      impact,
-      h('div', { class: 'row' },
-        unlocked
-          ? h('button', { class: 'primary small', disabled: !fits || state.cash < it.price, onclick: () => act(ctx, { type: 'buyEquipment', itemId: it.id }, `${it.name} installed`) },
-            !fits ? 'Kitchen full' : state.cash < it.price ? `Save ${money(it.price - state.cash)} more` : 'Buy and install')
-          : h('span', { class: 'small muted' }, `🔒 ${unlockText(it.unlock)}`)));
-  });
+  const penalties = Object.values(k.flow.stations).filter((s) => s.reachMult < 1).length + (k.plateWalk > 0 ? 1 : 0) + (k.flow.washMult < 1 ? 1 : 0);
   return h('div', { class: 'stack' },
     h('h2', null, 'Kitchen'),
+    h('div', { class: 'small muted' }, 'Tap an empty spot on the plan to add equipment there. Tap a station to see what it does; drag it to move it. Short walks between prep, oven and pass make service faster.'),
     h('div', { class: 'card' },
       h('div', { class: 'kv' },
-        h('span', null, 'Oven capacity'), h('b', null, `${k.ovenPerHour.toFixed(1)} pizzas/h`),
-        h('span', null, 'Prep capacity'), h('b', null, `${k.prepPerHour.toFixed(1)} dishes/h (${k.staffedCounters}/${k.counters} counters staffed)`),
-        h('span', null, 'Bake time'), h('b', null, `${k.cookTime.toFixed(1)} min`),
-        h('span', null, 'Kitchen skill'), h('b', null, `${k.kitchenSkillK.toFixed(1)} (avg cook skill ${k.avgSkill.toFixed(1)})`),
+        h('span', null, 'Ovens'), h('b', null, `${k.ovenPerHour.toFixed(1)} pizzas/h`),
+        h('span', null, 'Prep'), h('b', null, `${k.prepPerHour.toFixed(1)} dishes/h`),
+        h('span', null, 'Prep stations'), h('b', null, `${k.staffedCounters} of ${k.counters} staffed`),
+        h('span', null, 'Bake and walk'), h('b', null, `${k.cookTime.toFixed(1)} min`),
+        h('span', null, 'Kitchen skill'), h('b', null, `${k.kitchenSkillK.toFixed(0)} (cooks ${k.avgSkill.toFixed(1)})`),
         h('span', null, 'Equipment quality'), h('b', null, signed(k.equipmentE, 1)),
-        h('span', null, 'Space used'), h('b', null, `${k.footprintUsed} of ${k.footprintMax} tiles`)),
-      h('div', { class: 'small muted' }, bottlenecks.length ? `Yesterday's limits: ${bottlenecks.join(', ')}` : 'No kitchen bottleneck yesterday.')),
-    h('h3', null, 'Your equipment'), owned,
-    h('h3', null, 'Catalogue'),
-    h('div', { class: 'small muted' }, 'Volume gear serves more, quality gear cooks better, artisan gear is slow but superb and needs a skilled cook.'),
-    ...catalogue);
+        h('span', null, 'Kitchen flow'), h('b', { class: penalties ? 'warn' : 'good' }, penalties ? `${penalties} slow spot${penalties > 1 ? 's' : ''}` : 'Smooth')),
+      h('div', { class: 'small muted' }, bottlenecks.length ? `Last service limits: ${bottlenecks.join(', ')}` : 'No bottleneck at the last service.')),
+    h('div', { class: 'row' },
+      h('button', { onclick: () => act(ctx, { type: 'tidyKitchen' }, 'Kitchen tidied into a tight pizza line') }, 'Tidy up layout')),
+    h('h3', null, 'Your equipment'),
+    ...state.equipment.map((e) => {
+      const it = EQUIPMENT[e.itemId];
+      if (!it) return h('div');
+      return h('button', { class: 'spread', style: 'text-align:left', onclick: () => { view.select({ kind: 'station', uid: e.uid }); ctx.rerender(); } },
+        h('span', null, h('b', null, it.name), ' ', h('span', { class: `chip family-${it.family}` }, it.family)),
+        h('span', { class: 'small muted' }, it.role === 'oven' ? `${(k.ovenOutput[e.uid] ?? 0).toFixed(0)}/h` : it.role === 'counter' ? `${(k.stationPrep[e.uid] ?? 0).toFixed(0)}/h` : ''));
+    }));
 }
 
 // ---------- Room ----------

@@ -5,6 +5,7 @@
 * Date: 2026-09-26
 * Extends: `prd.md` 5.5 (Kitchen equipment) and 5.7 (service and turnover); numbers extend `balance.md` 1.7
 * Features: F-100 to F-109 in `features.md`. Acceptance criteria: AC-134 to AC-158 in `acceptance-criteria.md`
+* Companion: `fresh-start.md` (empty premises, second hand items, Hole in the wall premises, covers retune), same milestone
 
 ## 1. Goal and the loop it serves
 
@@ -34,6 +35,7 @@ Today the Kitchen tab is a list. The Kitchen Builder turns it into a place: a to
 
 | Premises | Kitchen grid (w x h) | Tiles (matches `kitchenTiles`) | Pass tiles (row 0) |
 |---|---|---|---|
+| Hole in the wall (new, `fresh-start.md`) | 8 x 3 | 24 | columns 3 and 4 |
 | Cosy corner shop | 10 x 3 | 30 | columns 4 and 5 |
 | Neighbourhood trattoria | 12 x 3 | 36 | columns 5 and 6 |
 | Big hall | 15 x 4 | 60 | columns 6 and 7 |
@@ -57,7 +59,9 @@ Every item gets `w` and `h` (from `balance.md` 1.7) and a position `x, y, rot`. 
 
 Invalid placements are never committed. The ghost turns amber with one reason: "Off the kitchen", "Something is already there", "The pass stays clear", "Needs a free tile to work from", "Keep at least one oven".
 
-### 3.4 Starter default layout (cosy, 10 x 3)
+### 3.4 Reference starter kitchen layout (cosy, 10 x 3)
+
+New games start with an empty kitchen (`fresh-start.md`). This layout is the reference for the `balance.md` section 2 cosy kitchen: tests use it, and the tutorial shows it as a good example.
 
 ```
 row 0:  P P O O H H S . . .      O Deck Oven (2x2)   P Prep Counter (2x1)
@@ -111,12 +115,13 @@ Wash walk:
 | Item | Family | Price | Footprint | Effect | Quality mod | Maintenance per week | Unlock | Safe range |
 |---|---|---|---|---|---|---|---|---|
 | Pizza Prep Fridge with Marble Top | Quality | $3,200 | 2x1 | Prep station (one cook, replaces a counter); x1.15 prep; cold store for touching counters; a sheeter does not stack (higher multiplier applies) | +1 | $25 | Serve 200 guests | x1.10 to x1.25; +1 to +2; $2,800 to $4,000 |
-| Dough Fridge | Basic | $900 | 1x1 | Cold store (cold at hand bonus); fridge storage 120 units when F-31 lands | 0 | $0 | Start, 1 preinstalled | $600 to $1,200 |
-| Sink | Basic | $600 | 1x1 | Wash station; dishwashers work here; required to open | 0 | $0 | Start, 1 preinstalled | $400 to $900 |
+| Dough Fridge | Basic | $600 | 1x1 | Cold store (cold at hand bonus); fridge storage 120 units when F-31 lands | 0 | $0 | Start (migrated saves get one free) | $400 to $1,000 |
+| Sink | Basic | $400 | 1x1 | Wash station; dishwashers work here; required to open | 0 | $0 | Start (migrated saves get one free) | $250 to $700 |
 
 * Blurbs: Prep Fridge "Cold dough underneath, cool marble on top. Roll, top, slide to the oven." Dough Fridge "Keeps dough cold and happy. Put it next to a bench." Sink "Where plates come back to life."
-* The Prep Fridge is the founder's dough cooler: an early, affordable goal (about day 3 at starter covers) with a visible quality gain, and a speed gain that matters once prep becomes the bottleneck. The Marble Bench stays the quality pick (+2).
+* The Prep Fridge is the founder's dough cooler: an early, affordable goal (about day 6 in a Hole in the wall) with a visible quality gain, and a speed gain that matters once prep becomes the bottleneck. The Marble Bench stays the quality pick (+2).
 * Fridge and Sink have $0 maintenance so the starter's $60 per week in `balance.md` 2.1 is unchanged.
+* The entry items of `fresh-start.md` 4 are also placeable: Second hand Deck Oven 2x2, Old Workbench 2x1 (a prep station).
 * Existing items keep all numbers and gain `w x h` from 1.7: Deck, Double Deck, Stone Hearth 2x2; Conveyor 3x2; Wood Fired 3x3; Prep Counter, Marble Bench, Heat Lamp Pass 2x1; Dish Machine 1x2; Sheeter, Proving Cabinet 1x1.
 * **Cut from M0.2:** the Walk-in Cold Room stays at v1.0 as specified in `prd.md` 5.5; when it arrives it counts as a cold store.
 
@@ -185,12 +190,12 @@ Moving and rotating are free. The Kitchen tab is build mode: time is paused and 
 
 ## 12. Acceptance criteria (summary; full rows in `acceptance-criteria.md`, milestone M0.2)
 
-* **AC-134** Given the premises data / When loaded / Then grids are 10x3, 12x3, 15x4 with pass tiles at columns 4 and 5, 5 and 6, 6 and 7 of row 0.
+* **AC-134** Given the premises data / When loaded / Then grids are 8x3, 10x3, 12x3, 15x4 with pass tiles at columns 3 and 4, 4 and 5, 5 and 6, 6 and 7 of row 0.
 * **AC-135** Given any placement off grid, overlapping, on the pass, or with no free touching tile / When submitted / Then it is rejected with its reason and state is unchanged.
 * **AC-136** Given a Conveyor Oven / When rotated / Then it occupies 2x3 and all stats are unchanged if distances are unchanged.
 * **AC-137** Given the last oven, prep station, cold store or Sink / When the player sells it / Then it is blocked; any other item refunds 80%.
 * **AC-138** Given any item / When moved or rotated / Then cash is unchanged and the new stats apply from the next service.
-* **AC-139** Given the starter default layout / When kitchen stats are computed / Then flow penalty is zero and oven 19.4, prep 47.5 match AC-56.
+* **AC-139** Given the reference starter kitchen in the 3.4 layout / When kitchen stats are computed / Then flow penalty is zero and oven 19.4, prep 47.5 match AC-56.
 * **AC-140** Given the starter kitchen / When the oven moves 5 tiles right / Then prep capacity falls from 47.5 to 40.9 per hour, oven stays 19.4, bottleneck stays oven.
 * **AC-141** Given a station 12 tiles from its nearest oven / When computed / Then reach_mult is 0.80.
 * **AC-142** Given one oven 6 tiles from the pass / When computed / Then cook time rises by 0.6 min; in no valid layout by more than 2.0 min.

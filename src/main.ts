@@ -1,4 +1,5 @@
 import './ui/styles.css';
+import './ui/kitchen.css';
 import { Controller } from './game/controller';
 import { App } from './ui/app';
 
