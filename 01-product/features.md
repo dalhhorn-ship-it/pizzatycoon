@@ -202,6 +202,17 @@
 | F-116 | Seat limit | Seats at most floor(0.55 x dining tiles): hole in the wall 16, cosy 44, trattoria 55, big hall 121; shown as "Seats 24 of 44" | W | Must | M0.2 | F-44 |
 | F-117 | Realistic covers retune | Foodies dinner meal 90 min, Students dinner meal 45 min, Foodies budget $28, Old Harbour W 1.5, luxury reference price $38 (band $20 to $40); automated covers per service and ceiling checks added to the balance suite | all | Must | M0.2 | F-81, F-53 |
 
+## Q. Kitchen upgrades and add-ons (spec: `kitchen-upgrades.md`)
+
+| ID | Feature | Description | Loop | Priority | Milestone | Depends on |
+|---|---|---|---|---|---|---|
+| F-118 | Add-on data and install rules | 18 add-ons in a data file (id, name, fits, price, maintenance per week, unlock, blurb, effects); installed on an owned station with no footprint; at most 2 per station and no duplicates; remove refunds 80%; selling a station refunds 80% of it and of each add-on; add-ons move with the station; `addons: string[]` on owned equipment with save migration | W | Must | M0.3 | F-100, F-101, F-103 |
+| F-119 | Generic add-on effects in the sim | Eight effect fields only: slotsAdd and bakeMult (ovens), prepMult (prep stations), qualityAdd (oven, prep, attached sheeter, pass, proving; kitchen total capped at +3 E), washMult (best equipped wash station), serveMult (pass), wasteMult (cold stores; only the best counts), coldReach (cold at hand within 2 tiles); add-on maintenance in upkeep; `T.addons` tunables | D | Must | M0.3 | F-118, F-102, F-39 |
+| F-120 | Upgrades section in the station card | Installed add-ons with plain word effect and Remove (refund shown); compatible add-ons with price, maintenance, plain effect, compare() impact preview and Install; states for short cash, locked, station full and quality cap reached | W | Must | M0.3 | F-118, F-105 |
+| F-121 | Add-on dots on the floor plan | One 8 pt dot per installed add-on in the station's top right corner, coloured by effect family (quality, speed, cold and waste, wash and serve) | MM | Should | M0.3 | F-118, F-101 |
+| F-122 | Station upgrade path (trade in) | "Upgrade to X" on the station card for Second hand Deck Oven to Deck Oven, Deck Oven to Double Deck or Stone Hearth, Old Workbench to Prep Counter, Prep Counter to Marble Bench or Prep Fridge; same tiles; net cost new price minus 80% of old; compatible add-ons kept, others refunded at 80%; Replace also carries compatible add-ons | W | Should | M0.3 | F-118, F-101 |
+| F-123 | Add-on balance checks | Reference builds carry no add-ons; new check that the fully upgraded middle build is still beaten by each specialist's best home profit by 15% or more; `npm run balance` prints each add-on's payback in its reference scenario | all | Must | M0.3 | F-119, F-81 |
+
 ## Dependency map (critical path)
 
 ```
@@ -219,4 +230,4 @@ v1.0 chain: F-79 Expansion loan + F-69 Manager -> F-83 New locations -> F-85 Off
 
 ## Scope note
 
-117 features is already a lot for a small team. The cut order in prd.md 10.4 applies. Features that carry the two strategies (F-19, F-20, F-38, F-39, F-40, F-53, F-81) are pillars and are not cut.
+123 features is already a lot for a small team. The cut order in prd.md 10.4 applies. Features that carry the two strategies (F-19, F-20, F-38, F-39, F-40, F-53, F-81) are pillars and are not cut.

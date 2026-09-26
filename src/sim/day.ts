@@ -253,7 +253,8 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const servedAfter = segs.reduce((x, s) => x + (served[s.id]?.[sv] ?? 0), 0);
     services.push({
       service: sv, demand, served: servedAfter, walkAways: walk, capacity, rho, queueDelay: q, bottleneck, tableCycle: cycle,
-      stages: { prep: prepPerHour, oven: k.ovenPerHour, seats: seatPerHour, plates: plateCap / hours },
+      // Plates are expressed per effective service hour so every stage compares on the same basis as seats and ovens.
+      stages: { prep: prepPerHour, oven: k.ovenPerHour, seats: seatPerHour, plates: plateCap / (hours * T.service.utilisation[sv]) },
       demandPerHour: demand / (hours * T.service.utilisation[sv]),
     });
   }

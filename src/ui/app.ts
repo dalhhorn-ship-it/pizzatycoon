@@ -6,12 +6,13 @@ import { T } from '../data/tunables';
 import type { Controller } from '../game/controller';
 import { fromSaveCode, toSaveCode } from '../save/saveFile';
 import { analyse } from '../sim/analysis';
-import { type GameEvent, RANK_NAMES } from '../sim/game';
+import { depositFor, type GameEvent, RANK_NAMES, seatLimit } from '../sim/game';
 import type { DayReport, GameState } from '../sim/state';
 import { h, modal, money, signed, stars, toast } from './dom';
 import { Floor } from './floor';
 import { KitchenView } from './kitchenView';
 import { pipelineStrip } from './pipeline';
+import { checklistCard } from './checklist';
 import { kitchenPanel, menuPanel, moneyPanel, type PanelCtx, roomPanel, staffPanel } from './panels';
 
 type Tab = 'menu' | 'kitchen' | 'room' | 'staff' | 'money';
@@ -24,6 +25,7 @@ export class App {
   private floor = new Floor();
   private kitchen = new KitchenView();
   private pipelineHost = h('div', { class: 'pipeline-host' });
+  private checklistHost = h('div');
   private hud = h('header', { class: 'hud' });
   private panel = h('div', { class: 'panel' });
   private tabs = h('nav', { class: 'tabs', role: 'tablist' });
@@ -50,7 +52,7 @@ export class App {
         this.kitchen.invalidate();
       }
     };
-    const side = h('aside', { class: 'side' }, this.tabs, this.panel);
+    const side = h('aside', { class: 'side', style: 'grid-template-rows: auto auto minmax(0, 1fr)' }, this.tabs, this.checklistHost, this.panel);
     root.append(this.hud, h('main', { class: 'main' }, stage, side));
 
     this.floor.onTap = (x, y, uid) => this.onFloorTap(x, y, uid);
@@ -136,7 +138,31 @@ export class App {
     }
   }
 
+  private renderChecklist(): void {
+    const s = this.game.state;
+    const card = s && !this.floor.playing ? checklistCard(s, (tab) => this.switchTab(tab)) : null;
+    this.checklistHost.replaceChildren(...(card ? [card] : []));
+  }
+
+  private switchTab(id: Tab): void {
+    this.tab = id;
+    try {
+      localStorage.setItem(TAB_KEY, id);
+    } catch {
+      // ignore
+    }
+    if (id !== 'room') {
+      this.floor.tool = { kind: 'none' };
+      this.floor.selected = null;
+      this.floor.invalidate();
+    }
+    this.renderTabs();
+    this.applyStageMode();
+    this.renderPanel();
+  }
+
   private renderAll(): void {
+    this.renderChecklist();
     this.applyStageMode();
     this.renderHud();
     this.renderTabs();
@@ -158,6 +184,8 @@ export class App {
       h('div', { class: 'stat' }, h('span', null, `Reputation ${s.rep.toFixed(0)}`), h('b', { class: 'stars' }, stars(s.rep))),
       h('div', { class: 'stat' }, h('span', null, 'Rank'), h('b', null, RANK_NAMES[s.rank])),
       h('div', { class: 'grow' }),
+      h('button', { class: 'small', onclick: () => this.showMarket() }, '🏠 Buy another restaurant'),
+      h('button', { class: 'small ghost', onclick: () => this.confirmRestart() }, '↺ Restart'),
       h('span', { class: `cloud ${status}` }, cloudText[status]),
     );
   }
@@ -165,22 +193,7 @@ export class App {
   private renderTabs(): void {
     this.tabs.replaceChildren(...TABS.map(([id, label]) => h('button', {
       class: this.tab === id ? 'active' : '', role: 'tab', 'aria-selected': this.tab === id ? 'true' : 'false',
-      onclick: () => {
-        this.tab = id;
-        try {
-          localStorage.setItem(TAB_KEY, id);
-        } catch {
-          // ignore
-        }
-        if (id !== 'room') {
-          this.floor.tool = { kind: 'none' };
-          this.floor.selected = null;
-          this.floor.invalidate();
-        }
-        this.renderTabs();
-        this.applyStageMode();
-        this.renderPanel();
-      },
+      onclick: () => this.switchTab(id),
     }, label)));
   }
 
@@ -286,41 +299,108 @@ export class App {
     close = modal(content, { onClose: () => undefined });
   }
 
+  /** Premises cards for one district: rent, deposit, seats and kitchen size (fresh-start.md 3). */
+  private premisesCards(district: string, selected: string | null, onPick: (id: string) => void, budget: number, refund = 0): HTMLElement {
+    const d = DISTRICTS[district];
+    return h('div', { class: 'districts' }, ...Object.values(PREMISES).map((x) => {
+      const tiles = x.diningWidth * x.diningHeight + x.kitchenTiles;
+      const rent = d ? tiles * d.rentPerTile : 0;
+      const deposit = depositFor(district, x.id);
+      const affordable = budget + refund >= deposit;
+      const tight = rent > (budget + refund - deposit) / 2;
+      return h('button', { class: selected === x.id ? 'on' : '', onclick: () => onPick(x.id) },
+        h('b', null, x.name),
+        h('span', { class: 'small' }, `Dining ${x.diningWidth}x${x.diningHeight} (up to ${seatLimit(x.id)} seats) · kitchen ${x.kitchenWidth}x${x.kitchenHeight}`),
+        h('span', { class: 'small' }, `Rent ${money(rent)}/week · deposit ${money(deposit)}`),
+        !affordable ? h('span', { class: 'small bad' }, `You need ${money(deposit - budget - refund)} more`)
+          : tight ? h('span', { class: 'small warn' }, 'Tight: leaves little for equipment') : null);
+    }));
+  }
+
   showNewGame(): void {
     let district = 'canal';
-    let premises = 'cosy';
+    let premises = 'hole';
     let close = (): void => {};
+    const hasGame = !!this.game.state;
     const body = h('div', { class: 'stack' });
     const render = (): void => {
-      const d = DISTRICTS[district];
-      const p = PREMISES[premises];
-      const tiles = p ? p.diningWidth * p.diningHeight + p.kitchenTiles : 0;
-      const rent = d ? tiles * d.rentPerTile : 0;
+      const deposit = depositFor(district, premises);
+      const left = T.finance.startingCash - deposit;
       body.replaceChildren(
-        h('h2', null, 'Welcome to Pizza D'),
-        h('div', { class: 'muted' }, 'Pick a neighbourhood and a place to rent. You start with $40,000, a small team, a deck oven and a classic menu. There is no game over: take your time.'),
+        h('h2', null, hasGame ? 'Start a new pizzeria' : 'Welcome to Pizza D'),
+        h('div', { class: 'muted' }, `You have ${money(T.finance.startingCash)} and a dream. Rent an empty place, then set it up yourself: a second hand oven, a workbench, a fridge, a sink, a few folding tables, a cook and a server. Start small, earn, and grow. There is no game over.`),
         h('h3', null, 'Neighbourhood'),
         h('div', { class: 'districts' }, ...Object.values(DISTRICTS).map((x) => h('button', { class: district === x.id ? 'on' : '', onclick: () => { district = x.id; render(); } },
           h('b', null, x.name), h('span', { class: 'small' }, x.blurb),
           h('span', { class: 'small muted' }, `${x.footTraffic.toLocaleString()} passers-by a day · rent $${x.rentPerTile}/tile/week`)))),
         h('h3', null, 'Premises'),
-        h('div', { class: 'districts' }, ...Object.values(PREMISES).map((x) => h('button', { class: premises === x.id ? 'on' : '', onclick: () => { premises = x.id; render(); } },
-          h('b', null, x.name), h('span', { class: 'small' }, `Dining room ${x.diningWidth}x${x.diningHeight}, kitchen ${x.kitchenTiles} tiles`)))),
+        this.premisesCards(district, premises, (id) => { premises = id; render(); }, T.finance.startingCash),
         h('div', { class: 'card' }, h('div', { class: 'kv' },
-          h('span', null, 'Rent'), h('b', null, `${money(rent)}/week`),
-          h('span', null, 'Deposit (8 weeks)'), h('b', null, money(rent * 8)))),
+          h('span', null, 'Deposit (4 weeks rent)'), h('b', null, money(deposit)),
+          h('span', null, 'Left to set up with'), h('b', { class: left < 2920 ? 'warn' : 'good' }, money(left))),
+          left < 2920 ? h('div', { class: 'small warn' }, 'The cheapest working pizzeria costs about $2,920 to fit out. You could borrow up to $5,000, but a smaller place is the cosy way to start.') : null),
         h('div', { class: 'row', style: 'justify-content:space-between' },
-          h('button', { class: 'ghost', onclick: () => { close(); this.showLinkDevice(true); } }, 'Continue a game from another device'),
-          h('button', { class: 'primary', onclick: () => {
+          hasGame
+            ? h('button', { class: 'ghost', onclick: () => close() }, 'Cancel')
+            : h('button', { class: 'ghost', onclick: () => { close(); this.showLinkDevice(true); } }, 'Continue a game from another device'),
+          h('button', { class: 'primary', disabled: left < 0, onclick: () => {
             close();
             this.game.start(Math.floor(Math.random() * 2 ** 31), district, premises);
             this.shown = this.game.state;
             this.setViews(this.game.state as GameState);
             this.renderAll();
-          } }, 'Open my pizzeria')));
+          } }, 'Sign the lease')));
     };
     render();
     close = modal(body, { wide: true });
+  }
+
+  /** Property market: move to another restaurant (fresh-start.md 3). */
+  private showMarket(): void {
+    const s = this.game.state;
+    if (!s) return;
+    let district = s.districtId;
+    let premises: string | null = null;
+    let close = (): void => {};
+    const body = h('div', { class: 'stack' });
+    const render = (): void => {
+      const st = this.game.state as GameState;
+      const net = premises ? depositFor(district, premises) - st.deposit : 0;
+      const same = premises === st.premisesId && district === st.districtId;
+      body.replaceChildren(...([
+        h('div', { class: 'spread' }, h('h2', null, 'Buy another restaurant'), h('button', { class: 'small', onclick: () => close() }, 'Close')),
+        h('div', { class: 'muted' }, `You rent the ${PREMISES[st.premisesId]?.name} in ${DISTRICTS[st.districtId]?.name}. Moving happens overnight: your deposit of ${money(st.deposit)} comes back, the new deposit is paid, and your team, recipes, reputation, equipment and furniture come with you. Anything that does not fit is sold at 80%. Running two restaurants at once arrives with chains in v1.0.`),
+        h('div', { class: 'row' }, ...Object.values(DISTRICTS).map((x) => h('button', { class: district === x.id ? 'active' : '', onclick: () => { district = x.id; premises = null; render(); } }, x.name))),
+        h('div', { class: 'small muted' }, DISTRICTS[district]?.blurb ?? ''),
+        this.premisesCards(district, premises, (id) => { premises = id; render(); }, st.cash, st.deposit),
+        premises && !same
+          ? h('div', { class: 'card' }, h('div', { class: 'kv' },
+            h('span', null, 'New deposit'), h('b', null, money(depositFor(district, premises))),
+            h('span', null, 'Your deposit back'), h('b', null, money(st.deposit)),
+            h('span', null, net >= 0 ? 'You pay' : 'You get back'), h('b', { class: net > st.cash ? 'bad' : '' }, money(Math.abs(net))),
+            h('span', null, 'Cash after the move'), h('b', null, money(st.cash - net))))
+          : null,
+        h('div', { class: 'row', style: 'justify-content:flex-end' },
+          h('button', { class: 'primary', disabled: !premises || same || net > st.cash, onclick: () => {
+            if (!premises) return;
+            const err = this.game.dispatch({ type: 'movePremises', districtId: district, premisesId: premises });
+            if (err) toast(err, 'warn');
+            else close();
+          } }, premises && !same ? `Move to the ${PREMISES[premises]?.name}` : 'Pick a place')),
+      ].filter(Boolean) as HTMLElement[]));
+    };
+    render();
+    close = modal(body, { wide: true });
+  }
+
+  private confirmRestart(): void {
+    let close = (): void => {};
+    close = modal(h('div', { class: 'stack' },
+      h('h2', null, 'Restart the game?'),
+      h('div', { class: 'muted' }, 'This starts a brand new pizzeria from scratch with $7,000. Your current game is replaced on this device and in the cloud.'),
+      h('div', { class: 'row', style: 'justify-content:flex-end' },
+        h('button', { class: 'ghost', onclick: () => close() }, 'Keep playing'),
+        h('button', { class: 'primary', onclick: () => { close(); this.showNewGame(); } }, 'Restart'))));
   }
 
   private showConflict(): void {
@@ -431,6 +511,6 @@ export class App {
         (this.game.state?.cash ?? 0) <= T.finance.freshStartThreshold
           ? h('button', { class: 'small', onclick: () => this.game.dispatch({ type: 'freshStart' }) }, 'Fresh start (keep recipes and unlocks)')
           : null,
-        h('button', { class: 'small ghost', onclick: () => { if (confirm('Start a new pizzeria? This replaces your current game everywhere it is synced.')) this.showNewGame(); } }, 'New game')));
+        h('button', { class: 'small ghost', onclick: () => this.confirmRestart() }, 'Restart game')));
   }
 }

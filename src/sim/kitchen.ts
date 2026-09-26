@@ -139,7 +139,7 @@ export function kitchenFlow(state: GameState): Flow {
   for (const o of ovens) ovenDPass[o.uid] = distance(rectOf(o), pass);
   const wash = eq.filter((e) => itemOf(e)?.role === 'sink' || itemOf(e)?.role === 'dishMachine');
   const dWash = wash.length ? Math.min(...wash.map((w) => distance(rectOf(w), pass))) : 99;
-  const washMult = 1 - Math.min(f.washPenaltyCap, f.washPenaltyPerTile * Math.max(0, dWash - f.washFreeTiles));
+  const washMult = wash.length ? 1 - Math.min(f.washPenaltyCap, f.washPenaltyPerTile * Math.max(0, dWash - f.washFreeTiles)) : 1;
   return { stations, walkMin: 0, ovenDPass, washMult, dWash, unattachedSheeters: unattached };
 }
 
