@@ -652,4 +652,20 @@ A frugal manager buys 5% cheaper. Without a manager (caretaker mode): 20% fewer 
 
 Not in this slice (prd.md 5.9): manager policies (strategy, price band, tier floor), manager pricing, hiring and equipment proposals, weekly manager report card, cannibalisation in the same district, chain menu and central purchasing.
 
-**Reputation gate** (`T.manager.openRep`, prd.md 5.12): opening another restaurant needs reputation 50 (2.5 stars) at a restaurant you already run. The city map says so and shows your current reputation. Measured at fair prices: the cheapest opening in Canal Quarter reaches 50 on day 17, a cosy starter on day 12. Reputation still climbs generously for an average restaurant (it settles around 65); tightening that would make this gate take longer.
+**Reputation gate** (`T.manager.openRep`, prd.md 5.12): opening another restaurant needs reputation 50 (2.5 stars) at a restaurant you already run. The city map says so and shows your current reputation. Measured at fair prices: the cheapest opening in Canal Quarter reaches 50 on day 17, a cosy starter on day 12. See 4.6 for the stricter reputation that makes this gate a real hurdle.
+
+### 4.6 Reputation follows satisfaction more strictly (2026-09-26)
+
+Founder request: reputation 50 should be a real first hurdle before a second restaurant. Reputation used to settle at 20 + 0.8 x satisfaction, so a mediocre restaurant (satisfaction 52) still reached about 62.
+
+| Tunable | Old | New |
+|---|---|---|
+| `reputation.reviewBase` | 20 | -10 |
+| `reputation.reviewSlope` | 0.8 | 1.1 |
+| `demand.repMultSlope` | 0.010 | 0.012 |
+
+Reputation now settles near satisfaction itself: 52 gives 47, 60 gives 56, 70 gives 67, 80 gives 78. Because established restaurants now sit about 10 points lower, each reputation point is worth a little more demand (0.5 + 0.012 x Rep), so the reference builds earn about what they did.
+
+Strategy table after the change (reference price, best price in band): luxury in Old Harbour $2,155 / $2,166; volume in University Quarter $2,138; middle best $1,699 University, $1,410 Canal, $1,296 Old Harbour. All balance checks pass; the fully upgraded middle build trails volume by 18% and luxury by 43%.
+
+Measured, reputation 50 (the gate for a second restaurant, 4.5): the cheapest opening at fair prices on day 45 (it settles near 54); the same at +40% prices on day 87; a properly set up cosy restaurant (satisfaction about 67) on day 18. The golden starter day at Rep 30 now has 57.0 guests and $1,086 sales (was 52.6 and $1,003), because Rep 30 counts for a little more demand.

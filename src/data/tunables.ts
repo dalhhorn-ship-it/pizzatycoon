@@ -10,7 +10,7 @@ export const T = {
   demand: {
     captureBase: 0.035,
     repMultBase: 0.5,
-    repMultSlope: 0.01,
+    repMultSlope: 0.012,
     menuFitBase: 0.6,
     menuFitSlope: 0.8,
     priceMultMin: 0.2,
@@ -218,8 +218,8 @@ export const T = {
     learningRate: 0.05,
     walkAwayPenalty: 1,
     walkAwayThreshold: 0.1,
-    reviewBase: 20,
-    reviewSlope: 0.8,
+    reviewBase: -10,
+    reviewSlope: 1.1,
   },
   finance: {
     // fresh-start.md 5: rags to riches.

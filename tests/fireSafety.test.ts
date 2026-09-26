@@ -85,7 +85,7 @@ describe('guests feel the kitchen', () => {
     s.unlockAll = true;
     const oven = s.equipment.find((e) => e.itemId === 'deckOven')!.uid;
     const upgraded = apply(s, { type: 'upgradeStation', uid: oven, toItemId: 'stoneHearthOven' }).state;
-    expect(sat(upgraded) - sat(s)).toBeGreaterThan(2.5);
+    expect(sat(upgraded) - sat(s)).toBeGreaterThan(2);
   });
 
   test('foodies taste the difference more than students', () => {

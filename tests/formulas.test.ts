@@ -81,17 +81,18 @@ describe('golden starter day (balance.md 2)', () => {
   });
 
   // balance.md 4.3: the cosy shopfront is seen by 75% of passers-by, so at Rep 30 demand sits below capacity
-  // (was 67.5 guests with seats full before visibility and the local following).
-  test('guests within 5% of 52.6 and no bottleneck at Rep 30', () => {
-    expect(r.covers).toBeGreaterThan(52.6 * 0.95);
-    expect(r.covers).toBeLessThan(52.6 * 1.05);
+  // (was 67.5 guests with seats full before visibility and the local following). balance.md 4.6: a reputation point
+  // is worth a little more demand now that reputation is stricter (52.6 before).
+  test('guests within 5% of 57.0 and no bottleneck at Rep 30', () => {
+    expect(r.covers).toBeGreaterThan(57.0 * 0.95);
+    expect(r.covers).toBeLessThan(57.0 * 1.05);
     expect(r.services.map((x) => x.bottleneck)).toEqual(['none', 'none']);
     expect(r.walkAways).toBeLessThan(3);
   });
 
   test('money within tolerance of the worked example', () => {
-    expect(r.pnl.sales).toBeGreaterThan(1003 * 0.9);
-    expect(r.pnl.sales).toBeLessThan(1003 * 1.1);
+    expect(r.pnl.sales).toBeGreaterThan(1086 * 0.9);
+    expect(r.pnl.sales).toBeLessThan(1086 * 1.1);
     expect(r.pnl.profit).toBeGreaterThan(0);
     expect(r.pnl.staff).toBeCloseTo(2214.4 / 7, 2);
     expect(r.pnl.rent).toBeCloseTo(1210 / 7, 2);
