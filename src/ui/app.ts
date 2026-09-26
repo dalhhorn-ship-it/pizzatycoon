@@ -455,7 +455,7 @@ export class App {
       mode: 'new',
       state: null,
       startCash: Math.round(T.finance.startingCash * (economy?.startingCash ?? 1)),
-      difficulty: presetName(economyOf({ economy })),
+      difficulty: `${presetName(economyOf({ economy }))}, ${economyOf({ economy }).start} start`,
       onBack: hadGame ? () => this.showShop() : null,
       onRent: (venueId) => {
         this.game.start(Math.floor(Math.random() * 2 ** 31), venueId, economy);
@@ -583,6 +583,14 @@ export class App {
             h('button', { class: preset === p ? 'on' : '', onclick: () => setEco(PRESETS[p]) }, p[0]?.toUpperCase() + p.slice(1))),
             h('button', { class: preset === 'custom' ? 'on' : '', disabled: true }, 'Custom')),
           h('div', { class: 'sliders' }, ...(Object.keys(ECONOMY_LABELS) as EconomyKey[]).map(slider)),
+          h('div', { class: 'stack', style: 'gap:6px' },
+            h('span', null, 'New restaurants'),
+            h('div', { class: 'seg' },
+              h('button', { class: eco.start === 'slow' ? 'on' : '', onclick: () => setEco({ start: 'slow' }) }, 'Slow start'),
+              h('button', { class: eco.start === 'normal' ? 'on' : '', onclick: () => setEco({ start: 'normal' }) }, 'Normal start')),
+            h('div', { class: 'small muted' }, eco.start === 'slow'
+              ? 'Nobody knows a new restaurant yet: expect quiet first weeks while word of mouth builds your local following. Applies to new games and moves.'
+              : 'The neighbourhood knows a new restaurant from day one; the following only drops if guests are unhappy. Applies to new games and moves.')),
           o.covers > 0
             ? h('div', { class: 'impact' }, 'With these settings an average day earns about ', h('b', { class: o.profit >= 0 ? 'good' : 'bad' }, money(o.profit)), ` from ${o.covers.toFixed(0)} guests (at your current reputation).`)
             : h('div', { class: 'impact' }, 'Set up and open your pizzeria to see what these settings do to a day\'s profit.')),

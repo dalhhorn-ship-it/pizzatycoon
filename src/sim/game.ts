@@ -13,7 +13,7 @@ import { T } from '../data/tunables';
 import { VENUES, venueFor } from '../data/venues';
 import { analyse, occupiedTiles, salaryFor } from './analysis';
 import { type DayOptions, simulateDay } from './day';
-import { buyPrice, clampEconomy, type Economy, economyOf, sellPrice } from './economy';
+import { buyPrice, clampEconomy, type Economy, economyOf, sellPrice, startFollowing } from './economy';
 import { autoLayout, bestSpot, kitchenDims, layoutProblem, rectOf } from './kitchen';
 import { locationFacts } from './location';
 import { Rng } from './rng';
@@ -232,7 +232,7 @@ export function newGame(seed: number, districtId: string, premisesId = 'hole', e
     schemaVersion: SCHEMA_VERSION, seed, day: 1, districtId, premisesId, venueId,
     cash: Math.round(T.finance.startingCash * (economy?.startingCash ?? 1)) - deposit, deposit,
     loan: { balance: 0, annualRate: T.finance.starterLoanRate, weeksLeft: 0, pausedWeeks: 0 },
-    rep: T.reputation.start, following: T.following.start, totalServed: 0, rank: 'cook', recipes, furniture: [], equipment: [], staff: [], candidates: [],
+    rep: T.reputation.start, following: startFollowing({ economy }), totalServed: 0, rank: 'cook', recipes, furniture: [], equipment: [], staff: [], candidates: [],
     nextUid: 1, daysBelowZero: 0, daysOpen: 0, fireSafety: [], history: [], unlockAll: false,
   };
   if (economy) state.economy = clampEconomy(economy);
@@ -487,7 +487,7 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       state.districtId = cmd.districtId;
       state.premisesId = cmd.premisesId;
       state.venueId = venueId;
-      state.following = followingAfterMove(state.following, sameDistrictMove);
+      state.following = followingAfterMove(state.following, sameDistrictMove, startFollowing(state));
       state.fireSafety = [];
       state.daysOpen = 0;
       const notes: string[] = [];
@@ -646,9 +646,9 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
 // ---------- Moving (city-map.md 6) ----------
 
 /** Regulars follow you down the street, not across town (balance.md 4.3). */
-export function followingAfterMove(following: number, sameDistrict: boolean): number {
+export function followingAfterMove(following: number, sameDistrict: boolean, start: number = T.following.start): number {
   const keep = sameDistrict ? T.following.keepSameDistrict : T.following.keepOtherDistrict;
-  return Math.max(T.following.start, following * keep);
+  return Math.max(start, following * keep);
 }
 
 export interface MoveQuote {
@@ -714,7 +714,7 @@ export function moveQuote(state: GameState, venueId: string): MoveQuote | null {
   const repAfter = state.rep * keep + T.reputation.start * (1 - keep);
   const net = newDeposit - refund + T.city.movingFee;
   return {
-    newDeposit, refund, movingFee: T.city.movingFee, net, repAfter, followingAfter: followingAfterMove(state.following, sameDistrict), sameDistrict,
+    newDeposit, refund, movingFee: T.city.movingFee, net, repAfter, followingAfter: followingAfterMove(state.following, sameDistrict, startFollowing(state)), sameDistrict,
     soldFurniture: dining.unplaced.map((f) => FURNITURE[f.itemId]?.name ?? f.itemId),
     soldEquipment: kitchen.unplaced.map((e) => EQUIPMENT[e.itemId]?.name ?? e.itemId),
     resale,

@@ -43,3 +43,27 @@ describe('local following', () => {
     expect(loaded.following).toBe(T.following.established);
   });
 });
+
+describe('start setting', () => {
+  test('slow start is the default; normal start opens with the neighbourhood already on board', async () => {
+    const { PRESETS, economyOf } = await import('../src/sim/economy');
+    expect(newGame(1, 'canal', 'hole').following).toBe(T.following.start);
+    expect(newGame(1, 'canal', 'hole', { ...PRESETS.normal, start: 'normal' }).following).toBe(T.following.normalStart);
+    expect(newGame(1, 'canal', 'hole', PRESETS.easy).following).toBe(T.following.normalStart);
+    // Settings saved before the choice existed follow their preset.
+    const oldEasy: Record<string, unknown> = { ...PRESETS.easy };
+    delete oldEasy.start;
+    expect(economyOf({ economy: oldEasy as never }).start).toBe('normal');
+  });
+
+  test('the setting can be changed from the settings menu and applies to moves', async () => {
+    const { apply, withStarterKit } = await import('../src/sim/game');
+    let s = withStarterKit(newGame(1, 'canal', 'cosy'));
+    s.cash = 100000;
+    s.following = 0.3;
+    s = apply(s, { type: 'setEconomy', economy: { start: 'normal' } }).state;
+    expect(s.economy?.start).toBe('normal');
+    s = apply(s, { type: 'movePremises', districtId: 'harbour', premisesId: 'medium' }).state;
+    expect(s.following).toBe(T.following.normalStart);
+  });
+});

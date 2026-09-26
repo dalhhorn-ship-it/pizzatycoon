@@ -244,6 +244,8 @@ export const T = {
    */
   following: {
     start: 0.1,
+    /** "Normal start" in the settings: the neighbourhood already knows you, as before the following existed. */
+    normalStart: 1,
     walkIn: 0.25,
     satZero: 35,
     satFull: 62,
