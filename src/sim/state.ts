@@ -1,6 +1,6 @@
 import type { DishKind, RankId, Role, SegmentId, Service, TierId, TraitId } from '../data/types';
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export interface RecipeLine {
   ingredientId: string;
@@ -37,6 +37,13 @@ export interface OwnedEquipment {
   rot: 0 | 1;
   /** Price actually paid; refunds are 80% of this. */
   paid?: number;
+  /** Installed add-ons (kitchen-upgrades.md 2). */
+  addons?: InstalledAddon[];
+}
+
+export interface InstalledAddon {
+  id: string;
+  paid: number;
 }
 
 export interface Staff {

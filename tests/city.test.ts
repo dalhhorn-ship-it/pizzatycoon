@@ -64,7 +64,7 @@ describe('city map venues (city-map.md)', () => {
     const f = locationFacts(s.districtId, s.premisesId, s.venueId);
     expect(f.weeklyRent).toBe((12 * 8 + 30) * 19);
     expect(f.footTraffic).toBeCloseTo(4200 * 1.15);
-    expect(f.sqm).toBe((12 * 8 + 30) * T.city.sqmPerTile);
+    expect(f.sqm).toBe((12 * 8 + 14 * 6) * T.city.sqmPerTile);
     expect(s.deposit).toBe(f.weeklyRent * T.finance.leaseDepositWeeks);
     expect(s.cash).toBe(T.finance.startingCash - s.deposit);
   });

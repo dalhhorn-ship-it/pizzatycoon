@@ -1,6 +1,7 @@
 // Commands in, state and events out (solution-design.md 5.1). Never mutates its input.
 
 import { DISTRICTS, PREMISES } from '../data/districts';
+import { ADDONS, type AddonItem, UPGRADE_PATHS } from '../data/addons';
 import { EQUIPMENT } from '../data/equipment';
 import { FURNITURE } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
@@ -15,7 +16,7 @@ import { buyPrice, clampEconomy, type Economy, economyOf, sellPrice } from './ec
 import { autoLayout, bestSpot, kitchenDims, layoutProblem, rectOf } from './kitchen';
 import { locationFacts } from './location';
 import { Rng } from './rng';
-import { type DayReport, type GameState, type Recipe, type RecipeLine, SCHEMA_VERSION, type Staff } from './state';
+import { type DayReport, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION, type Staff } from './state';
 
 export type Command =
   | { type: 'setTier'; recipeId: string; ingredientId: string; tier: TierId }
@@ -31,6 +32,9 @@ export type Command =
   | { type: 'moveEquipment'; uid: number; x: number; y: number; rot: 0 | 1 }
   | { type: 'sellEquipment'; uid: number }
   | { type: 'tidyKitchen' }
+  | { type: 'installAddon'; uid: number; addonId: string }
+  | { type: 'removeAddon'; uid: number; addonId: string }
+  | { type: 'upgradeStation'; uid: number; toItemId: string }
   | { type: 'movePremises'; districtId: string; premisesId: string }
   | { type: 'hire'; candidateId: number }
   | { type: 'fire'; staffId: number }
@@ -231,12 +235,15 @@ export function withStarterKit(state: GameState): GameState {
   const s = structuredClone(state);
   let uid = s.nextUid;
   s.furniture = STARTER_LAYOUT.map(([itemId, x, y]) => ({ uid: uid++, itemId, x, y }));
+  // kitchen-builder.md 3.4 layout, placed relative to the pass hatch so it fits any kitchen size.
+  const kd = kitchenDims(s.premisesId);
+  const px = kd.pass[0]?.[0] ?? 4;
   s.equipment = [
-    { itemId: 'prepCounter', x: 0, y: 0, rot: 0 as const },
-    { itemId: 'deckOven', x: 2, y: 0, rot: 0 as const },
-    { itemId: 'prepCounter', x: 2, y: 2, rot: 0 as const },
-    { itemId: 'sink', x: 6, y: 0, rot: 0 as const },
-    { itemId: 'doughFridge', x: 9, y: 2, rot: 0 as const },
+    { itemId: 'prepCounter', x: px - 4, y: 0, rot: 0 as const },
+    { itemId: 'deckOven', x: px - 2, y: 0, rot: 0 as const },
+    { itemId: 'prepCounter', x: px - 2, y: 2, rot: 0 as const },
+    { itemId: 'sink', x: px + 2, y: 0, rot: 0 as const },
+    { itemId: 'doughFridge', x: kd.W - 1, y: kd.H - 1, rot: 0 as const },
   ].map((e) => ({ uid: uid++, ...e }));
   s.staff = [
     makeStaff(uid++, 'Giulia Rossi', 'cook', 5, 7, 0, ['steady']),
@@ -286,6 +293,16 @@ function relayoutDining(furniture: GameState['furniture'], premisesId: string): 
     } else unplaced.push(f);
   }
   return { placed, unplaced };
+}
+
+/** Why an add-on cannot go on this station, or null (kitchen-upgrades.md 2). */
+export function addonProblem(state: GameState, e: OwnedEquipment, addon: AddonItem): string | null {
+  if (!addon.fits.includes(e.itemId)) return 'That does not fit this station.';
+  if (!isUnlocked(state, addon.unlock)) return `Locked: ${unlockText(addon.unlock)}.`;
+  const installed = e.addons ?? [];
+  if (installed.some((a) => a.id === addon.id)) return 'Already installed.';
+  if (installed.length >= T.addons.maxPerStation) return 'Station full, remove one first.';
+  return null;
 }
 
 // ---------- Commands ----------
@@ -438,6 +455,7 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       state.equipment = kitchen.placed;
       for (const u of kitchen.unplaced) {
         state.cash += sellPrice(state, EQUIPMENT[u.itemId]?.price ?? 0, u.paid);
+        state.cash += (u.addons ?? []).reduce((x, a) => x + sellPrice(state, ADDONS[a.id]?.price ?? 0, a.paid), 0);
         notes.push(`${EQUIPMENT[u.itemId]?.name} did not fit and was sold`);
       }
       const room = relayoutDining(state.furniture, cmd.premisesId);
@@ -449,9 +467,57 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       events.push({ kind: 'info', text: `Moved to the ${PREMISES[cmd.premisesId]?.name} in ${DISTRICTS[cmd.districtId]?.name}.${notes.length ? ` ${notes.join('; ')}.` : ''}` });
       break;
     }
+    case 'installAddon': {
+      const e = state.equipment.find((x) => x.uid === cmd.uid);
+      const addon = ADDONS[cmd.addonId];
+      if (!e || !addon) return fail(input, 'Not found.');
+      const problem = addonProblem(state, e, addon);
+      if (problem) return fail(input, problem);
+      const cost = buyPrice(state, addon.price);
+      if (state.cash < cost) return fail(input, `You need ${Math.ceil(cost - state.cash).toLocaleString('en-US')} more.`);
+      state.cash -= cost;
+      e.addons = [...(e.addons ?? []), { id: addon.id, paid: cost }];
+      break;
+    }
+    case 'removeAddon': {
+      const e = state.equipment.find((x) => x.uid === cmd.uid);
+      const inst = e?.addons?.find((a) => a.id === cmd.addonId);
+      if (!e || !inst) return fail(input, 'Not installed.');
+      state.cash += sellPrice(state, ADDONS[inst.id]?.price ?? 0, inst.paid);
+      e.addons = (e.addons ?? []).filter((a) => a !== inst);
+      break;
+    }
+    case 'upgradeStation': {
+      // kitchen-upgrades.md 5: trade in on the same tiles; compatible add-ons stay, others are refunded.
+      const e = state.equipment.find((x) => x.uid === cmd.uid);
+      const to = EQUIPMENT[cmd.toItemId];
+      if (!e || !to) return fail(input, 'Not found.');
+      if (!UPGRADE_PATHS.some(([a, b]) => a === e.itemId && b === to.id)) return fail(input, 'That is not an upgrade for this station.');
+      if (!isUnlocked(state, to.unlock)) return fail(input, `Locked: ${unlockText(to.unlock)}.`);
+      const cost = buyPrice(state, to.price);
+      const refund = sellPrice(state, EQUIPMENT[e.itemId]?.price ?? 0, e.paid);
+      const keep = (e.addons ?? []).filter((a) => ADDONS[a.id]?.fits.includes(to.id));
+      const drop = (e.addons ?? []).filter((a) => !keep.includes(a));
+      const dropRefund = drop.reduce((x, a) => x + sellPrice(state, ADDONS[a.id]?.price ?? 0, a.paid), 0);
+      const net = cost - refund - dropRefund;
+      if (state.cash < net) return fail(input, `You need ${Math.ceil(net - state.cash).toLocaleString('en-US')} more.`);
+      const before = { itemId: e.itemId, paid: e.paid, addons: e.addons };
+      e.itemId = to.id;
+      e.paid = cost;
+      e.addons = keep;
+      const problem = layoutProblem(state.equipment, kitchenDims(state.premisesId));
+      if (problem) {
+        Object.assign(e, before);
+        return fail(input, problem);
+      }
+      state.cash -= net;
+      events.push({ kind: 'info', text: `Upgraded to ${to.name}.` });
+      break;
+    }
     case 'sellEquipment': {
       const e = state.equipment.find((x) => x.uid === cmd.uid);
       if (!e) return fail(input, 'Not found.');
+      state.cash += (e.addons ?? []).reduce((x, a) => x + sellPrice(state, ADDONS[a.id]?.price ?? 0, a.paid), 0);
       state.cash += sellPrice(state, EQUIPMENT[e.itemId]?.price ?? 0, e.paid);
       state.equipment = state.equipment.filter((x) => x.uid !== cmd.uid);
       break;

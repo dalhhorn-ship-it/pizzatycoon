@@ -73,7 +73,7 @@ Effective location (the one the day model uses):
 
 ### 4.2 Square metres
 
-One grid tile is **1.5 m²** (`T.city.sqmPerTile`). Floor area is shown split into dining room and kitchen, plus the total. A cosy corner shop is 80 dining tiles (120 m²) plus 30 kitchen tiles (45 m²) = 165 m².
+One grid tile is **1.5 m²** (`T.city.sqmPerTile`). Floor area is shown split into dining room and kitchen, plus the total, from the real grids. A cosy corner shop is 80 dining tiles (120 m²) plus a 14 x 6 kitchen (126 m²) = 246 m². Rent keeps the balance sheet rule (dining tiles plus `kitchenTiles`).
 
 ### 4.3 Premises shapes
 
@@ -81,10 +81,10 @@ The hole in the wall (6 x 5 dining, 8 x 3 kitchen, 81 m²) comes from `fresh-sta
 
 | Premises | Dining (w x h) | Kitchen (w x h) | Total m² |
 |---|---|---|---|
-| Corner unit (new) | 12 x 8 | 10 x 3 | 189 |
-| Warehouse loft (new) | 14 x 10 | 12 x 4 | 282 |
+| Corner unit (new) | 12 x 8 | 14 x 6 | 270 |
+| Warehouse loft (new) | 14 x 10 | 18 x 7 | 399 |
 
-Both keep the starter furniture and starter kitchen layouts valid (dining at least 10 x 8, kitchen at least 10 x 3).
+Both keep the starter furniture and starter kitchen layouts valid (dining at least 10 x 8, kitchen at least 14 x 6).
 
 ### 4.4 The twenty four venues
 

@@ -46,9 +46,10 @@ export function locationFacts(districtId: string, premisesId: string, venueId: s
     competition: clamp(district.competition + (venue?.competitionDelta ?? 0), 0, T.city.competitionMax),
     lunchShare: clamp(district.lunchShare + (venue?.lunchShareDelta ?? 0), T.city.lunchShareMin, T.city.lunchShareMax),
     weeklyRent: tiles * rentPerTile,
+    // Floor area comes from the real grids; rent keeps the balance sheet's kitchenTiles.
     diningSqm: diningTiles * T.city.sqmPerTile,
-    kitchenSqm: premises.kitchenTiles * T.city.sqmPerTile,
-    sqm: tiles * T.city.sqmPerTile,
+    kitchenSqm: premises.kitchenWidth * premises.kitchenHeight * T.city.sqmPerTile,
+    sqm: (diningTiles + premises.kitchenWidth * premises.kitchenHeight) * T.city.sqmPerTile,
   };
 }
 

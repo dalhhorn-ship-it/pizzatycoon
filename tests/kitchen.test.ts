@@ -10,9 +10,10 @@ const starter = (): GameState => withStarterKit(newGame(1, 'canal', 'cosy'));
 
 describe('kitchen floor plan', () => {
   test('grids and pass tiles per premises (AC-134)', () => {
-    expect(kitchenDims('cosy')).toEqual({ W: 10, H: 3, pass: [[4, 0], [5, 0]] });
-    expect(kitchenDims('medium')).toEqual({ W: 12, H: 3, pass: [[5, 0], [6, 0]] });
-    expect(kitchenDims('large')).toEqual({ W: 15, H: 4, pass: [[6, 0], [7, 0]] });
+    expect(kitchenDims('hole')).toEqual({ W: 10, H: 5, pass: [[4, 0], [5, 0]] });
+    expect(kitchenDims('cosy')).toEqual({ W: 14, H: 6, pass: [[6, 0], [7, 0]] });
+    expect(kitchenDims('medium')).toEqual({ W: 16, H: 6, pass: [[7, 0], [8, 0]] });
+    expect(kitchenDims('large')).toEqual({ W: 20, H: 8, pass: [[9, 0], [10, 0]] });
   });
 
   test('invalid placements are rejected with a reason and state unchanged (AC-135)', () => {
@@ -20,9 +21,9 @@ describe('kitchen floor plan', () => {
     s.cash = 50000;
     const oven = s.equipment.find((e) => e.itemId === 'deckOven')!;
     const cases: [number, number, RegExp][] = [
-      [9, 2, /Off the kitchen/],
-      [0, 0, /already there/],
-      [4, 0, /pass stays clear/],
+      [13, 5, /Off the kitchen/],
+      [2, 0, /already there/],
+      [6, 0, /pass stays clear/],
     ];
     for (const [x, y, reason] of cases) {
       const r = apply(s, { type: 'moveEquipment', uid: oven.uid, x, y, rot: 0 });
@@ -36,7 +37,7 @@ describe('kitchen floor plan', () => {
     s.cash = 50000;
     s.day = 10;
     expect(apply(s, { type: 'buyEquipment', itemId: 'heatLampPass', x: 7, y: 1 }).error).toMatch(/hatch/);
-    const ok = apply(s, { type: 'buyEquipment', itemId: 'heatLampPass', x: 4, y: 0 });
+    const ok = apply(s, { type: 'buyEquipment', itemId: 'heatLampPass', x: 6, y: 0 });
     expect(ok.error).toBeUndefined();
   });
 
@@ -67,7 +68,7 @@ describe('kitchen floor plan', () => {
     const s = starter();
     const before = analyse(s).kitchen.prepPerHour;
     const counter = s.equipment.find((e) => e.itemId === 'prepCounter' && e.y === 2)!;
-    const r = apply(s, { type: 'moveEquipment', uid: counter.uid, x: 7, y: 2, rot: 0 });
+    const r = apply(s, { type: 'moveEquipment', uid: counter.uid, x: 9, y: 2, rot: 0 });
     expect(r.error).toBeUndefined();
     const after = analyse(r.state).kitchen;
     expect(after.prepPerHour).toBeLessThan(before);
@@ -79,12 +80,12 @@ describe('kitchen floor plan', () => {
     const s = starter();
     s.premisesId = 'large';
     s.equipment = [
-      { uid: 1, itemId: 'deckOven', x: 13, y: 2, rot: 0 },
-      { uid: 2, itemId: 'prepCounter', x: 11, y: 2, rot: 0 },
-      { uid: 3, itemId: 'sink', x: 8, y: 0, rot: 0 },
-      { uid: 4, itemId: 'doughFridge', x: 0, y: 3, rot: 0 },
+      { uid: 1, itemId: 'deckOven', x: 14, y: 4, rot: 0 },
+      { uid: 2, itemId: 'prepCounter', x: 12, y: 4, rot: 0 },
+      { uid: 3, itemId: 'sink', x: 11, y: 0, rot: 0 },
+      { uid: 4, itemId: 'doughFridge', x: 0, y: 7, rot: 0 },
     ];
-    const dPass = distance(rectOf(s.equipment[0]!), { x: 6, y: 0, w: 2, h: 1 });
+    const dPass = distance(rectOf(s.equipment[0]!), { x: 9, y: 0, w: 2, h: 1 });
     expect(dPass).toBe(8);
     const a = analyse(s).kitchen;
     expect(a.plateWalk).toBeCloseTo(Math.min(2, 0.2 * (dPass - 3)), 5);

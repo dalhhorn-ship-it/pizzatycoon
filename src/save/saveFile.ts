@@ -4,7 +4,7 @@ import { SCHEMA_VERSION, type GameState } from '../sim/state';
 import { DISTRICTS, PREMISES } from '../data/districts';
 import { EQUIPMENT } from '../data/equipment';
 import { VENUES, venueFor } from '../data/venues';
-import { autoLayout } from '../sim/kitchen';
+import { autoLayout, kitchenDims, layoutProblem } from '../sim/kitchen';
 
 export interface SaveSummary {
   day: number;
@@ -41,8 +41,18 @@ const MIGRATIONS: Record<number, (state: Record<string, unknown>) => Record<stri
     s.deposit = d && p ? (p.diningWidth * p.diningHeight + p.kitchenTiles) * d.rentPerTile * 8 : 0;
     return s;
   },
-  // v3 to v4: venues on the city map (city-map.md 6). Land on the venue with the same district and premises.
+  // v3 to v4: kitchens got bigger and the hatch moved; re-lay any kitchen that no longer follows the rules.
   3: (state) => {
+    const s = state as unknown as GameState;
+    if (layoutProblem(s.equipment, kitchenDims(s.premisesId))) {
+      const { placed, unplaced } = autoLayout(s.equipment, s.premisesId);
+      s.equipment = placed;
+      for (const u of unplaced) s.cash += EQUIPMENT[u.itemId]?.price ?? 0;
+    }
+    return state;
+  },
+  // v4 to v5: venues on the city map (city-map.md 6). Land on the venue with the same district and premises.
+  4: (state) => {
     const s = state as { districtId: string; premisesId: string; venueId?: string | null };
     s.venueId = venueFor(s.districtId, s.premisesId);
     return s;

@@ -152,6 +152,7 @@ export class App {
   private ctx(): PanelCtx {
     return {
       state: this.game.state as GameState,
+      current: () => this.game.state as GameState,
       dispatch: (cmd) => this.game.dispatch(cmd),
       floor: this.floor,
       rerender: () => this.renderPanel(),
