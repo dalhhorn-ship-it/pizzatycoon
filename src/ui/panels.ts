@@ -6,9 +6,10 @@ import { FURNITURE } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
 import { ROLE_NAMES, TRAITS } from '../data/staff';
 import type { EquipmentItem, Role } from '../data/types';
+import { ADDONS, addonEffectText, UPGRADE_PATHS } from '../data/addons';
 import { T } from '../data/tunables';
 import { analyse } from '../sim/analysis';
-import { type Command, isUnlocked, loanPayment, RANK_NAMES, suppliersFor, tiersFor, unlockText } from '../sim/game';
+import { addonProblem, type Command, isUnlocked, loanPayment, RANK_NAMES, suppliersFor, tiersFor, unlockText } from '../sim/game';
 import { buyPrice, sellPrice } from '../sim/economy';
 import { kitchenDims, layoutProblem } from '../sim/kitchen';
 import type { GameState, OwnedEquipment, Recipe } from '../sim/state';
@@ -19,6 +20,8 @@ import type { KitchenView } from './kitchenView';
 
 export interface PanelCtx {
   state: GameState;
+  /** The state right now (after any dispatch in this render). */
+  current: () => GameState;
   dispatch: (cmd: Command) => string | null;
   floor: Floor;
   rerender: () => void;
@@ -196,7 +199,7 @@ export function kitchenPanel(ctx: PanelCtx, view: KitchenView): HTMLElement {
               if (err) toast(err, 'warn');
               else {
                 toast(`${it.name} installed`, 'good');
-                const added = ctx.state.equipment.at(-1);
+                const added = ctx.current().equipment.at(-1);
                 view.select(added ? { kind: 'station', uid: added.uid } : { kind: 'none' });
                 ctx.rerender();
               }
@@ -236,6 +239,7 @@ export function kitchenPanel(ctx: PanelCtx, view: KitchenView): HTMLElement {
         h('div', { class: 'spread' }, h('h2', null, it.name), h('button', { class: 'small', onclick: clear }, 'Close')),
         h('div', { class: 'row' }, h('span', { class: `chip family-${it.family}` }, it.family), h('span', { class: 'small muted' }, it.blurb)),
         h('div', { class: 'card' }, h('div', { class: 'small' }, itemStats(it)), ...lines.map((l) => h('div', null, l))),
+        upgradesSection(ctx, e, it),
         h('div', { class: 'small muted' }, 'Drag it on the plan to move it. Moving is free.'),
         h('div', { class: 'row' },
           it.role !== 'pass' && it.w !== it.h
@@ -275,6 +279,71 @@ export function kitchenPanel(ctx: PanelCtx, view: KitchenView): HTMLElement {
         h('span', null, h('b', null, it.name), ' ', h('span', { class: `chip family-${it.family}` }, it.family)),
         h('span', { class: 'small muted' }, it.role === 'oven' ? `${(k.ovenOutput[e.uid] ?? 0).toFixed(0)}/h` : it.role === 'counter' ? `${(k.stationPrep[e.uid] ?? 0).toFixed(0)}/h` : ''));
     }));
+}
+
+/** Upgrades for one station: trade in paths and add-ons (kitchen-upgrades.md 6). */
+function upgradesSection(ctx: PanelCtx, e: OwnedEquipment, it: EquipmentItem): HTMLElement | null {
+  const { state } = ctx;
+  const paths = UPGRADE_PATHS.filter(([from]) => from === e.itemId).map(([, to]) => EQUIPMENT[to]).filter((x): x is EquipmentItem => !!x);
+  const fitting = Object.values(ADDONS).filter((a) => a.fits.includes(e.itemId));
+  if (!paths.length && !fitting.length) return null;
+  const installed = e.addons ?? [];
+  const preview = (mutate: (hyp: GameState) => void, cost: number): HTMLElement => {
+    const hyp = structuredClone(state);
+    mutate(hyp);
+    const d = compare(state, hyp);
+    return impactLine(d, d.profit > 1 ? `pays back in about ${Math.ceil(cost / d.profit)} days` : 'does not raise your bottleneck today');
+  };
+  const rows: HTMLElement[] = [];
+  for (const to of paths) {
+    const unlocked = isUnlocked(state, to.unlock);
+    const keep = installed.filter((a) => ADDONS[a.id]?.fits.includes(to.id));
+    const dropRefund = installed.filter((a) => !keep.includes(a)).reduce((x, a) => x + sellPrice(state, ADDONS[a.id]?.price ?? 0, a.paid), 0);
+    const net = buyPrice(state, to.price) - sellPrice(state, it.price, e.paid) - dropRefund;
+    rows.push(h('div', { class: 'fit upgrade' },
+      h('div', { class: 'spread' }, h('b', null, `⬆ Upgrade to ${to.name}`), h('b', null, money(net))),
+      h('div', { class: 'small muted' }, `${to.blurb} Same spot; your old one is traded in at 80%.${keep.length ? ` Keeps ${keep.map((a) => ADDONS[a.id]?.name).join(', ')}.` : ''}`),
+      unlocked ? preview((hyp) => {
+        const x = hyp.equipment.find((q) => q.uid === e.uid);
+        if (x) {
+          x.itemId = to.id;
+          x.addons = keep;
+        }
+      }, net) : null,
+      unlocked
+        ? h('button', { class: 'primary small', disabled: state.cash < net, onclick: () => act(ctx, { type: 'upgradeStation', uid: e.uid, toItemId: to.id }) },
+          state.cash < net ? `Need ${money(net - state.cash)} more` : `Upgrade for ${money(net)}`)
+        : h('span', { class: 'small muted' }, `🔒 ${unlockText(to.unlock)}`)));
+  }
+  for (const inst of installed) {
+    const a = ADDONS[inst.id];
+    if (!a) continue;
+    rows.push(h('div', { class: 'fit installed' },
+      h('div', { class: 'spread' }, h('b', null, `✓ ${a.name}`), h('span', { class: 'small good' }, addonEffectText(a))),
+      h('button', { class: 'small', onclick: () => act(ctx, { type: 'removeAddon', uid: e.uid, addonId: a.id }) }, `Remove, +${money(sellPrice(state, a.price, inst.paid))}`)));
+  }
+  for (const a of fitting.filter((x) => !installed.some((i) => i.id === x.id))) {
+    const problem = addonProblem(state, e, a);
+    const locked = !isUnlocked(state, a.unlock);
+    const cost = buyPrice(state, a.price);
+    rows.push(h('div', { class: `fit ${locked ? 'locked' : ''}` },
+      h('div', { class: 'spread' }, h('b', null, a.name), h('b', null, money(cost))),
+      h('div', { class: 'small' }, h('span', { class: 'good' }, addonEffectText(a)), a.maintenance ? ` · ${money(a.maintenance)}/week upkeep` : ''),
+      h('div', { class: 'small muted' }, a.blurb),
+      !problem ? preview((hyp) => {
+        const x = hyp.equipment.find((q) => q.uid === e.uid);
+        if (x) x.addons = [...(x.addons ?? []), { id: a.id, paid: cost }];
+      }, cost) : null,
+      locked
+        ? h('span', { class: 'small muted' }, `🔒 ${unlockText(a.unlock)}`)
+        : problem
+          ? h('span', { class: 'small muted' }, problem)
+          : h('button', { class: 'primary small', disabled: state.cash < cost, onclick: () => act(ctx, { type: 'installAddon', uid: e.uid, addonId: a.id }, `${a.name} installed`) },
+            state.cash < cost ? `Need ${money(cost - state.cash)} more` : `Install ${money(cost)}`)));
+  }
+  return h('div', { class: 'stack' },
+    h('div', { class: 'spread' }, h('h3', null, 'Upgrades'), h('span', { class: 'small muted' }, `${installed.length} of ${T.addons.maxPerStation} add-ons`)),
+    h('div', { class: 'fitlist' }, ...rows));
 }
 
 // ---------- Room ----------

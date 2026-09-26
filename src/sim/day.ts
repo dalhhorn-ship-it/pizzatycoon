@@ -334,8 +334,8 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   const pnl = fixedCosts(state, a, covers);
   pnl.sales = sales;
   pnl.ingredients = ingredients;
-  pnl.waste = waste;
-  pnl.profit = sales - ingredients - waste - pnl.staff - pnl.rent - pnl.utilities - pnl.upkeep - pnl.interest;
+  pnl.waste = waste * a.kitchen.wasteMult;
+  pnl.profit = sales - ingredients - pnl.waste - pnl.staff - pnl.rent - pnl.utilities - pnl.upkeep - pnl.interest;
 
   return {
     day: state.day, weekday, open: true, closedReason: null, covers, walkAways: totalWalk, services, segments: segmentReports,

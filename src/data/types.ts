@@ -38,7 +38,9 @@ export interface Premises {
   name: string;
   diningWidth: number;
   diningHeight: number;
+  /** Kitchen tiles counted for rent and deposit (balance.md tuning). */
   kitchenTiles: number;
+  /** The kitchen floor plan the player builds on; roomier than the rented tile count on purpose (founder request). */
   kitchenWidth: number;
   kitchenHeight: number;
 }

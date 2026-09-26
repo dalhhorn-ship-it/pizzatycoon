@@ -121,7 +121,7 @@ On install: a small spanner twirl and a soft click; the dot pops in.
 | Tunable (`T.addons`) | Unit | Start | Safe range |
 |---|---|---|---|
 | maxPerStation | count | 2 | 1 to 3 |
-| qualityCap | E points | 3 | 2 to 4 |
+| qualityCap | E points | 2 (was 3; lowered after the live balance run, see section 7 risk) | 2 to 4 |
 | coldReachTiles | tiles | 2 | 2 to 3 |
 | resale | fraction | 0.80 (reads `kitchen.resale`) | 0.6 to 0.9 |
 
