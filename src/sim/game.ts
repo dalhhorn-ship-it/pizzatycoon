@@ -16,6 +16,7 @@ import { type DayOptions, simulateDay } from './day';
 import { buyPrice, clampEconomy, type Economy, economyOf, sellPrice, startFollowing } from './economy';
 import { autoLayout, bestSpot, kitchenDims, layoutProblem, rectOf } from './kitchen';
 import { locationFacts } from './location';
+import { applyLocation, extractLocation, locationName, managerOf, ownedVenues, runBranchDay } from './chain';
 import { Rng } from './rng';
 import { type DayReport, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION, type Staff } from './state';
 
@@ -49,8 +50,12 @@ export type Command =
   | { type: 'freshStart' }
   | { type: 'rentVenue'; venueId: string }
   | { type: 'buyFireSafety'; id: string }
+  /** Open a second (third...) restaurant; the current one stays open under its restaurant manager. */
+  | { type: 'openRestaurant'; venueId: string }
+  /** Go and run another restaurant you own; the one you leave needs a manager. */
+  | { type: 'switchRestaurant'; locationId: number }
   | { type: 'runDay' }
-  /** Fast forward: up to 7 days, stopping early when something needs the player (see WEEK_STOPS). */
+  /** Fast forward: up to 7 days, stopping early when something needs the player (see WEEK_STOPS, and a closed day with a single restaurant). */
   | { type: 'runWeek' };
 
 export interface GameEvent {
@@ -74,6 +79,8 @@ export const RANK_NAMES: Record<RankId, string> = {
 };
 
 // ---------- Helpers ----------
+
+const money0 = (n: number): string => `$${Math.ceil(n).toLocaleString('en-US')}`;
 
 /** Cheapest supplier that carries the tier for this ingredient's category (ties go to better quality). */
 export function defaultSupplier(ingredientId: string, tier: TierId): string | null {
@@ -172,6 +179,14 @@ function generateCandidates(state: GameState): Staff[] {
     const name = `${rng.pick(FIRST_NAMES)} ${rng.pick(LAST_NAMES)}`;
     out.push(makeStaff(state.nextUid + i, name, role, skill, potential, fame, traits));
   }
+  // From the second week on, one restaurant manager applies every week (prd.md 5.9). Own stream: the rest of the board is unchanged.
+  if (state.day > 1) {
+    const mr = Rng.stream(state.seed, state.day, 'manager');
+    const [lo, hi] = T.manager.candidateSkill;
+    const skill = mr.int(lo, hi);
+    const trait = mr.pick(['steady', 'frugal', 'charmer', 'mentor'] as TraitId[]);
+    out.push(makeStaff(state.nextUid + out.length, `${mr.pick(FIRST_NAMES)} ${mr.pick(LAST_NAMES)}`, 'manager', skill, Math.min(10, skill + mr.int(0, 2)), 0, [trait]));
+  }
   return out;
 }
 
@@ -233,11 +248,11 @@ export function newGame(seed: number, districtId: string, premisesId = 'hole', e
     cash: Math.round(T.finance.startingCash * (economy?.startingCash ?? 1)) - deposit, deposit,
     loan: { balance: 0, annualRate: T.finance.starterLoanRate, weeksLeft: 0, pausedWeeks: 0 },
     rep: T.reputation.start, following: startFollowing({ economy }), totalServed: 0, rank: 'cook', recipes, furniture: [], equipment: [], staff: [], candidates: [],
-    nextUid: 1, daysBelowZero: 0, daysOpen: 0, fireSafety: [], history: [], unlockAll: false,
+    nextUid: 1, daysBelowZero: 0, daysOpen: 0, fireSafety: [], history: [], locationId: 1, branches: [], unlockAll: false,
   };
   if (economy) state.economy = clampEconomy(economy);
   state.candidates = generateCandidates(state);
-  state.nextUid += T.staff.candidatesPerWeek;
+  state.nextUid += state.candidates.length;
   return state;
 }
 
@@ -635,6 +650,35 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       events.push({ kind: 'info', text: `${item.name} installed. The room now allows ${seatLimit(state.premisesId, state.fireSafety)} seats.` });
       break;
     }
+    case 'openRestaurant': {
+      const venue = VENUES[cmd.venueId];
+      if (!venue) return fail(input, 'Unknown venue.');
+      if (ownedVenues(state).has(venue.id)) return fail(input, 'You already run a restaurant here.');
+      const here = locationName(state);
+      if (!managerOf(state.staff)) return fail(input, `Hire a restaurant manager for ${here} first, so it keeps running while you open the new one.`);
+      const deposit = venueDeposit(venue.id);
+      if (state.cash < deposit) return fail(input, `The deposit is ${money0(deposit)}; you need ${money0(deposit - state.cash)} more.`);
+      state.branches.push(extractLocation(state));
+      const id = Math.max(state.locationId, ...state.branches.map((b) => b.id)) + 1;
+      // A new restaurant: empty premises, the recipe book and menu come along, the neighbourhood has to get to know you.
+      applyLocation(state, {
+        id, districtId: venue.districtId, premisesId: venue.premisesId, venueId: venue.id, deposit,
+        rep: T.reputation.start, following: startFollowing(state), recipes: structuredClone(state.recipes),
+        furniture: [], equipment: [], staff: [], daysOpen: 0, fireSafety: [], history: [],
+      });
+      state.cash -= deposit;
+      events.push({ kind: 'info', text: `You signed the lease on ${venue.name}. ${here} carries on under its manager.` });
+      break;
+    }
+    case 'switchRestaurant': {
+      const target = state.branches.find((b) => b.id === cmd.locationId);
+      if (!target) return fail(input, 'You do not own that restaurant.');
+      if (!managerOf(state.staff)) return fail(input, `Hire a restaurant manager for ${locationName(state)} first, so it keeps running while you are away.`);
+      state.branches = state.branches.map((b) => (b.id === target.id ? extractLocation(state) : b));
+      applyLocation(state, target);
+      events.push({ kind: 'info', text: `You are now running ${locationName(state)}.` });
+      break;
+    }
     case 'runDay':
       return runDay(state, opts);
     case 'runWeek':
@@ -727,6 +771,7 @@ function rentVenue(input: GameState, venueId: string): Result {
   const quote = moveQuote(input, venueId);
   if (!venue || !quote) return fail(input, 'Unknown venue.');
   if (input.venueId === venueId) return fail(input, 'You already rent this venue.');
+  if (ownedVenues(input).has(venueId)) return fail(input, 'You already run a restaurant there.');
   if (quote.total > 0 && input.cash < quote.total) return fail(input, `Moving costs $${Math.ceil(quote.total).toLocaleString('en-US')}; you need $${Math.ceil(quote.total - input.cash).toLocaleString('en-US')} more.`);
   const state = structuredClone(input);
   state.furniture = moveDining(state, venue.premisesId).placed;
@@ -769,7 +814,8 @@ function runWeek(state: GameState, opts: DayOptions): Result {
     if (day?.report) reports.push(day.report);
     const others = r.events.filter((e) => e.kind !== 'dayCompleted');
     events.push(...others);
-    if (day?.report && !day.report.open) stoppedBecause = `Closed on day ${day.report.day}: ${day.report.closedReason}`;
+    // With only one restaurant a closed day needs the player; with more, the others keep earning while this one is set up.
+    if (day?.report && !day.report.open && !state.branches.length) stoppedBecause = `Closed on day ${day.report.day}: ${day.report.closedReason}`;
     const stop = others.find((e) => WEEK_STOPS.includes(e.kind));
     if (stop) stoppedBecause = stop.text;
     if (stoppedBecause) break;
@@ -807,6 +853,10 @@ function runDay(state: GameState, opts: DayOptions): Result {
     }
     state.cash -= weekly;
   }
+  // The other restaurants, run by their managers, share the same cash (prd.md 5.12).
+  const branchDays = state.branches.map((b) => runBranchDay(state, b, report.weekday, opts));
+  if (branchDays.length) report.branches = branchDays.map((x) => x.day);
+  weekly += branchDays.reduce((x, d) => x + d.weekly, 0);
   report.weeklyPayments = weekly;
   report.cashAfter = state.cash;
 
@@ -869,7 +919,7 @@ function runDay(state: GameState, opts: DayOptions): Result {
   state.day += 1;
   if (report.weekday === 6) {
     state.candidates = generateCandidates(state);
-    state.nextUid += T.staff.candidatesPerWeek;
+    state.nextUid += state.candidates.length;
   }
 
   const unlockedAfter = unlockedIds(state);

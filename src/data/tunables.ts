@@ -261,6 +261,26 @@ export const T = {
     /** Saves from before the following existed are established restaurants. */
     established: 0.8,
   },
+  /**
+   * Restaurant manager (prd.md 5.9): runs a restaurant the player is not running. Skill m 1..10.
+   * Guests x (1 + demandBase + demandPerSkill x m): m 5 is as good as the player.
+   * Stock accuracy = accuracyBase + accuracyPerSkill x m; waste x (1 + wastePerAccuracy x (parityAccuracy - accuracy)).
+   * No manager: caretaker mode (last settings repeated) at caretakerDemand and caretakerWaste.
+   */
+  manager: {
+    demandBase: -0.1,
+    demandPerSkill: 0.02,
+    accuracyBase: 0.7,
+    accuracyPerSkill: 0.03,
+    parityAccuracy: 0.85,
+    wastePerAccuracy: 2,
+    caretakerDemand: -0.2,
+    caretakerWaste: 1.5,
+    /** A frugal manager buys 5% cheaper. */
+    frugalIngredients: 0.95,
+    /** Manager candidates on the weekly board: skill range. */
+    candidateSkill: [3, 9] as readonly [number, number],
+  },
   city: {
     sqmPerTile: 1.5,
     movingFee: 1500,

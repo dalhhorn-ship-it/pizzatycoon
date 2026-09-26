@@ -629,3 +629,25 @@ Measured on the cosy starter: deck oven 67.2 satisfaction; Stone Hearth 70.4 (wa
 **Retune.** The add-on guardrail (kitchen-upgrades.md 7) had only $7 a day of headroom before this change, and a fully upgraded middle build gained about $30. Following the order in kitchen-upgrades.md 7 and 3.7 (qualityCap was already 2): Students budget B 11 to 11.5. Volume at home $1,922 to $2,113 a day; middle in University Quarter $1,615 to $1,689; luxury and the other districts within a few dollars. The add-on test now takes each specialist's best price in its band, as the spec says, instead of a fixed $8. The upgraded middle build trails volume by 17% and luxury by 42%.
 
 **Start setting (settings menu, `Economy.start`).** "Slow start" (default on Normal and Hard) opens a new restaurant at a 10% following as described in 4.3. "Normal start" (default on Easy) opens at 100%, as before the following existed; it then only drops if guests are unhappy. The choice applies to new games, fresh starts and moves, and is remembered on the device for the next new game.
+
+### 4.5 A second restaurant under a restaurant manager (2026-09-26)
+
+Founder request: before buying another restaurant, the player hires a manager for the current one; that restaurant is then run according to the manager's skills. First slice of prd.md 5.9 and 5.12.
+
+**Manager.** New staff role, base salary $1,100 a week (prd.md 5.8), skill 3 to 9 on the hiring board; one manager candidate applies every week from the second week on (own random stream, so the rest of the board is unchanged). While the player runs the restaurant the manager has nothing to do.
+
+**Opening another restaurant.** City map, any venue you do not run: "Open a new restaurant here" next to "Move here". It needs a restaurant manager on the current team and the new venue's deposit. The current restaurant (room, kitchen, team, menu, reputation, following, fire safety) becomes a managed restaurant; the new one starts empty at Rep 30 and the start setting's following, with a copy of the recipe book and menu. Cash, loan, rank and the hiring board are shared. "Go and run it" (Money tab or city map) switches between restaurants; the one you leave needs a manager.
+
+**How a manager runs it** (`T.manager`, `src/sim/chain.ts`), skill m:
+
+| | Formula | m = 3 | m = 5 | m = 9 |
+|---|---|---|---|---|
+| Guests | 1 - 0.10 + 0.02 x m | -4% | as the player | +8% |
+| Stock accuracy | 0.70 + 0.03 x m | 0.79 | 0.85 | 0.97 |
+| Waste | 1 + 2 x (0.85 - accuracy) | +12% | as the player | -24% |
+
+A frugal manager buys 5% cheaper. Without a manager (caretaker mode): 20% fewer guests, waste x1.5. Better managers cost more (salary scales with skill), so a skill 9 manager pays off in a busy restaurant, not a quiet one.
+
+**Each day** every managed restaurant runs the same day model with those effects (its own randomness, no loan interest). Sales and daily costs settle into the shared cash; wages and rent on Sunday. Its reputation, following, days open and last 28 days of reports update. Staff at a managed restaurant do not grow or change morale yet. The day and week reports list the other restaurants; "Run a week" no longer stops for a closed day when other restaurants are earning.
+
+Not in this slice (prd.md 5.9): manager policies (strategy, price band, tier floor), manager pricing, hiring and equipment proposals, weekly manager report card, Rep 50 gate for opening, cannibalisation in the same district, chain menu and central purchasing.

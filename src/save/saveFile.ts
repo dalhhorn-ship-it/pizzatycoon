@@ -98,6 +98,9 @@ export function deserialise(text: string): SaveFile {
   // Saves from before fire safety: treat every day played as a day open.
   if (!Array.isArray(s.fireSafety)) s.fireSafety = [];
   if (typeof s.daysOpen !== 'number') s.daysOpen = Math.max(0, s.day - 1);
+  // Saves from before chains run one restaurant.
+  if (!Array.isArray(s.branches)) s.branches = [];
+  if (typeof s.locationId !== 'number') s.locationId = 1;
   return { ...raw, schemaVersion: SCHEMA_VERSION, state: s };
 }
 

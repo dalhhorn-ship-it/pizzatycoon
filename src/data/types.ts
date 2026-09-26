@@ -168,7 +168,7 @@ export interface FurnitureItem {
   color: string;
 }
 
-export type Role = 'chef' | 'cook' | 'server' | 'host' | 'dishwasher';
+export type Role = 'chef' | 'cook' | 'server' | 'host' | 'dishwasher' | 'manager';
 
 export type TraitId = 'speedy' | 'perfectionist' | 'charmer' | 'steady' | 'mentor' | 'nightOwl' | 'frugal' | 'crowdPleaser';
 

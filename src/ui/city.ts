@@ -5,6 +5,7 @@ import { SEGMENTS, SEGMENT_IDS } from '../data/segments';
 import type { SegmentId, Venue } from '../data/types';
 import { T } from '../data/tunables';
 import { VENUES } from '../data/venues';
+import { CARETAKER_TEXT, locationName, managerOf, ownedVenues } from '../sim/chain';
 import { moveQuote, seatLimit, venueDeposit } from '../sim/game';
 import { bestFor, type LocationFacts, locationFacts, stateLocation } from '../sim/location';
 import type { GameState } from '../sim/state';
@@ -20,6 +21,10 @@ export interface CityCtx {
   /** Null when there is nothing to go back to (first launch). */
   onBack: (() => void) | null;
   onRent: (venueId: string) => void;
+  /** Move mode: open a second restaurant here; the current one stays open under its manager. */
+  onOpen?: (venueId: string) => void;
+  /** Move mode: go and run a restaurant you already own. */
+  onSwitch?: (locationId: number) => void;
   onLinkDevice?: () => void;
 }
 
@@ -127,7 +132,8 @@ export class CityView {
     const pins = Object.values(VENUES).sort((a, b) => (a.id === this.selected ? 1 : b.id === this.selected ? -1 : 0));
     for (const v of pins) {
       const r = pinRadius(v.premisesId);
-      const cls = ['pin', v.id === this.selected ? 'on' : '', v.id === hereId ? 'here' : ''].join(' ');
+      const owned = this.ctx?.state ? ownedVenues(this.ctx.state).has(v.id) : false;
+      const cls = ['pin', v.id === this.selected ? 'on' : '', v.id === hereId || owned ? 'here' : ''].join(' ');
       const g = svg('g', { class: cls, tabindex: 0, role: 'button', 'aria-label': v.name });
       g.append(svg('circle', { cx: v.x, cy: v.y, r: 3.6, class: 'hit' }), svg('circle', { cx: v.x, cy: v.y, r: v.id === this.selected ? r + 0.5 : r, class: 'dot' }));
       if (v.id === hereId) g.append(svg('text', { x: v.x, y: v.y - r - 1.2, class: 'flag' }, 'You are here'));
@@ -169,7 +175,8 @@ export class CityView {
       h('div', { class: 'row small' }, h('span', { class: 'muted' }, 'Sort'), h('div', { class: 'seg' },
         sortBtn('traffic', 'Foot traffic'), sortBtn('rent', 'Rent'), sortBtn('size', 'Size'), sortBtn('name', 'Name'))),
       h('div', { class: 'vrows' }, ...rows.map(({ v, f }) => h('button', { class: `vrow ${v.id === this.selected ? 'on' : ''}`, onclick: () => this.select(v.id) },
-        h('span', { class: 'vname' }, h('b', null, v.name), v.id === hereId ? h('span', { class: 'chip here' }, 'You are here') : null,
+        h('span', { class: 'vname' }, h('b', null, v.name), v.id === hereId ? h('span', { class: 'chip here' }, 'You are here')
+          : this.ctx?.state && ownedVenues(this.ctx.state).has(v.id) ? h('span', { class: 'chip here' }, 'Yours') : null,
           h('span', { class: 'small muted' }, `${f.district.name} · ${f.premises.name}`)),
         h('span', { class: 'vnum' }, h('b', null, Math.round(f.footTraffic).toLocaleString('en-US')), h('span', { class: 'small muted' }, 'a day')),
         h('span', { class: 'vnum' }, h('b', null, money(f.weeklyRent)), h('span', { class: 'small muted' }, 'a week')),
@@ -266,6 +273,16 @@ export class CityView {
     }
     if (here) return h('div', { class: 'card rentbox' }, h('div', { class: 'small muted' }, 'This is where your pizzeria is today.'),
       ctx.onBack ? h('button', { class: 'primary', onclick: () => ctx.onBack?.() }, `Back to ${v.name}`) : null);
+    const branch = ctx.state.branches.find((b) => b.venueId === v.id);
+    if (branch) {
+      const m = managerOf(branch.staff);
+      const hasManager = !!managerOf(ctx.state.staff);
+      return h('div', { class: 'card rentbox' },
+        h('h3', null, 'Your restaurant'),
+        h('div', { class: 'small muted' }, m ? `Run by ${m.name}, restaurant manager, skill ${m.skill}. Reputation ${branch.rep.toFixed(0)}.` : CARETAKER_TEXT),
+        !hasManager ? h('div', { class: 'small warn' }, `To go and run it, first hire a restaurant manager for ${locationName(ctx.state)} (Staff tab).`) : null,
+        h('button', { class: 'primary', disabled: !hasManager, onclick: () => ctx.onSwitch?.(branch.id) }, 'Go and run it'));
+    }
     const q = moveQuote(ctx.state, v.id);
     if (!q) return h('div');
     const short = q.total > 0 && ctx.state.cash < q.total;
@@ -281,7 +298,25 @@ export class CityView {
       h('div', { class: 'small muted' }, `Reputation ${ctx.state.rep.toFixed(0)} → ${q.repAfter.toFixed(0)}: ${q.sameDistrict ? 'same neighbourhood, most regulars follow you' : 'a new neighbourhood has to get to know you'}. Local following ${Math.round(ctx.state.following * 100)}% → ${Math.round(q.followingAfter * 100)}%. Team, menu, loan and rank come with you${ctx.state.fireSafety.length ? '; fire safety upgrades stay in the old building' : ''}.`),
       sold.length ? h('div', { class: 'small warn' }, `Will not fit and gets sold: ${sold.join(', ')}.`) : null,
       short ? h('div', { class: 'small bad' }, `You need ${money(q.total - ctx.state.cash)} more cash.`) : null,
-      h('button', { class: 'primary', disabled: short, onclick: () => ctx.onRent(v.id) }, 'Rent this venue'));
+      h('button', { class: 'primary', disabled: short, onclick: () => ctx.onRent(v.id) }, 'Move here'),
+      this.openBox(v));
+  }
+
+  /** Open a second restaurant here: the current one keeps running under its manager (prd.md 5.9). */
+  private openBox(v: Venue): HTMLElement {
+    const ctx = this.ctx as CityCtx;
+    const state = ctx.state as GameState;
+    const deposit = venueDeposit(v.id);
+    const manager = managerOf(state.staff);
+    const short = state.cash < deposit;
+    return h('div', { class: 'stack', style: 'margin-top:10px' },
+      h('h3', null, 'Or open it as a new restaurant'),
+      h('div', { class: 'small muted' }, `Keep ${locationName(state)} and open here as well. The new place starts empty, with your recipes and menu. Deposit ${money(deposit)}; the rest comes from shared cash.`),
+      manager
+        ? h('div', { class: 'small good' }, `${manager.name} (skill ${manager.skill}) will run ${locationName(state)} while you are here.`)
+        : h('div', { class: 'small warn' }, `First hire a restaurant manager for ${locationName(state)} in the Staff tab, to keep it running while you are away.`),
+      short ? h('div', { class: 'small bad' }, `You need ${money(deposit - state.cash)} more cash.`) : null,
+      h('button', { disabled: !manager || short, onclick: () => ctx.onOpen?.(v.id) }, 'Open a new restaurant here'));
   }
 }
 

@@ -135,6 +135,27 @@ export interface DayReport {
   cashAfter: number;
   weeklyPayments: number;
   tips: string[];
+  /** The player's other restaurants on the same day (chain). */
+  branches?: BranchDay[];
+}
+
+/** Everything that belongs to one restaurant. The one the player runs lives at the top of GameState. */
+export const LOCATION_KEYS = [
+  'districtId', 'premisesId', 'venueId', 'deposit', 'rep', 'following', 'recipes', 'furniture', 'equipment', 'staff',
+  'daysOpen', 'fireSafety', 'history',
+] as const;
+export type LocationKey = (typeof LOCATION_KEYS)[number];
+export type Location = Pick<GameState, LocationKey> & { id: number };
+
+/** How a managed restaurant did today, for the day report. */
+export interface BranchDay {
+  id: number;
+  name: string;
+  open: boolean;
+  covers: number;
+  profit: number;
+  manager: string | null;
+  managerSkill: number;
 }
 
 export interface GameState {
@@ -166,6 +187,10 @@ export interface GameState {
   /** Fire safety upgrades installed in this building (src/data/fireSafety.ts). */
   fireSafety: string[];
   history: DayReport[];
+  /** Id of the restaurant the player runs right now (the fields above). */
+  locationId: number;
+  /** The other restaurants the player owns, run by their managers (prd.md 5.9, 5.12). */
+  branches: Location[];
   unlockAll: boolean;
   /** Difficulty multipliers from the settings menu; missing means Normal. */
   economy?: import('./economy').Economy;

@@ -1,11 +1,11 @@
 import type { Role, Trait, TraitId } from './types';
 
 export const ROLE_BASE_SALARY: Record<Role, number> = {
-  chef: 900, cook: 550, server: 450, host: 420, dishwasher: 380,
+  chef: 900, cook: 550, server: 450, host: 420, dishwasher: 380, manager: 1100,
 };
 
 export const ROLE_NAMES: Record<Role, string> = {
-  chef: 'Chef', cook: 'Cook', server: 'Server', host: 'Host', dishwasher: 'Dishwasher',
+  chef: 'Chef', cook: 'Cook', server: 'Server', host: 'Host', dishwasher: 'Dishwasher', manager: 'Restaurant manager',
 };
 
 export const TRAITS: Record<TraitId, Trait> = {

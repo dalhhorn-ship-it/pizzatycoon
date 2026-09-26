@@ -7,7 +7,8 @@ import { T } from '../data/tunables';
 import type { Controller } from '../game/controller';
 import { fromSaveCode, toSaveCode } from '../save/saveFile';
 import { analyse } from '../sim/analysis';
-import { type GameEvent, moveQuote, RANK_NAMES } from '../sim/game';
+import { type GameEvent, moveQuote, RANK_NAMES, venueDeposit } from '../sim/game';
+import { locationName, managerOf } from '../sim/chain';
 import { ECONOMY_LABELS, ECONOMY_RANGE, type Economy, type EconomyKey, economyOf, PRESETS, presetName } from '../sim/economy';
 import { outlook } from './impact';
 import type { DayReport, GameState } from '../sim/state';
@@ -32,6 +33,23 @@ function savedEconomy(): Economy | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** Week summary for the restaurants run by managers. */
+function branchWeek(reports: DayReport[]): HTMLElement | null {
+  const by = new Map<number, { name: string; covers: number; profit: number; manager: string | null }>();
+  for (const r of reports) for (const b of r.branches ?? []) {
+    const x = by.get(b.id) ?? { name: b.name, covers: 0, profit: 0, manager: b.manager };
+    x.covers += b.covers;
+    x.profit += b.profit;
+    by.set(b.id, x);
+  }
+  if (!by.size) return null;
+  return h('div', { class: 'card' }, h('h3', null, 'Your other restaurants'),
+    h('div', { class: 'kv' }, ...[...by.values()].flatMap((b) => [
+      h('span', null, `${b.name}${b.manager ? ` · ${b.manager}` : ' · caretaker'}`),
+      h('b', { class: b.profit >= 0 ? 'good' : 'bad' }, `${Math.round(b.covers)} guests · ${money(b.profit)}`),
+    ])));
 }
 
 const clockText = (m: number): string => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
@@ -117,6 +135,8 @@ export class App {
       state: this.game.state,
       onBack: () => this.showShop(),
       onRent: (venueId) => this.confirmMove(venueId),
+      onOpen: (venueId) => this.confirmOpen(venueId),
+      onSwitch: (locationId) => this.switchRestaurant(locationId),
     }, focusDistrict);
     this.renderHud();
     this.city.el.scrollTop = 0;
@@ -125,6 +145,30 @@ export class App {
   private showShop(): void {
     this.setView('shop');
     this.renderAll();
+  }
+
+  private confirmOpen(venueId: string): void {
+    const state = this.game.state;
+    const v = VENUES[venueId];
+    if (!state || !v) return;
+    let close = (): void => {};
+    close = modal(h('div', { class: 'stack' },
+      h('h2', null, `Open ${v.name}?`),
+      h('div', { class: 'muted' }, `You pay a deposit of ${money(venueDeposit(venueId))} and start ${v.name} from an empty room. ${locationName(state)} stays open under ${managerOf(state.staff)?.name ?? 'its manager'}; its profit keeps coming into your cash.`),
+      h('div', { class: 'row', style: 'justify-content:flex-end' },
+        h('button', { class: 'ghost', onclick: () => close() }, 'Not yet'),
+        h('button', { class: 'primary', onclick: () => {
+          close();
+          const err = this.game.dispatch({ type: 'openRestaurant', venueId });
+          if (err) toast(err, 'warn');
+          else this.showShop();
+        } }, 'Sign the lease'))));
+  }
+
+  switchRestaurant(locationId: number): void {
+    const err = this.game.dispatch({ type: 'switchRestaurant', locationId });
+    if (err) toast(err, 'warn');
+    else this.showShop();
   }
 
   private confirmMove(venueId: string): void {
@@ -406,6 +450,11 @@ export class App {
       r.tips.length ? h('div', { class: 'card' }, h('h3', null, 'Your advisor'), ...r.tips.map((t) => h('div', { class: 'small' }, t))) : null,
       r.reviews.length ? h('div', { class: 'stack' }, h('h3', null, 'Reviews'),
         ...r.reviews.slice(0, 4).map((rv) => h('div', { class: 'review' }, h('span', { class: 'st' }, '★'.repeat(rv.stars) + '☆'.repeat(5 - rv.stars)), ' ', rv.text, h('span', { class: 'muted small' }, ` (${SEGMENTS[rv.segment].name})`)))) : null,
+      r.branches?.length ? h('div', { class: 'card' }, h('h3', null, 'Your other restaurants'),
+        h('div', { class: 'kv' }, ...r.branches.flatMap((b) => [
+          h('span', null, `${b.name}${b.manager ? ` · ${b.manager} (skill ${b.managerSkill})` : ' · caretaker'}`),
+          h('b', { class: !b.open ? 'warn' : b.profit >= 0 ? 'good' : 'bad' }, b.open ? `${Math.round(b.covers)} guests · ${money(b.profit)}` : 'closed'),
+        ]))) : null,
       r.weeklyPayments ? h('div', { class: 'small muted' }, `Sunday bills paid: ${money(r.weeklyPayments)} for wages, rent and loan.`) : null,
       events.length ? h('div', { class: 'stack' }, ...events.map((e) => h('div', { class: e.kind === 'unlocked' || e.kind === 'rankUp' ? 'good' : e.kind === 'restructure' ? 'warn' : '' }, e.text))) : null,
       h('div', { class: 'row', style: 'justify-content:flex-end' }, h('button', { class: 'primary', onclick: () => close() }, 'Tomorrow')));
@@ -439,6 +488,7 @@ export class App {
             h('span', null, `${T.time.weekdayNames[r.weekday]} ${r.day}`),
             h('b', { class: r.open ? (r.pnl.profit >= 0 ? 'good' : 'bad') : 'warn' }, r.open ? `${Math.round(r.covers)} guests · ${money(r.pnl.profit)}` : 'closed'),
           ]))),
+      branchWeek(reports),
       last.tips.length ? h('div', { class: 'card' }, h('h3', null, 'Your advisor'), ...last.tips.map((t) => h('div', { class: 'small' }, t))) : null,
       bills ? h('div', { class: 'small muted' }, `Sunday bills paid: ${money(bills)} for wages, rent and loan.`) : null,
       events.length ? h('div', { class: 'stack' }, ...events.map((e) => h('div', { class: e.kind === 'unlocked' || e.kind === 'rankUp' ? 'good' : e.kind === 'info' ? '' : 'warn' }, e.text))) : null,

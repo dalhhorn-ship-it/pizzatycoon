@@ -8,6 +8,7 @@ Playable greybox with the full economy of `01-product/balance.md`:
 
 * Menu with 13 pizzas, 15 primi piatti, 9 secondi plus antipasti, drinks and desserts; per ingredient quality tiers (Basic, Standard, Premium, Artisan) and supplier choice, custom pizzas, primi and secondi, pricing against a fair price band
 * Local following: a new restaurant starts unknown and earns its regulars through word of mouth from satisfied guests; small shopfronts are seen by fewer passers-by
+* More than one restaurant: hire a restaurant manager, open another venue, and the manager runs the first one according to their skill
 * Fast forward a week, stopping early when something needs you
 * Menu complexity: a wide or fancy menu slows the prep line and lengthens ticket times unless the cooks are skilled; primi and secondi spare the oven but load the prep line
 * Kitchen equipment in volume, quality, artisan and basic families with unlocks, throughput and quality effects

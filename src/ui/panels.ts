@@ -15,7 +15,8 @@ import { analyse } from '../sim/analysis';
 import { addonProblem, type Command, fireSafetyUnlocked, isUnlocked, seatLimit, loanPayment, RANK_NAMES, suppliersFor, tiersFor, unlockText } from '../sim/game';
 import { buyPrice, sellPrice } from '../sim/economy';
 import { kitchenDims, layoutProblem } from '../sim/kitchen';
-import type { GameState, OwnedEquipment, Recipe } from '../sim/state';
+import type { GameState, OwnedEquipment, Recipe, Staff } from '../sim/state';
+import { locationName, managerEffect, managerOf } from '../sim/chain';
 import { h, meter, money, signed, toast } from './dom';
 import type { Floor } from './floor';
 import { compare } from './impact';
@@ -491,9 +492,18 @@ function fireSafetyCard(ctx: PanelCtx): HTMLElement {
 
 // ---------- Staff ----------
 
+/** What a restaurant manager does while the player runs another restaurant (prd.md 5.9). */
+function managerNote(s: Staff): HTMLElement {
+  const e = managerEffect(s);
+  const pct = (x: number): string => `${x >= 1 ? '+' : '−'}${Math.abs(Math.round((x - 1) * 100))}%`;
+  return h('div', { class: 'small muted' },
+    `Runs this restaurant while you open or run another one. At skill ${s.skill}: guests ${pct(e.demand)}, waste ${pct(e.waste)} compared with you running it yourself. ` +
+    'While you are here they have nothing to do, but you need one before you can leave.');
+}
+
 export function staffPanel(ctx: PanelCtx): HTMLElement {
   const { state } = ctx;
-  const order: Role[] = ['chef', 'cook', 'server', 'host', 'dishwasher'];
+  const order: Role[] = ['manager', 'chef', 'cook', 'server', 'host', 'dishwasher'];
   const team = [...state.staff].sort((a, b) => order.indexOf(a.role) - order.indexOf(b.role));
   const traitChips = (ids: string[]): HTMLElement =>
     h('div', { class: 'chips' }, ...ids.map((id) => h('span', { class: 'chip', title: TRAITS[id as keyof typeof TRAITS]?.effect }, `${TRAITS[id as keyof typeof TRAITS]?.name}: ${TRAITS[id as keyof typeof TRAITS]?.effect}`)));
@@ -508,6 +518,7 @@ export function staffPanel(ctx: PanelCtx): HTMLElement {
         h('span', null, 'Morale'), h('b', { class: s.morale < 40 ? 'bad' : '' }, s.morale.toFixed(0))),
       meter(s.morale, 100, s.morale < 40 ? 'hot' : ''),
       traitChips(s.traits),
+      s.role === 'manager' ? managerNote(s) : null,
       s.leavingOnDay ? h('div', { class: 'warn small' }, `Leaving on day ${s.leavingOnDay} unless things improve.`) : null,
       h('div', { class: 'row' },
         h('button', { class: 'small', onclick: () => act(ctx, { type: 'giveRaise', staffId: s.id }, `${s.name} is delighted`) }, `Raise 10% (+${money(s.salary * 0.1)})`),
@@ -524,9 +535,35 @@ export function staffPanel(ctx: PanelCtx): HTMLElement {
           h('span', null, 'Skill'), h('b', null, `${c.skill} (potential ${c.potential})`),
           h('span', null, 'Salary'), h('b', null, `${money(c.salary)}/week`)),
         traitChips(c.traits),
-        impactLine(d),
+        c.role === 'manager' ? managerNote(c) : impactLine(d),
         h('button', { class: 'primary small', onclick: () => act(ctx, { type: 'hire', candidateId: c.id }) }, 'Hire'));
     }));
+}
+
+// ---------- Restaurants (prd.md 5.9, 5.12) ----------
+
+function restaurantsCard(ctx: PanelCtx): HTMLElement | null {
+  const { state } = ctx;
+  if (!state.branches.length) return null;
+  const lastProfit = (h: GameState['history']): string => {
+    const d = h.at(-1);
+    return d ? (d.open ? `${money(d.pnl.profit)} yesterday` : 'closed yesterday') : 'not open yet';
+  };
+  const hasManager = !!managerOf(state.staff);
+  return h('div', { class: 'card' },
+    h('h3', null, h('span', null, 'Your restaurants'), h('span', { class: 'small muted' }, `${state.branches.length + 1} in total`)),
+    h('div', { class: 'line' },
+      h('div', null, h('div', null, h('b', null, locationName(state))), h('div', { class: 'small muted' }, `You run this one · reputation ${state.rep.toFixed(0)} · ${lastProfit(state.history)}`)),
+      h('span', { class: 'small good' }, 'Here')),
+    ...state.branches.map((b) => {
+      const m = managerOf(b.staff);
+      return h('div', { class: 'line' },
+        h('div', null,
+          h('div', null, h('b', null, locationName(b))),
+          h('div', { class: 'small muted' }, `${m ? `${m.name}, skill ${m.skill}` : 'No manager: caretaker mode'} · reputation ${b.rep.toFixed(0)} · locals ${Math.round(b.following * 100)}% · ${lastProfit(b.history)}`)),
+        h('button', { class: 'small', disabled: !hasManager, title: hasManager ? '' : 'Hire a manager for this restaurant first', onclick: () => act(ctx, { type: 'switchRestaurant', locationId: b.id }) }, 'Go and run it'));
+    }),
+    hasManager ? null : h('div', { class: 'small muted' }, `To go and run another restaurant, first hire a manager for ${locationName(state)}.`));
 }
 
 // ---------- Money ----------
@@ -555,6 +592,7 @@ export function moneyPanel(ctx: PanelCtx, extra: HTMLElement): HTMLElement {
   ];
   return h('div', { class: 'stack' },
     h('h2', null, 'Money'),
+    restaurantsCard(ctx),
     h('div', { class: 'card' },
       h('div', { class: 'spread' }, h('span', null, 'Cash'), h('span', { class: `big ${state.cash < 0 ? 'bad' : ''}` }, money(state.cash))),
       h('div', { class: 'small muted' }, `Weekly bills on Sunday night: wages ${money(a.weeklySalaries)}, rent ${money(a.weeklyRent)} (${where}), loan ${money(payment)}. Upkeep ${money(a.kitchen.maintenancePerWeek)}/week is paid daily.`),
