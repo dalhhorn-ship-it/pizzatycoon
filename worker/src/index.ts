@@ -10,6 +10,23 @@ const LINK_CODE_TTL_MS = 15 * 60 * 1000;
 const SLOT_RE = /^[a-z0-9-]{1,32}$/;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
+// Same statements as worker/migrations/0001_init.sql, so a fresh database works without a manual migration step.
+const SCHEMA = [
+  'CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, created_at INTEGER NOT NULL)',
+  'CREATE TABLE IF NOT EXISTS tokens (token_hash TEXT PRIMARY KEY, player_id TEXT NOT NULL REFERENCES players(id), created_at INTEGER NOT NULL)',
+  'CREATE TABLE IF NOT EXISTS link_codes (code TEXT PRIMARY KEY, player_id TEXT NOT NULL REFERENCES players(id), expires_at INTEGER NOT NULL)',
+  'CREATE TABLE IF NOT EXISTS saves (player_id TEXT NOT NULL REFERENCES players(id), slot TEXT NOT NULL, revision INTEGER NOT NULL, updated_at INTEGER NOT NULL, summary TEXT NOT NULL, blob TEXT NOT NULL, PRIMARY KEY (player_id, slot))',
+];
+let schemaReady: Promise<unknown> | null = null;
+
+function ensureSchema(env: Env): Promise<unknown> {
+  schemaReady ??= env.DB.batch(SCHEMA.map((sql) => env.DB.prepare(sql))).catch((err) => {
+    schemaReady = null;
+    throw err;
+  });
+  return schemaReady;
+}
+
 const json = (data: unknown, status = 200): Response =>
   new Response(JSON.stringify(data), {
     status,
@@ -131,6 +148,7 @@ export default {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/api/')) {
       try {
+        await ensureSchema(env);
         return await handleApi(request, env, url);
       } catch (err) {
         console.error(err);

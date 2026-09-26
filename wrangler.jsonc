@@ -2,6 +2,8 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pizza-d",
   "main": "worker/src/index.ts",
+  // `wrangler deploy` builds the game first, so Cloudflare Workers Builds needs no separate build command.
+  "build": { "command": "npm run build" },
   "compatibility_date": "2026-09-01",
   "assets": {
     "directory": "./dist",
@@ -13,8 +15,7 @@
     {
       "binding": "DB",
       "database_name": "pizza-d-saves",
-      // Replace with the id printed by `npx wrangler d1 create pizza-d-saves` (see 02-architecture/infrastructure.md).
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // No database_id: wrangler creates the database on the first deploy and remembers it.
       "migrations_dir": "worker/migrations"
     }
   ],

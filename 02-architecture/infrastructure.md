@@ -6,13 +6,17 @@
 * Cloud saves live in a D1 database bound to the Worker (ADR-005). Schema migrations are in `worker/migrations/` and applied with `wrangler d1 migrations apply`, never by hand in the dashboard.
 * Configuration: `wrangler.jsonc` at the repo root.
 
-### First time setup (once, by the founder)
+### Cloudflare Workers Builds (git connected)
+
+* Production branch: `main`. Only code on that branch is deployed.
+* Build command: leave empty (or `npm ci`). Deploy command: `npx wrangler deploy`.
+* `wrangler.jsonc` runs `npm run build` before every deploy, and has no `database_id`, so the first deploy creates the D1 database automatically.
+* The Worker creates its tables on first use (`CREATE TABLE IF NOT EXISTS`), so no manual migration step is needed. `worker/migrations/` holds the same schema for `wrangler d1 migrations` when a later schema change needs a real migration.
+
+### Manual deploy from a laptop
 
 1. `npx wrangler login`
-2. `npx wrangler d1 create pizza-d-saves` and copy the printed `database_id` into `wrangler.jsonc`.
-3. `npm run db:migrate:remote`
-4. `npm run deploy`
-5. For CI deploys: create a Cloudflare API token with Workers and D1 edit rights and add it as the GitHub secret `CLOUDFLARE_API_TOKEN`, plus `CLOUDFLARE_ACCOUNT_ID`.
+2. `npm run deploy`
 
 ## Environments
 
@@ -29,7 +33,7 @@
 3. `npm run lint` (includes the simulation purity rules)
 4. `npm test` (unit, golden day, balance harness)
 5. `npm run build`
-6. On main, when `CLOUDFLARE_API_TOKEN` is set: apply D1 migrations and `wrangler deploy`
+6. Deploys happen in Cloudflare Workers Builds on pushes to `main` (see above); the GitHub workflow only deploys when `CLOUDFLARE_API_TOKEN` is set, for teams that prefer deploying from Actions
 
 ## Monitoring
 

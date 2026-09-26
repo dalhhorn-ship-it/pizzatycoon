@@ -47,11 +47,6 @@ npm run build && npm run worker:dev   # http://localhost:8787
 
 ## Deploy (Cloudflare Workers)
 
-One time setup is in `02-architecture/infrastructure.md` (create the D1 database, put its id in `wrangler.jsonc`). Then:
+The repo is connected to Cloudflare Workers Builds and deploys the `main` branch with `npx wrangler deploy`. That command builds the game first (`build` in `wrangler.jsonc`), creates the D1 save database on the first deploy, and the Worker creates its tables on first use. Nothing needs to be set up by hand. Details in `02-architecture/infrastructure.md`.
 
-```bash
-npm run db:migrate:remote
-npm run deploy
-```
-
-CI deploys on every push to `main` once the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets are set.
+Manual deploy: `npx wrangler login`, then `npm run deploy`.

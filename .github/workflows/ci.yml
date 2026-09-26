@@ -40,6 +40,4 @@ jobs:
         if: env.CLOUDFLARE_API_TOKEN == ''
         run: echo "CLOUDFLARE_API_TOKEN is not set; see 02-architecture/infrastructure.md" && exit 0
       - if: env.CLOUDFLARE_API_TOKEN != ''
-        run: npm run db:migrate:remote
-      - if: env.CLOUDFLARE_API_TOKEN != ''
         run: npm run deploy
