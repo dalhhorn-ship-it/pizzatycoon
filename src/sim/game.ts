@@ -4,9 +4,9 @@ import { DISTRICTS, PREMISES } from '../data/districts';
 import { EQUIPMENT } from '../data/equipment';
 import { FURNITURE } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
-import { RECIPE_BOOK } from '../data/recipes';
+import { PIZZA_BASE, PRIMO_BASES, RECIPE_BOOK } from '../data/recipes';
 import { FIRST_NAMES, LAST_NAMES, ROLE_BASE_SALARY, TRAITS } from '../data/staff';
-import type { EquipmentItem, RankId, Role, TierId, TraitId, Unlock } from '../data/types';
+import type { EquipmentItem, MainKind, RankId, Role, TierId, TraitId, Unlock } from '../data/types';
 import { T } from '../data/tunables';
 import { analyse, occupiedTiles, salaryFor } from './analysis';
 import { type DayOptions, simulateDay } from './day';
@@ -21,6 +21,8 @@ export type Command =
   | { type: 'setPrice'; recipeId: string; price: number }
   | { type: 'toggleMenu'; recipeId: string; on: boolean }
   | { type: 'createPizza'; name: string; toppings: string[]; price: number }
+  /** A custom main. `base` is the pasta or rice for a primo; pizzas always get dough, sauce and mozzarella. */
+  | { type: 'createDish'; kind: MainKind; name: string; base?: string; ingredients: string[]; price: number }
   | { type: 'deleteRecipe'; recipeId: string }
   | { type: 'placeFurniture'; itemId: string; x: number; y: number }
   | { type: 'moveFurniture'; uid: number; x: number; y: number }
@@ -81,6 +83,19 @@ export function tiersFor(ingredientId: string): TierId[] {
   const set = new Set<TierId>();
   for (const s of Object.values(SUPPLIERS)) for (const t of s.carries[ing.category] ?? []) set.add(t);
   return (Object.keys(TIERS) as TierId[]).filter((t) => set.has(t));
+}
+
+/** Adds recipe book dishes a save does not know yet (new content after an update), off the menu. */
+export function withRecipeBook(state: GameState): GameState {
+  const known = new Set(state.recipes.map((r) => r.id));
+  for (const t of RECIPE_BOOK) {
+    if (known.has(t.id)) continue;
+    state.recipes.push({
+      id: t.id, name: t.name, kind: t.kind, lines: makeLines(t.ingredients), price: t.price, onMenu: false,
+      extraTags: [...(t.tags ?? [])], custom: false,
+    });
+  }
+  return state;
 }
 
 function makeLines(ingredientIds: readonly string[], tier: TierId = 'standard'): RecipeLine[] {
@@ -317,14 +332,25 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       r.onMenu = cmd.on;
       break;
     }
-    case 'createPizza': {
-      const toppings = cmd.toppings.filter((t) => INGREDIENTS[t] && !INGREDIENTS[t]?.base);
-      if (toppings.length > 6) return fail(input, 'At most 6 toppings.');
+    case 'createPizza':
+    case 'createDish': {
+      const kind: MainKind = cmd.type === 'createPizza' ? 'pizza' : cmd.kind;
+      const picked = cmd.type === 'createPizza' ? cmd.toppings : cmd.ingredients;
+      const extras = [...new Set(picked)].filter((t) => INGREDIENTS[t] && !INGREDIENTS[t]?.base && INGREDIENTS[t]?.category !== 'drinks');
+      if (extras.length > 6) return fail(input, kind === 'pizza' ? 'At most 6 toppings.' : 'At most 6 ingredients.');
+      let base: readonly string[] = [];
+      if (kind === 'pizza') base = PIZZA_BASE;
+      if (kind === 'primo') {
+        const b = cmd.type === 'createDish' ? cmd.base : undefined;
+        if (!b || !PRIMO_BASES.includes(b)) return fail(input, 'Pick a pasta, rice or gnocchi for the primo.');
+        base = [b];
+      }
+      if (kind === 'secondo' && extras.length === 0) return fail(input, 'Pick at least one ingredient.');
       const name = cmd.name.trim().slice(0, 40) || 'House special';
       const id = `custom${state.nextUid++}`;
       state.recipes.push({
-        id, name, kind: 'pizza', lines: makeLines(['dough', 'tomatoSauce', 'mozzarella', ...toppings]),
-        price: cmd.price, onMenu: false, extraTags: [], custom: true,
+        id, name, kind, lines: makeLines([...base, ...extras]),
+        price: Math.round(Math.max(1, Math.min(60, cmd.price)) * 2) / 2, onMenu: false, extraTags: [], custom: true,
       });
       events.push({ kind: 'info', text: `${name} added to your recipe book.` });
       break;

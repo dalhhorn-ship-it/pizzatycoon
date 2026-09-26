@@ -2,6 +2,7 @@
 // Formulas: 01-product/prd.md 5.7, 5.10, 5.11 and balance.md 1.4, 1.8, 1.12.
 
 import { DISTRICTS } from '../data/districts';
+import { isMain } from '../data/recipes';
 import { SEGMENTS, SEGMENT_IDS } from '../data/segments';
 import type { DishKind, SegmentId, Service } from '../data/types';
 import { T } from '../data/tunables';
@@ -16,7 +17,7 @@ export interface DayOptions {
 }
 
 const SERVICES: Service[] = ['lunch', 'dinner'];
-const SIDE_KINDS: Exclude<DishKind, 'pizza'>[] = ['drink', 'starter', 'dessert'];
+const SIDE_KINDS: Exclude<DishKind, 'pizza' | 'primo' | 'secondo'>[] = ['drink', 'starter', 'dessert'];
 
 interface Choice {
   probs: { recipe: Recipe; stats: DishStats; p: number }[];
@@ -26,6 +27,10 @@ interface Choice {
   avgQuality: number;
   avgTaste: number;
   wasteCost: number;
+  /** Share of plates that go through the pizza oven. */
+  ovenShare: number;
+  /** Average prep work per plate relative to a simple pizza. */
+  avgWork: number;
 }
 
 export function valueScore(r: number, elasticity: number): number {
@@ -43,13 +48,16 @@ export function queueDelay(rho: number): number {
 }
 
 /** Logit dish choice for one segment among dishes of one kind (prd.md 5.7 "Dish choice"). */
-export function chooseDishes(recipes: Recipe[], a: Analysis, segment: SegmentId): Choice | null {
+export function chooseDishes(recipes: Recipe[], a: Analysis, segment: SegmentId, wealth?: number): Choice | null {
   if (!recipes.length) return null;
   const seg = SEGMENTS[segment];
+  // With a district's wealth, guests steer away from dishes well beyond their budget (a student skips the ossobuco).
+  const budget = wealth === undefined ? Infinity : seg.budget * wealth;
   const appeals = recipes.map((r) => {
     const st = a.dishes[r.id] as DishStats;
     const value = valueScore(r.price / st.fairPrice, seg.elasticity);
-    return (seg.qualityWeight * st.quality) / 100 + 0.4 * tasteMatch(st.tags, segment) + 0.3 * value;
+    const overBudget = Math.max(0, r.price / budget - T.demand.budgetChoiceSlack);
+    return (seg.qualityWeight * st.quality) / 100 + 0.4 * tasteMatch(st.tags, segment) + 0.3 * value - T.demand.budgetChoiceAversion * overBudget;
   });
   const maxA = Math.max(...appeals);
   const w = appeals.map((x) => Math.exp(T.demand.choiceTemperature * (x - maxA)));
@@ -64,6 +72,8 @@ export function chooseDishes(recipes: Recipe[], a: Analysis, segment: SegmentId)
     avgQuality: avg((x) => x.stats.quality),
     avgTaste: avg((x) => tasteMatch(x.stats.tags, segment)),
     wasteCost: avg((x) => x.stats.foodCost * x.stats.wasteRate),
+    ovenShare: avg((x) => (x.recipe.kind === 'pizza' ? 1 : 0)),
+    avgWork: avg((x) => x.stats.work),
   };
 }
 
@@ -129,7 +139,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   }
 
   const onMenu = state.recipes.filter((r) => r.onMenu);
-  const mains = onMenu.filter((r) => r.kind === 'pizza');
+  const mains = onMenu.filter((r) => isMain(r.kind));
   const sidesByKind = Object.fromEntries(SIDE_KINDS.map((k) => [k, onMenu.filter((r) => r.kind === k)])) as Record<
     (typeof SIDE_KINDS)[number],
     Recipe[]
@@ -141,7 +151,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     dessert: sidesByKind.dessert.length ? attachRate('dessert', ambience) : 0,
   };
   const kitchenBy = { lunch: kitchenStats(state, 'lunch'), dinner: kitchenStats(state, 'dinner') };
-  const prepLoad = 1 + T.kitchen.prepLoadFactor * (attach.starter + attach.dessert);
+  const sideLoad = T.kitchen.prepLoadFactor * (attach.starter + attach.dessert);
 
   const crowdPleaser = state.staff.some((s) => s.traits.includes('crowdPleaser'));
   const chefFame = state.staff.filter((s) => s.role === 'chef').reduce((x, s) => x + s.fame, 0);
@@ -163,7 +173,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   const segs: SegCalc[] = [];
   for (const id of SEGMENT_IDS) {
     const seg = SEGMENTS[id];
-    const choice = chooseDishes(mains, a, id);
+    const choice = chooseDishes(mains, a, id, district.wealth);
     if (!choice) continue;
     const r = choice.avgPrice / choice.avgFair;
     const fit = menuFit(mains, a, id, crowdPleaser);
@@ -219,8 +229,14 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const cycle = a.service.serviceTime[sv] + meal;
     const seatPerHour = (a.room.seats * T.service.partySizeFit * 60) / cycle;
     const k = kitchenBy[sv];
+    // Pasta and secondi skip the oven but ask more of the prep line (menu complexity, balance.md 4.2).
+    const mix = (f: (s: SegCalc) => number, fallback: number): number =>
+      demand > 0 ? segs.reduce((x, s) => x + s.demand[sv] * f(s), 0) / demand : fallback;
+    const ovenShare = mix((s) => s.choice.ovenShare, 1);
+    const prepLoad = mix((s) => s.choice.avgWork, 1) + sideLoad;
     const prepPerHour = k.prepPerHour / prepLoad;
-    const kitchenPerHour = Math.min(k.ovenPerHour, prepPerHour);
+    const ovenCoversPerHour = ovenShare > 0 ? k.ovenPerHour / ovenShare : Infinity;
+    const kitchenPerHour = Math.min(ovenCoversPerHour, prepPerHour);
     const perHour = Math.min(kitchenPerHour, seatPerHour);
     const serviceCap = perHour * hours * T.service.utilisation[sv];
     const plateCap = (a.service.platesPerHour / T.kitchen.platesPerCover) * hours + T.kitchen.plateStock / T.kitchen.platesPerCover;
@@ -234,7 +250,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     if (rho >= 0.85) {
       if (plateCap < serviceCap) bottleneck = 'plates';
       else if (seatPerHour <= kitchenPerHour) bottleneck = 'seats';
-      else bottleneck = k.ovenPerHour <= prepPerHour ? 'oven' : 'prep';
+      else bottleneck = ovenCoversPerHour <= prepPerHour ? 'oven' : 'prep';
     }
     let walk = demand - servedTotal;
     const share = T.service.perceivedQueueShare[sv];
@@ -255,7 +271,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     services.push({
       service: sv, demand, served: servedAfter, walkAways: walk, capacity, rho, queueDelay: q, bottleneck, tableCycle: cycle,
       // Plates are expressed per effective service hour so every stage compares on the same basis as seats and ovens.
-      stages: { prep: prepPerHour, oven: k.ovenPerHour, seats: seatPerHour, plates: plateCap / (hours * T.service.utilisation[sv]) },
+      stages: { prep: prepPerHour, oven: Number.isFinite(ovenCoversPerHour) ? ovenCoversPerHour : k.ovenPerHour, seats: seatPerHour, plates: plateCap / (hours * T.service.utilisation[sv]) },
       demandPerHour: demand / (hours * T.service.utilisation[sv]),
     });
   }
@@ -362,7 +378,13 @@ function tipsFor(services: ServiceReport[], a: Analysis, pnl: PnL, segs: Segment
     const name = s.service === 'lunch' ? 'lunch' : 'dinner';
     if (s.bottleneck === 'seats') tips.push(`Seats were full ${pct}% of ${name}. More tables or a host (faster seating) would help.`);
     if (s.bottleneck === 'oven') tips.push(`The oven was the limit at ${name}. A bigger or faster oven would serve more guests.`);
-    if (s.bottleneck === 'prep') tips.push(`Prep counters were the limit at ${name}. Another counter, a cook or a dough sheeter would help.`);
+    if (s.bottleneck === 'prep') {
+      tips.push(
+        a.kitchen.menu.efficiency < 1
+          ? `Prep was the limit at ${name}, and the menu is slowing the line to ${Math.round(a.kitchen.menu.efficiency * 100)}%. A shorter menu, shared ingredients or more skilled cooks would help.`
+          : `Prep counters were the limit at ${name}. Another counter, a cook or a dough sheeter would help.`,
+      );
+    }
     if (s.bottleneck === 'plates') tips.push(`You ran out of clean plates at ${name}. A dishwasher or a dish machine would help.`);
   }
   if (pnl.sales > 0) {

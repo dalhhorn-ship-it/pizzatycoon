@@ -5,11 +5,13 @@ import { DISTRICTS, PREMISES } from '../data/districts';
 import { EQUIPMENT } from '../data/equipment';
 import { FURNITURE } from '../data/furniture';
 import { HARMONY_CLASHES, HARMONY_MATCHES, INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
+import { isMain } from '../data/recipes';
 import { SEGMENTS } from '../data/segments';
-import type { EquipmentItem, SegmentId, Service, Tag } from '../data/types';
+import type { EquipmentItem, MainKind, SegmentId, Service, Tag } from '../data/types';
 import { T } from '../data/tunables';
 import { economyOf } from './economy';
 import { type Flow, kitchenFlow, plateWalk } from './kitchen';
+import { dishWork, type MenuComplexity, menuComplexity } from './menu';
 import type { GameState, PlacedFurniture, Recipe, Staff } from './state';
 
 export const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -25,6 +27,8 @@ export interface DishStats {
   wasteRate: number;
   tags: Set<Tag>;
   toppings: number;
+  /** Prep work per plate relative to a simple pizza (0 for sides). */
+  work: number;
 }
 
 export interface KitchenStats {
@@ -52,6 +56,8 @@ export interface KitchenStats {
   stationPrep: Record<number, number>;
   /** Output per oven by uid, for the kitchen view. */
   ovenOutput: Record<number, number>;
+  /** How hard the menu is on the line; already applied to prep and cook time. */
+  menu: MenuComplexity;
 }
 
 export interface RoomStats {
@@ -119,13 +125,13 @@ export function linePrice(ingredientId: string, tier: Recipe['lines'][number]['t
   return ing.portionCost * TIERS[tier].priceMult * sup.priceIndex;
 }
 
-export function harmonyOf(ingredientIds: string[]): number {
+export function harmonyOf(ingredientIds: string[], maxExtras: number = T.quality.maxToppingsBeforePenalty): number {
   const set = new Set(ingredientIds);
   let h = T.quality.harmonyBase;
   for (const [a, b] of HARMONY_MATCHES) if (set.has(a) && set.has(b)) h += T.quality.harmonyMatch;
   for (const [a, b] of HARMONY_CLASHES) if (set.has(a) && set.has(b)) h += T.quality.harmonyClash;
   const toppings = ingredientIds.filter((id) => !INGREDIENTS[id]?.base).length;
-  h += T.quality.harmonyExtraTopping * Math.max(0, toppings - T.quality.maxToppingsBeforePenalty);
+  h += T.quality.harmonyExtraTopping * Math.max(0, toppings - maxExtras);
   return clamp(h, 0, 100);
 }
 
@@ -146,27 +152,30 @@ export function dishStats(recipe: Recipe, K: number, E: number, frugal: boolean,
     wSum += c * TIERS[line.tier].wasteRate;
     if (line.tier === 'artisan') artisanCost += c;
     for (const t of ing.tags) tags.add(t);
-    if (ing.category === 'meat') hasMeat = true;
+    if (ing.category === 'meat' || ing.category === 'seafood') hasMeat = true;
   }
   const iq = cost > 0 ? qSum / cost : 0;
   const wasteRate = cost > 0 ? wSum / cost : 0;
   const ids = recipe.lines.map((l) => l.ingredientId);
   const toppings = ids.filter((id) => !INGREDIENTS[id]?.base).length;
-  if (recipe.kind === 'pizza') {
+  const main = isMain(recipe.kind);
+  if (main) {
     if (!hasMeat) tags.add('veggie');
     if (toppings <= 2 && !tags.has('spicy') && !tags.has('bold')) tags.add('kid friendly');
   }
   if (cost > 0 && artisanCost / cost >= T.quality.artisanShareForTag) tags.add('artisan');
   if (frugal) cost *= 1 - T.staff.frugalDiscount;
   cost *= costMult;
-  const harmony = recipe.kind === 'pizza' ? harmonyOf(ids) : T.quality.harmonyBase + 10;
+  const harmony = !main
+    ? T.quality.harmonyBase + 10
+    : harmonyOf(ids, recipe.kind === 'pizza' ? T.quality.maxToppingsBeforePenalty : T.quality.maxExtrasBeforePenaltyNonPizza);
   const quality = clamp(T.quality.wIngredients * iq + T.quality.wHarmony * harmony + T.quality.wKitchen * K + E, 0, 100);
-  const pizza = recipe.kind === 'pizza';
   const fairPrice =
-    (pizza ? T.pricing.fairIntercept : T.pricing.sideFairIntercept) +
-    (pizza ? T.pricing.fairQualitySlope : T.pricing.sideFairQualitySlope) * quality +
-    T.pricing.fairFoodCostMult * cost;
-  return { recipeId: recipe.id, foodCost: cost, ingredientQuality: iq, harmony, quality, fairPrice, wasteRate, tags, toppings };
+    (main ? T.pricing.fairIntercept : T.pricing.sideFairIntercept) +
+    (main ? T.pricing.fairQualitySlope : T.pricing.sideFairQualitySlope) * quality +
+    T.pricing.fairFoodCostMult * cost +
+    (main ? T.pricing.fairKindPremium[recipe.kind as MainKind] : 0);
+  return { recipeId: recipe.id, foodCost: cost, ingredientQuality: iq, harmony, quality, fairPrice, wasteRate, tags, toppings, work: dishWork(recipe) };
 }
 
 export function tasteMatch(tags: Set<Tag>, segment: SegmentId): number {
@@ -219,8 +228,11 @@ export function kitchenStats(state: GameState, service: Service = 'dinner'): Kit
     if (speed > 0) cookTimeWeighted += perHour * ((T.kitchen.bakeMinutes * (o.bakeMult ?? 1) * cookTimeMult) / speed);
     qualityWeighted += perHour * qmod;
   }
+  // A crowded menu slows every ticket: more stations to run, more mise en place to hunt through.
+  const menu = menuComplexity(state.recipes, cooks.length ? avgSkill : 5);
   const walk = ovenPerHour > 0 ? walkWeighted / ovenPerHour : 0;
-  const cookTime = (ovenPerHour > 0 ? cookTimeWeighted / ovenPerHour : T.kitchen.bakeMinutes) + walk;
+  const ticketMult = 1 + T.menu.ticketShare * (1 / menu.efficiency - 1);
+  const cookTime = ((ovenPerHour > 0 ? cookTimeWeighted / ovenPerHour : T.kitchen.bakeMinutes) + walk) * ticketMult;
   const ovenQ = ovenPerHour > 0 ? qualityWeighted / ovenPerHour : 0;
 
   // Prep stations (kitchen-builder.md 4): each staffed station gets one cook, best stations first.
@@ -230,7 +242,7 @@ export function kitchenStats(state: GameState, service: Service = 'dinner'): Kit
     const it = EQUIPMENT[e.itemId] as EquipmentItem;
     const st = flow.stations[e.uid];
     const tool = Math.max(it.prepMult ?? 1, st?.sheeter ? (sheeterItem?.prepMult ?? 1.35) : 1);
-    return T.kitchen.prepRate * counterSpeed * tool * (st?.coldMult ?? 1) * (st?.reachMult ?? 1);
+    return T.kitchen.prepRate * counterSpeed * tool * (st?.coldMult ?? 1) * (st?.reachMult ?? 1) * menu.efficiency;
   };
   const ranked = [...counters].sort((a, b) => stationRate(b) - stationRate(a) || (EQUIPMENT[b.itemId]?.qualityMod ?? 0) - (EQUIPMENT[a.itemId]?.qualityMod ?? 0));
   const staffedCounters = Math.min(counters.length, cooks.length);
@@ -278,6 +290,7 @@ export function kitchenStats(state: GameState, service: Service = 'dinner'): Kit
     flow,
     stationPrep,
     ovenOutput,
+    menu,
   };
 }
 

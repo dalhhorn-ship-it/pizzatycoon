@@ -3,6 +3,7 @@
 import { SCHEMA_VERSION, type GameState } from '../sim/state';
 import { DISTRICTS, PREMISES } from '../data/districts';
 import { EQUIPMENT } from '../data/equipment';
+import { withRecipeBook } from '../sim/game';
 import { autoLayout } from '../sim/kitchen';
 
 export interface SaveSummary {
@@ -73,6 +74,7 @@ export function deserialise(text: string): SaveFile {
   const s = state as unknown as GameState;
   if (typeof s.day !== 'number' || typeof s.cash !== 'number' || !Array.isArray(s.recipes)) throw new Error('Save file is damaged.');
   s.schemaVersion = SCHEMA_VERSION;
+  withRecipeBook(s);
   return { ...raw, schemaVersion: SCHEMA_VERSION, state: s };
 }
 

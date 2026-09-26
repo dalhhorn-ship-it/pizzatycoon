@@ -536,3 +536,34 @@ Expected results after the change (Thursday, steady Rep):
 | Volume, University | about 189 | about 169 (about 228 on a Saturday) | $1,984 |
 
 **Watch list for the rerun.** (1) If the middle build loses the top spot in Canal Quarter because Foodies B 28 lifts luxury there, set Foodies B to 26 first. (2) If volume in University Quarter falls under +15% over the best middle build (it is +16% in the M0 sim), the retune did not cause it, but fix it before M0.2 closes by Students B, per 3.7. (3) The M0 sim's luxury ran about 4% below this document; the $38 price may need to become $36 to $40 after the rerun.
+
+### 4.2 Primi, secondi and menu complexity (2026-09-26)
+
+Founder request: a wider menu with primi piatti and secondi, more ingredients to combine, and a real cost to a wide or fancy menu: more complexity for the kitchen and lower output.
+
+**Content.** 15 primi (pasta, fresh pasta, risotto, gnocchi), 9 secondi (meat, fish, one vegetarian), 3 new antipasti, 36 new ingredients and a new `seafood` supplier category (Fratelli Standard, Metro Basic to Premium, Casa Premium and Artisan). New harmony pairs for the classics (guanciale and pecorino, butter and sage, sea bass and lemon, ...) and the Italian rule "no cheese on fish" as clashes. The recipe creator makes pizzas, primi (on a pasta, rice or gnocchi base) and secondi. Older saves get the new dishes in their recipe book on load.
+
+**Mains.** A guest orders one main: a pizza, a primo or a secondo (`MAIN_KINDS`). Primi and secondi use the main pricing line plus `pricing.fairKindPremium` (primo +$1, secondo +$4) and allow 5 extras before the harmony penalty (`quality.maxExtrasBeforePenaltyNonPizza`). Dish choice now steers away from mains above a segment's budget: appeal minus `demand.budgetChoiceAversion` (1.5) x (price / (budget x wealth) minus `demand.budgetChoiceSlack` (1.2)). With pizzas only and prices inside the slack this changes nothing.
+
+**Kitchen.** Primi and secondi do not use the pizza oven: oven covers per hour = oven pizzas per hour / pizza share of mains. They do load the prep line: work per plate is 1 for a pizza, 1.25 for a primo, 1.5 for a secondo, plus 0.08 per extra above 4 (`menu.work`, `menu.workPerExtra`).
+
+**Menu complexity** (`src/sim/menu.ts`, tunables `menu`):
+
+`complexity = 1 x food dishes on the menu + 0.5 x distinct food ingredients`
+`allowance = 16 + 1 x (average kitchen skill - 5)`
+`efficiency = max(0.6, 1 - 0.02 x max(0, complexity - allowance))`
+
+Prep speed is multiplied by the efficiency and ticket (cook) times grow by half of the slowdown. Drinks do not count. The classic starter menu (score 12) and every reference build (score 13.5 to 15) sit inside the allowance, so the golden day and the strategy table are unchanged.
+
+Measured (steady Rep, Thursday, extras on top of the reference menus):
+
+| Build | Menu | Complexity | Line speed | Covers | Profit per day |
+|---|---|---|---|---|---|
+| Middle, Canal | reference | 13.5 / 17 | 100% | 155 | $1,260 |
+| Middle, Canal | + 4 simple primi | 21.5 / 17 | 91% | 167 | $1,515 |
+| Middle, Canal | + 10 fancy primi, secondi, antipasti | 36.5 / 17 | 61% | 134 (prep bound) | $1,220 |
+| Volume, University | reference | 15 / 15 | 100% | 364 | $1,927 |
+| Volume, University | + 2 primi | 20.5 / 15 | 89% | 373 | $2,206 |
+| Volume, University | + 10 fancy dishes | 38 / 15 | 60% | 313 (prep bound) | $1,695 |
+
+A few primi that share ingredients pay off: they relieve the oven and lift the check. A long, fancy menu turns prep into the bottleneck and costs covers and profit unless the brigade is skilled. `build.menuMaxItems` went from 16 to 24.

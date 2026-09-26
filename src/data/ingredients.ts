@@ -14,14 +14,14 @@ export const SUPPLIERS: Record<string, Supplier> = {
     id: 'fratelli', name: 'Fratelli Market', priceIndex: 1.0, qualityOffset: -3, reliability: 0.85, leadDays: 1, minOrder: 0,
     carries: {
       dry: ['basic', 'standard'], dairy: ['basic', 'standard'], produce: ['basic', 'standard'],
-      meat: ['basic', 'standard'], drinks: ['basic', 'standard'],
+      meat: ['basic', 'standard'], seafood: ['standard'], drinks: ['basic', 'standard'],
     },
   },
   metro: {
     id: 'metro', name: 'Metro Wholesale', priceIndex: 0.9, qualityOffset: 0, reliability: 0.97, leadDays: 2, minOrder: 300,
     carries: {
       dry: ['basic', 'standard', 'premium'], meat: ['basic', 'standard', 'premium'], dairy: ['basic', 'standard'],
-      produce: ['basic', 'standard'], drinks: ['basic', 'standard', 'premium'],
+      produce: ['basic', 'standard'], seafood: ['basic', 'standard', 'premium'], drinks: ['basic', 'standard', 'premium'],
     },
   },
   greenValley: {
@@ -31,7 +31,8 @@ export const SUPPLIERS: Record<string, Supplier> = {
   casa: {
     id: 'casa', name: 'Casa Artigiana', priceIndex: 1.15, qualityOffset: 5, reliability: 0.9, leadDays: 3, minOrder: 200,
     carries: {
-      dry: ['premium', 'artisan'], meat: ['premium', 'artisan'], dairy: ['premium', 'artisan'], drinks: ['premium', 'artisan'],
+      dry: ['premium', 'artisan'], meat: ['premium', 'artisan'], seafood: ['premium', 'artisan'], dairy: ['premium', 'artisan'],
+      drinks: ['premium', 'artisan'],
     },
   },
 };
@@ -75,6 +76,43 @@ export const INGREDIENTS: Record<string, Ingredient> = Object.fromEntries(
     I('mascarpone', 'Mascarpone and espresso', 'dairy', 1.5, 5),
     I('cream', 'Cream and vanilla', 'dairy', 1.3, 5),
     I('gelato', 'Gelato', 'dairy', 1.0, 60, ['kid friendly']),
+
+    // Primi: pasta, rice and gnocchi are the base of the dish, like dough on a pizza.
+    I('spaghetti', 'Dried spaghetti', 'dry', 0.35, 365, ['classic'], true),
+    I('freshPasta', 'Fresh egg pasta', 'dry', 0.8, 3, [], true),
+    I('rice', 'Carnaroli rice', 'dry', 0.45, 365, [], true),
+    I('gnocchi', 'Potato gnocchi', 'dry', 0.6, 4, ['kid friendly'], true),
+    I('saffron', 'Saffron', 'dry', 0.9, 180),
+    I('whiteWine', 'Cooking wine', 'dry', 0.2, 30),
+    I('pesto', 'Basil pesto', 'produce', 0.6, 7, ['classic']),
+    I('pecorino', 'Pecorino Romano', 'dairy', 0.6, 30, ['cheesy', 'classic']),
+    I('butter', 'Butter', 'dairy', 0.2, 14),
+    I('eggs', 'Egg yolks', 'dairy', 0.3, 10),
+    I('bechamel', 'Béchamel', 'dairy', 0.4, 4),
+    I('guanciale', 'Guanciale', 'meat', 0.9, 20, ['meaty', 'classic']),
+    I('ragu', 'Slow cooked beef ragù', 'meat', 1.4, 4, ['meaty', 'classic']),
+    // Secondi: the protein is the star.
+    I('chicken', 'Chicken thigh', 'meat', 2.2, 4, ['meaty']),
+    I('pork', 'Pork belly', 'meat', 2.8, 5, ['meaty']),
+    I('veal', 'Veal escalope', 'meat', 4.2, 4, ['meaty']),
+    I('beef', 'Beef sirloin', 'meat', 5.5, 4, ['meaty']),
+    I('vealShank', 'Veal shank', 'meat', 5.5, 4, ['meaty', 'classic']),
+    I('clams', 'Clams', 'seafood', 2.2, 2, ['bold']),
+    I('prawns', 'Prawns', 'seafood', 2.8, 3),
+    I('squid', 'Calamari', 'seafood', 1.6, 3),
+    I('seaBass', 'Sea bass fillet', 'seafood', 4.8, 2),
+    I('garlic', 'Garlic', 'produce', 0.05, 30),
+    I('lemon', 'Lemon', 'produce', 0.1, 14),
+    I('parsley', 'Parsley', 'produce', 0.08, 5),
+    I('sage', 'Sage', 'produce', 0.15, 5),
+    I('rosemary', 'Rosemary', 'produce', 0.1, 7),
+    I('potatoes', 'Potatoes', 'produce', 0.25, 30),
+    I('capers', 'Capers', 'produce', 0.2, 60, ['bold']),
+    I('zucchini', 'Courgette', 'produce', 0.3, 6),
+    I('aubergine', 'Aubergine', 'produce', 0.4, 7),
+    I('porcini', 'Porcini', 'produce', 1.3, 4, ['seasonal']),
+    I('pumpkin', 'Pumpkin', 'produce', 0.4, 20, ['seasonal']),
+    I('asparagus', 'Asparagus', 'produce', 0.9, 4, ['seasonal']),
   ].map((i) => [i.id, i]),
 );
 
@@ -90,6 +128,33 @@ export const HARMONY_MATCHES: readonly [string, string][] = [
   ['anchovy', 'olives'],
   ['truffleOil', 'mushrooms'],
   ['mascarpone', 'cream'],
+  // Primi and secondi
+  ['guanciale', 'pecorino'],
+  ['eggs', 'pecorino'],
+  ['ragu', 'parmesan'],
+  ['ragu', 'bechamel'],
+  ['pesto', 'potatoes'],
+  ['clams', 'garlic'],
+  ['clams', 'parsley'],
+  ['prawns', 'garlic'],
+  ['porcini', 'parmesan'],
+  ['saffron', 'butter'],
+  ['butter', 'sage'],
+  ['pumpkin', 'sage'],
+  ['asparagus', 'parmesan'],
+  ['zucchini', 'prawns'],
+  ['veal', 'sage'],
+  ['prosciutto', 'sage'],
+  ['veal', 'lemon'],
+  ['vealShank', 'lemon'],
+  ['beef', 'rocket'],
+  ['seaBass', 'lemon'],
+  ['squid', 'lemon'],
+  ['potatoes', 'rosemary'],
+  ['pork', 'rosemary'],
+  ['chicken', 'rosemary'],
+  ['aubergine', 'parmesan'],
+  ['capers', 'lemon'],
 ];
 
 export const HARMONY_CLASHES: readonly [string, string][] = [
@@ -98,4 +163,12 @@ export const HARMONY_CLASHES: readonly [string, string][] = [
   ['pineapple', 'burrata'],
   ['anchovy', 'burrata'],
   ['gorgonzola', 'pineapple'],
+  // The Italian rule: no cheese on fish.
+  ['clams', 'parmesan'],
+  ['clams', 'pecorino'],
+  ['prawns', 'parmesan'],
+  ['seaBass', 'parmesan'],
+  ['squid', 'parmesan'],
+  ['pineapple', 'guanciale'],
+  ['truffleOil', 'clams'],
 ];

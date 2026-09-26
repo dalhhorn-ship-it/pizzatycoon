@@ -4,8 +4,9 @@ import { DISTRICTS } from '../data/districts';
 import { EQUIPMENT } from '../data/equipment';
 import { FURNITURE } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
+import { isMain, PRIMO_BASES } from '../data/recipes';
 import { ROLE_NAMES, TRAITS } from '../data/staff';
-import type { EquipmentItem, Role } from '../data/types';
+import type { EquipmentItem, MainKind, Role } from '../data/types';
 import { T } from '../data/tunables';
 import { analyse } from '../sim/analysis';
 import { type Command, isUnlocked, loanPayment, RANK_NAMES, suppliersFor, tiersFor, unlockText } from '../sim/game';
@@ -24,7 +25,8 @@ export interface PanelCtx {
   rerender: () => void;
 }
 
-const expanded = new Set<string>();
+const expanded = new Set<string>(['book:pizza']);
+const creatorState: { kind: MainKind; base: string; picked: Set<string> } = { kind: 'pizza', base: 'spaghetti', picked: new Set() };
 const act = (ctx: PanelCtx, cmd: Command, ok?: string): void => {
   const err = ctx.dispatch(cmd);
   if (err) toast(err, 'warn');
@@ -47,8 +49,10 @@ export function menuPanel(ctx: PanelCtx): HTMLElement {
   const a = analyse(state);
   const onMenu = state.recipes.filter((r) => r.onMenu);
   const book = state.recipes.filter((r) => !r.onMenu);
-  const kinds: Recipe['kind'][] = ['pizza', 'starter', 'drink', 'dessert'];
-  const kindName: Record<Recipe['kind'], string> = { pizza: 'Pizzas', starter: 'Starters', drink: 'Drinks', dessert: 'Desserts' };
+  const kinds: Recipe['kind'][] = ['starter', 'pizza', 'primo', 'secondo', 'dessert', 'drink'];
+  const kindName: Record<Recipe['kind'], string> = {
+    starter: 'Antipasti', pizza: 'Pizzas', primo: 'Primi piatti', secondo: 'Secondi', dessert: 'Desserts', drink: 'Drinks',
+  };
 
   const card = (r: Recipe): HTMLElement => {
     const d = a.dishes[r.id];
@@ -68,7 +72,10 @@ export function menuPanel(ctx: PanelCtx): HTMLElement {
         h('div', { class: 'small', style: 'text-align:right' },
           h('div', { class: band === 'Pricey' ? 'warn' : band === 'Generous' ? 'good' : '' }, `${band} · fair ${money(d.fairPrice * 0.9, true)} to ${money(d.fairPrice * 1.1, true)}`),
           h('div', { class: 'muted' }, `Cost ${money(d.foodCost, true)} · margin ${(margin * 100).toFixed(0)}%`))),
-      h('div', { class: 'chips' }, ...[...d.tags].map((t) => h('span', { class: 'chip' }, t))),
+      h('div', { class: 'chips' },
+        ...[...d.tags].map((t) => h('span', { class: 'chip' }, t)),
+        isMain(r.kind) && d.work > 1 ? h('span', { class: 'chip', title: 'Prep work per plate compared with a simple pizza' }, `prep x${d.work.toFixed(2)}`) : null,
+        r.kind === 'primo' || r.kind === 'secondo' ? h('span', { class: 'chip', title: 'Cooked on the stove, not in the pizza oven' }, 'no oven') : null),
       h('div', { class: 'row' },
         h('button', { class: 'small', onclick: () => { if (open) expanded.delete(r.id); else expanded.add(r.id); ctx.rerender(); } }, open ? 'Hide ingredients' : 'Ingredients and suppliers'),
         h('button', { class: 'small', onclick: () => act(ctx, { type: 'toggleMenu', recipeId: r.id, on: !r.onMenu }) }, r.onMenu ? 'Take off menu' : 'Put on menu'),
@@ -90,15 +97,28 @@ export function menuPanel(ctx: PanelCtx): HTMLElement {
       })) : null);
   };
 
-  const notToppings = new Set(['garlicButter', 'mascarpone', 'cream', 'gelato', 'bread', 'softDrink', 'houseWine', 'craftBeer']);
-  const toppings = Object.values(INGREDIENTS).filter((i) => !i.base && i.category !== 'drinks' && !notToppings.has(i.id));
-  const picked = new Set<string>();
-  const nameInput = h('input', { type: 'text', placeholder: 'Name your pizza', maxLength: 40 });
+  // Custom dishes: pizzas keep their base, primi pick a pasta or rice, secondi start from nothing.
+  const creatorKind = creatorState.kind;
+  const notExtras = new Set(['mascarpone', 'cream', 'gelato', 'bread', 'garlicButter']);
+  const extrasPool = Object.values(INGREDIENTS).filter((i) => !i.base && i.category !== 'drinks' && !notExtras.has(i.id));
+  const picked = creatorState.picked;
+  const nameInput = h('input', { type: 'text', placeholder: creatorKind === 'pizza' ? 'Name your pizza' : 'Name your dish', maxLength: 40 });
+  const hint: Record<MainKind, string> = {
+    pizza: 'Dough, tomato sauce and mozzarella are included. Pick up to 6 toppings. Pairs that go well together raise harmony; more than 4 toppings lowers it.',
+    primo: 'Pick a pasta, rice or gnocchi, then up to 6 ingredients. Primi go on the stove, so they spare the oven but keep the prep line busy. No cheese on fish.',
+    secondo: 'Pick up to 6 ingredients around a meat, fish or vegetable. Secondi are the most work per plate, and fetch the highest prices.',
+  };
   const creator = h('div', { class: 'card' },
-    h('h3', null, 'Create a pizza'),
-    h('div', { class: 'small muted' }, 'Dough, tomato sauce and mozzarella are included. Pick up to 6 toppings. Pairs that go well together raise harmony; more than 4 toppings lowers it.'),
-    h('div', { class: 'chips' }, ...toppings.map((i) => {
-      const b = h('button', { class: 'small', onclick: () => {
+    h('h3', null, 'Create a dish'),
+    h('div', { class: 'seg' }, ...(['pizza', 'primo', 'secondo'] as MainKind[]).map((k) =>
+      h('button', { class: k === creatorKind ? 'on' : '', onclick: () => { creatorState.kind = k; ctx.rerender(); } }, k === 'pizza' ? 'Pizza' : k === 'primo' ? 'Primo' : 'Secondo'))),
+    h('div', { class: 'small muted' }, hint[creatorKind]),
+    creatorKind === 'primo'
+      ? h('div', { class: 'seg' }, ...PRIMO_BASES.map((b) =>
+        h('button', { class: b === creatorState.base ? 'on' : '', onclick: () => { creatorState.base = b; ctx.rerender(); } }, INGREDIENTS[b]?.name ?? b)))
+      : null,
+    h('div', { class: 'chips' }, ...extrasPool.map((i) => {
+      const b = h('button', { class: `small ${picked.has(i.id) ? 'active' : ''}`, onclick: () => {
         if (picked.has(i.id)) picked.delete(i.id);
         else if (picked.size < 6) picked.add(i.id);
         b.classList.toggle('active', picked.has(i.id));
@@ -106,18 +126,43 @@ export function menuPanel(ctx: PanelCtx): HTMLElement {
       return b;
     })),
     h('div', { class: 'row' }, nameInput,
-      h('button', { class: 'primary', onclick: () => act(ctx, { type: 'createPizza', name: nameInput.value, toppings: [...picked], price: 13 }) }, 'Add to recipe book')));
+      h('button', { class: 'primary', onclick: () => {
+        const price = creatorKind === 'pizza' ? 13 : creatorKind === 'primo' ? 15 : 20;
+        const err = ctx.dispatch({ type: 'createDish', kind: creatorKind, name: nameInput.value, base: creatorState.base, ingredients: [...picked], price });
+        if (err) toast(err, 'warn');
+        else picked.clear();
+      } }, 'Add to recipe book')));
 
-  const avgQ = onMenu.filter((r) => r.kind === 'pizza').reduce((x, r, _, arr) => x + (a.dishes[r.id]?.quality ?? 0) / arr.length, 0);
+  const mc = a.kitchen.menu;
+  const complexity = h('div', { class: 'card' },
+    h('h3', null, h('span', null, 'Kitchen complexity'), h('span', { class: `small ${mc.efficiency < 1 ? 'warn' : 'muted'}` },
+      mc.efficiency < 1 ? `line at ${Math.round(mc.efficiency * 100)}% speed` : 'the line keeps up')),
+    meter(mc.score, Math.max(mc.allowance * 1.6, mc.score), mc.score > mc.allowance ? 'warm' : ''),
+    h('div', { class: 'small muted' },
+      `${mc.dishes} dishes and ${mc.ingredients} ingredients to keep ready: ${mc.score.toFixed(1)} of ${mc.allowance.toFixed(1)} your cooks handle comfortably. ` +
+      'Every point above slows prep and lengthens ticket times. Skilled cooks and dishes that share ingredients keep a wide menu running.'));
+
+  const avgQ = onMenu.filter((r) => isMain(r.kind)).reduce((x, r, _, arr) => x + (a.dishes[r.id]?.quality ?? 0) / arr.length, 0);
   return h('div', { class: 'stack' },
-    h('div', { class: 'spread' }, h('h2', null, 'Menu'), h('span', { class: 'muted small' }, `${onMenu.length} of 16 items · average pizza quality ${avgQ.toFixed(0)}`)),
+    h('div', { class: 'spread' }, h('h2', null, 'Menu'), h('span', { class: 'muted small' }, `${onMenu.length} of ${T.build.menuMaxItems} items · average main quality ${avgQ.toFixed(0)}`)),
     h('div', { class: 'small muted' }, 'Pick a quality tier for every ingredient: B Basic, S Standard, P Premium, A Artisan. Better tiers raise quality and cost, and spoil faster.'),
     ...kinds.flatMap((k) => {
       const items = onMenu.filter((r) => r.kind === k);
       return items.length ? [h('h3', null, kindName[k]), ...items.map(card)] : [];
     }),
+    complexity,
     h('h2', null, 'Recipe book'),
-    ...book.map(card),
+    ...kinds.flatMap((k) => {
+      const items = book.filter((r) => r.kind === k);
+      if (!items.length) return [];
+      const key = `book:${k}`;
+      const open = expanded.has(key);
+      return [
+        h('button', { class: 'spread ghost', onclick: () => { if (open) expanded.delete(key); else expanded.add(key); ctx.rerender(); } },
+          h('b', null, kindName[k]), h('span', { class: 'small muted' }, `${items.length} ${open ? '▾' : '▸'}`)),
+        ...(open ? items.map(card) : []),
+      ];
+    }),
     creator);
 }
 

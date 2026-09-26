@@ -1,5 +1,6 @@
 // "Measurable impact" previews (prd.md 5.8): run the real day model on a hypothetical state.
 
+import { isMain } from '../data/recipes';
 import { analyse } from '../sim/analysis';
 import { simulateDay } from '../sim/day';
 import type { GameState } from '../sim/state';
@@ -14,7 +15,7 @@ export interface Outlook {
 /** Average expected day across a week, without randomness, at the current reputation. */
 export function outlook(state: GameState): Outlook {
   const a = analyse(state);
-  const mains = state.recipes.filter((r) => r.onMenu && r.kind === 'pizza');
+  const mains = state.recipes.filter((r) => r.onMenu && isMain(r.kind));
   const quality = mains.length ? mains.reduce((x, r) => x + (a.dishes[r.id]?.quality ?? 0), 0) / mains.length : 0;
   let profit = 0;
   let covers = 0;

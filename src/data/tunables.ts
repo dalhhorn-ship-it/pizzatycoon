@@ -34,6 +34,9 @@ export const T = {
     /** taste_match = min(1, base + slope x liked tags). Not defined in the PRD; see solution-design.md 11. */
     tasteMatchBase: 0.1,
     tasteMatchPerTag: 0.45,
+    /** Dish choice: appeal drops by aversion x (price / (budget x wealth) - slack) for mains above the slack. */
+    budgetChoiceSlack: 1.2,
+    budgetChoiceAversion: 1.5,
   },
   attach: {
     drink: { base: 0.8, bonus: 0.1, pivot: 60, span: 25 },
@@ -49,6 +52,8 @@ export const T = {
     harmonyClash: -15,
     harmonyExtraTopping: -10,
     maxToppingsBeforePenalty: 4,
+    /** Primi and secondi carry more on the plate before it gets muddled. */
+    maxExtrasBeforePenaltyNonPizza: 5,
     kitchenBase: 30,
     kitchenPerSkill: 7,
     chefSpecialty: 5,
@@ -64,6 +69,8 @@ export const T = {
     /** Sides (drinks, starters, desserts) use a lower intercept and quality slope; not in the PRD, see solution-design.md 11. */
     sideFairIntercept: 1.5,
     sideFairQualitySlope: 0.04,
+    /** Guests expect to pay more for a plated primo or secondo than for a pizza of the same quality and cost. */
+    fairKindPremium: { pizza: 0, primo: 1, secondo: 4 },
     fairBandLow: 0.9,
     fairBandHigh: 1.1,
     valueBase: 0.7,
@@ -132,7 +139,27 @@ export const T = {
     /** Fire safety: seats at most 0.55 per dining tile (fresh-start.md 3). */
     maxSeatsPerDiningTile: 0.55,
     menuMinItems: 0,
-    menuMaxItems: 16,
+    menuMaxItems: 24,
+  },
+  /**
+   * Menu complexity (balance.md 4.2): every dish and every ingredient the line has to keep ready slows the cooks down.
+   * complexity = perDish x food dishes + perIngredient x distinct food ingredients.
+   * Up to free + perSkill x (average kitchen skill - 5) is handled without trouble; every point above costs
+   * penaltyPerPoint of prep speed (down to efficiencyFloor); ticket times grow by ticketShare of that slowdown.
+   */
+  menu: {
+    perDish: 1,
+    perIngredient: 0.5,
+    free: 16,
+    perSkill: 1,
+    penaltyPerPoint: 0.02,
+    efficiencyFloor: 0.6,
+    ticketShare: 0.5,
+    /** Prep work per plate relative to a pizza. Primi go on the stove, secondi need the most hands. */
+    work: { pizza: 1, primo: 1.25, secondo: 1.5 },
+    /** Extras (non base ingredients) included in that work; each one above adds workPerExtra. */
+    freeExtras: 4,
+    workPerExtra: 0.08,
   },
   ambience: {
     base: 25,

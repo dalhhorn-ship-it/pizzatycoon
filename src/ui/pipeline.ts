@@ -9,8 +9,8 @@ import { h } from './dom';
 type StageId = keyof ServiceReport['stages'];
 
 const STAGES: { id: StageId; name: string; icon: string; tip: string }[] = [
-  { id: 'prep', name: 'Dough and prep', icon: '🫓', tip: 'Add a prep station or sheeter, or bring stations closer to an oven.' },
-  { id: 'oven', name: 'Oven', icon: '🔥', tip: 'Add or upgrade an oven.' },
+  { id: 'prep', name: 'Prep and stove', icon: '🫓', tip: 'Add a prep station or sheeter, bring stations closer to an oven, or trim a crowded menu.' },
+  { id: 'oven', name: 'Oven', icon: '🔥', tip: 'Add or upgrade an oven, or offer primi and secondi that skip it.' },
   { id: 'seats', name: 'Tables and serving', icon: '🍽', tip: 'Add tables or a host, or a heat lamp pass.' },
   { id: 'plates', name: 'Dishwashing', icon: '🫧', tip: 'Hire a dishwasher, buy a dish machine, or move the sink toward the pass.' },
 ];

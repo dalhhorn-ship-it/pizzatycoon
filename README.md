@@ -6,7 +6,8 @@ A cosy restaurant builder for adults, inspired by Pizza Tycoon. Open a pizzeria,
 
 Playable greybox with the full economy of `01-product/balance.md`:
 
-* Menu with 13 pizzas plus sides, per ingredient quality tiers (Basic, Standard, Premium, Artisan) and supplier choice, custom pizzas, pricing against a fair price band
+* Menu with 13 pizzas, 15 primi piatti, 9 secondi plus antipasti, drinks and desserts; per ingredient quality tiers (Basic, Standard, Premium, Artisan) and supplier choice, custom pizzas, primi and secondi, pricing against a fair price band
+* Menu complexity: a wide or fancy menu slows the prep line and lengthens ticket times unless the cooks are skilled; primi and secondi spare the oven but load the prep line
 * Kitchen equipment in volume, quality, artisan and basic families with unlocks, throughput and quality effects
 * Dining room build mode (tables, booths, decor, lighting, ambience)
 * Staff with skill, potential, traits, morale and salary; hiring board with a measurable impact preview
