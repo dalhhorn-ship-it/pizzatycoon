@@ -636,7 +636,7 @@ Founder request: before buying another restaurant, the player hires a manager fo
 
 **Manager.** New staff role, base salary $1,100 a week (prd.md 5.8), skill 3 to 9 on the hiring board; one manager candidate applies every week from the second week on (own random stream, so the rest of the board is unchanged). While the player runs the restaurant the manager has nothing to do.
 
-**Opening another restaurant.** City map, any venue you do not run: "Open a new restaurant here" next to "Move here". It needs a restaurant manager on the current team and the new venue's deposit. The current restaurant (room, kitchen, team, menu, reputation, following, fire safety) becomes a managed restaurant; the new one starts empty at Rep 30 and the start setting's following, with a copy of the recipe book and menu. Cash, loan, rank and the hiring board are shared. "Go and run it" (Money tab or city map) switches between restaurants; the one you leave needs a manager.
+**Opening another restaurant.** City map, any venue you do not run: "Open a new restaurant here" next to "Move here". It needs a restaurant manager on the current team and the new venue's deposit. The current restaurant (room, kitchen, team, menu, reputation, following, fire safety) becomes a managed restaurant; the new one starts empty at Rep 30 and the start setting's following, with a copy of the recipe book (own dishes, tiers and prices) and an empty menu: each restaurant has its own menu. Cash, loan, rank and the hiring board are shared. "Go and run it" (Money tab or city map) switches between restaurants; the one you leave needs a manager.
 
 **How a manager runs it** (`T.manager`, `src/sim/chain.ts`), skill m:
 

@@ -63,7 +63,10 @@ describe('opening another restaurant', () => {
     expect(t.branches).toHaveLength(1);
     expect(t.branches[0]!.venueId).toBe('towpathKiosk');
     expect(t.branches[0]!.staff.some((x) => x.role === 'manager')).toBe(true);
-    expect(t.recipes.filter((x) => x.onMenu).length).toBeGreaterThan(0);
+    // Its own, empty menu; the recipe book comes along, the old restaurant keeps its menu.
+    expect(t.recipes.filter((x) => x.onMenu)).toHaveLength(0);
+    expect(t.recipes).toHaveLength(s.recipes.length);
+    expect(t.branches[0]!.recipes.filter((x) => x.onMenu).length).toBeGreaterThan(0);
   });
 
   test('you cannot open or move into a venue you already run', () => {
@@ -174,4 +177,22 @@ test('opening another restaurant needs reputation 50 at a restaurant you run', (
   // The new place starts at 30, but the first restaurant still counts for a third one.
   t.state.staff.push(manager(901, 5));
   expect(apply(t.state, { type: 'openRestaurant', venueId: 'marketHall' }).error).toBeUndefined();
+});
+
+test('each restaurant has its own menu: changing one leaves the other alone', () => {
+  const s = established();
+  s.staff.push(manager(900, 6));
+  let t = apply(s, { type: 'openRestaurant', venueId: other }).state;
+  const oldMenu = t.branches[0]!.recipes.filter((x) => x.onMenu).map((x) => x.id);
+  expect(apply(t, { type: 'toggleMenu', recipeId: 'margherita', on: true }).error).toBeUndefined();
+  t = apply(t, { type: 'toggleMenu', recipeId: 'margherita', on: true }).state;
+  t = apply(t, { type: 'toggleMenu', recipeId: 'diavola', on: true }).state;
+  t = apply(t, { type: 'setPrice', recipeId: 'margherita', price: 20 }).state;
+  expect(t.recipes.filter((x) => x.onMenu).map((x) => x.id).sort()).toEqual(['diavola', 'margherita']);
+  expect(t.branches[0]!.recipes.filter((x) => x.onMenu).map((x) => x.id)).toEqual(oldMenu);
+  expect(t.branches[0]!.recipes.find((x) => x.id === 'margherita')?.price).not.toBe(20);
+  // Switching back brings the old restaurant's own menu.
+  t.staff.push(manager(901, 5));
+  const back = apply(t, { type: 'switchRestaurant', locationId: t.branches[0]!.id }).state;
+  expect(back.recipes.filter((x) => x.onMenu).map((x) => x.id)).toEqual(oldMenu);
 });

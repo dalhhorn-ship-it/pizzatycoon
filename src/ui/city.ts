@@ -313,7 +313,7 @@ export class CityView {
     const repOk = rep >= T.manager.openRep;
     return h('div', { class: 'stack', style: 'margin-top:10px' },
       h('h3', null, 'Or open it as a new restaurant'),
-      h('div', { class: 'small muted' }, `Keep ${locationName(state)} and open here as well. The new place starts empty, with your recipes and menu. Deposit ${money(deposit)}; the rest comes from shared cash.`),
+      h('div', { class: 'small muted' }, `Keep ${locationName(state)} and open here as well. The new place starts empty, with your recipe book; you choose its own menu. Deposit ${money(deposit)}; the rest comes from shared cash.`),
       repOk
         ? null
         : h('div', { class: 'small warn' }, `Build your name first: you need reputation ${T.manager.openRep} (${(T.manager.openRep / 20).toFixed(1)} stars) at a restaurant you run before a landlord takes you on for a second one. Now ${Math.floor(rep)}.`),

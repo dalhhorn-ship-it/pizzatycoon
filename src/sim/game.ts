@@ -683,10 +683,11 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       if (state.cash < deposit) return fail(input, `The deposit is ${money0(deposit)}; you need ${money0(deposit - state.cash)} more.`);
       state.branches.push(extractLocation(state));
       const id = Math.max(state.locationId, ...state.branches.map((b) => b.id)) + 1;
-      // A new restaurant: empty premises, the recipe book and menu come along, the neighbourhood has to get to know you.
+      // A new restaurant: empty premises and an empty menu. The recipe book (own dishes, tiers, prices) comes along;
+      // the player picks this restaurant's menu. The neighbourhood has to get to know you.
       applyLocation(state, {
         id, districtId: venue.districtId, premisesId: venue.premisesId, venueId: venue.id, deposit,
-        rep: T.reputation.start, following: startFollowing(state), recipes: structuredClone(state.recipes),
+        rep: T.reputation.start, following: startFollowing(state), recipes: structuredClone(state.recipes).map((r) => ({ ...r, onMenu: false })),
         furniture: [], equipment: [], staff: [], daysOpen: 0, fireSafety: [], roomTouches: [], history: [],
       });
       state.cash -= deposit;
