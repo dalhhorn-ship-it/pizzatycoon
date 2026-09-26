@@ -39,6 +39,8 @@ export interface Premises {
   diningWidth: number;
   diningHeight: number;
   kitchenTiles: number;
+  kitchenWidth: number;
+  kitchenHeight: number;
 }
 
 export interface QualityTier {
@@ -85,7 +87,7 @@ export interface RecipeTemplate {
 }
 
 export type EquipmentFamily = 'basic' | 'volume' | 'quality' | 'artisan' | 'hybrid';
-export type EquipmentRole = 'oven' | 'counter' | 'sheeter' | 'pass' | 'dishMachine' | 'proving';
+export type EquipmentRole = 'oven' | 'counter' | 'sheeter' | 'pass' | 'dishMachine' | 'proving' | 'cold' | 'sink';
 
 export type Unlock =
   | { kind: 'start' }
@@ -110,10 +112,16 @@ export interface EquipmentItem {
   effectMult?: number;
   qualityMod: number;
   skillNeeded: number;
+  /** Footprint on the kitchen grid (kitchen-builder.md 3.2); footprint = w x h. */
+  w: number;
+  h: number;
   footprint: number;
+  /** Keeps dough cold: gives touching prep counters the cold at hand bonus (kitchen-builder.md 4). */
+  cold?: boolean;
   maintenance: number;
   unlock: Unlock;
   blurb: string;
+  short: string;
 }
 
 export type FurnitureKind = 'table' | 'decor';

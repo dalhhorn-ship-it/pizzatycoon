@@ -2,6 +2,8 @@
 
 import { SCHEMA_VERSION, type GameState } from '../sim/state';
 import { DISTRICTS } from '../data/districts';
+import { EQUIPMENT } from '../data/equipment';
+import { autoLayout } from '../sim/kitchen';
 
 export interface SaveSummary {
   day: number;
@@ -19,7 +21,18 @@ export interface SaveFile {
 }
 
 /** migrations[n] upgrades a state from schema n to n + 1. */
-const MIGRATIONS: Record<number, (state: Record<string, unknown>) => Record<string, unknown>> = {};
+const MIGRATIONS: Record<number, (state: Record<string, unknown>) => Record<string, unknown>> = {
+  // v1 to v2: the kitchen became a floor plan (kitchen-builder.md 9). Lay out old equipment, add a fridge and a sink.
+  1: (state) => {
+    const s = state as { equipment: { uid: number; itemId: string }[]; premisesId: string; nextUid: number; cash: number; migrationNotes?: string[] };
+    const items = [...s.equipment];
+    for (const id of ['doughFridge', 'sink']) if (!items.some((e) => e.itemId === id)) items.push({ uid: s.nextUid++, itemId: id });
+    const { placed, unplaced } = autoLayout(items, s.premisesId);
+    s.equipment = placed;
+    for (const u of unplaced) s.cash += EQUIPMENT[u.itemId]?.price ?? 0;
+    return s;
+  },
+};
 
 export function summarise(state: GameState, savedAt: number): SaveSummary {
   return {

@@ -10,8 +10,9 @@ import type { EquipmentItem, RankId, Role, TierId, TraitId, Unlock } from '../da
 import { T } from '../data/tunables';
 import { analyse, occupiedTiles, salaryFor } from './analysis';
 import { type DayOptions, simulateDay } from './day';
+import { autoLayout, bestSpot, kitchenDims, layoutProblem } from './kitchen';
 import { Rng } from './rng';
-import { type DayReport, type GameState, type Recipe, type RecipeLine, SCHEMA_VERSION, type Staff } from './state';
+import { type DayReport, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION, type Staff } from './state';
 
 export type Command =
   | { type: 'setTier'; recipeId: string; ingredientId: string; tier: TierId }
@@ -23,8 +24,10 @@ export type Command =
   | { type: 'placeFurniture'; itemId: string; x: number; y: number }
   | { type: 'moveFurniture'; uid: number; x: number; y: number }
   | { type: 'removeFurniture'; uid: number }
-  | { type: 'buyEquipment'; itemId: string }
+  | { type: 'buyEquipment'; itemId: string; x?: number; y?: number; rot?: 0 | 1 }
+  | { type: 'moveEquipment'; uid: number; x: number; y: number; rot: 0 | 1 }
   | { type: 'sellEquipment'; uid: number }
+  | { type: 'tidyKitchen' }
   | { type: 'hire'; candidateId: number }
   | { type: 'fire'; staffId: number }
   | { type: 'giveRaise'; staffId: number }
@@ -171,7 +174,14 @@ export function newGame(seed: number, districtId: string, premisesId = 'cosy'): 
   if (!district || !premises) throw new Error('Unknown district or premises');
   let uid = 1;
   const furniture = STARTER_LAYOUT.map(([itemId, x, y]) => ({ uid: uid++, itemId, x, y }));
-  const equipment = ['deckOven', 'prepCounter', 'prepCounter'].map((itemId) => ({ uid: uid++, itemId }));
+  // kitchen-builder.md 3.4 starter layout.
+  const equipment: OwnedEquipment[] = [
+    { itemId: 'prepCounter', x: 0, y: 0, rot: 0 as const },
+    { itemId: 'deckOven', x: 2, y: 0, rot: 0 as const },
+    { itemId: 'prepCounter', x: 2, y: 2, rot: 0 as const },
+    { itemId: 'sink', x: 6, y: 0, rot: 0 as const },
+    { itemId: 'doughFridge', x: 9, y: 2, rot: 0 as const },
+  ].map((e) => ({ uid: uid++, ...e }));
   const staff: Staff[] = [
     makeStaff(uid++, 'Giulia Rossi', 'cook', 5, 7, 0, ['steady']),
     makeStaff(uid++, 'Marco Bakker', 'cook', 4, 7, 0, ['crowdPleaser']),
@@ -293,12 +303,35 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       const item = EQUIPMENT[cmd.itemId];
       if (!item) return fail(input, 'Unknown equipment.');
       if (!isUnlocked(state, item.unlock)) return fail(input, `Locked: ${unlockText(item.unlock)}.`);
-      if (state.cash < item.price) return fail(input, 'Not enough cash. Pin it as a savings goal.');
-      const used = state.equipment.reduce((a, e) => a + (EQUIPMENT[e.itemId]?.footprint ?? 0), 0);
-      const max = (premises?.kitchenTiles ?? 30) - 4;
-      if (used + item.footprint > max) return fail(input, 'The kitchen is full. Sell something first.');
+      if (state.cash < item.price) return fail(input, `You need ${Math.ceil(item.price - state.cash).toLocaleString('en-US')} more.`);
+      const dims = kitchenDims(state.premisesId);
+      const uid = state.nextUid;
+      const placed =
+        cmd.x !== undefined && cmd.y !== undefined
+          ? { uid, itemId: item.id, x: cmd.x, y: cmd.y, rot: cmd.rot ?? 0 }
+          : bestSpot(state.equipment, uid, item.id, dims);
+      if (!placed) return fail(input, 'There is no room for that in the kitchen. Sell or move something first.');
+      const problem = layoutProblem([...state.equipment, placed], dims);
+      if (problem) return fail(input, problem);
+      state.nextUid += 1;
       state.cash -= item.price;
-      state.equipment.push({ uid: state.nextUid++, itemId: item.id });
+      state.equipment.push(placed);
+      break;
+    }
+    case 'moveEquipment': {
+      const e = state.equipment.find((x) => x.uid === cmd.uid);
+      if (!e) return fail(input, 'Not found.');
+      e.x = cmd.x;
+      e.y = cmd.y;
+      e.rot = cmd.rot;
+      const problem = layoutProblem(state.equipment, kitchenDims(state.premisesId));
+      if (problem) return fail(input, problem);
+      break;
+    }
+    case 'tidyKitchen': {
+      const { placed, unplaced } = autoLayout(state.equipment, state.premisesId);
+      if (unplaced.length) return fail(input, 'Tidy up could not fit everything; move items by hand.');
+      state.equipment = placed;
       break;
     }
     case 'sellEquipment': {

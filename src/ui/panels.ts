@@ -139,7 +139,7 @@ export function kitchenPanel(ctx: PanelCtx): HTMLElement {
     let impact: HTMLElement | null = null;
     if (unlocked && fits) {
       const hyp = structuredClone(state);
-      hyp.equipment.push({ uid: -1, itemId: it.id });
+      hyp.equipment.push({ uid: -1, itemId: it.id, x: -9, y: -9, rot: 0 });
       const d = compare(state, hyp);
       impact = impactLine(d, d.profit > 1 ? `pays back in about ${Math.ceil(it.price / d.profit)} days` : 'no payback at today\'s trade');
     }

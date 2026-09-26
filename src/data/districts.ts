@@ -25,7 +25,7 @@ export const DISTRICTS: Record<string, District> = {
 };
 
 export const PREMISES: Record<string, Premises> = {
-  cosy: { id: 'cosy', name: 'Cosy corner shop', diningWidth: 10, diningHeight: 8, kitchenTiles: 30 },
-  medium: { id: 'medium', name: 'Neighbourhood trattoria', diningWidth: 10, diningHeight: 10, kitchenTiles: 36 },
-  large: { id: 'large', name: 'Big hall', diningWidth: 20, diningHeight: 11, kitchenTiles: 60 },
+  cosy: { id: 'cosy', name: 'Cosy corner shop', diningWidth: 10, diningHeight: 8, kitchenTiles: 30, kitchenWidth: 10, kitchenHeight: 3 },
+  medium: { id: 'medium', name: 'Neighbourhood trattoria', diningWidth: 10, diningHeight: 10, kitchenTiles: 36, kitchenWidth: 12, kitchenHeight: 3 },
+  large: { id: 'large', name: 'Big hall', diningWidth: 20, diningHeight: 11, kitchenTiles: 60, kitchenWidth: 15, kitchenHeight: 4 },
 };

@@ -1,6 +1,6 @@
 import type { DishKind, RankId, Role, SegmentId, Service, TierId, TraitId } from '../data/types';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export interface RecipeLine {
   ingredientId: string;
@@ -29,6 +29,10 @@ export interface PlacedFurniture {
 export interface OwnedEquipment {
   uid: number;
   itemId: string;
+  /** Top left tile on the kitchen grid and rotation (0 or 1 = turned 90 degrees). */
+  x: number;
+  y: number;
+  rot: 0 | 1;
 }
 
 export interface Staff {
@@ -69,6 +73,10 @@ export interface ServiceReport {
   queueDelay: number;
   bottleneck: 'seats' | 'oven' | 'prep' | 'plates' | 'none';
   tableCycle: number;
+  /** Service pipeline in covers per hour (kitchen-builder.md 6). */
+  stages: { prep: number; oven: number; seats: number; plates: number };
+  /** Demand per hour of effective service time. */
+  demandPerHour: number;
 }
 
 export interface SegmentReport {

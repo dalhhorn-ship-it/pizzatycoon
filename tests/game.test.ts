@@ -54,9 +54,9 @@ describe('game commands', () => {
   test('locked equipment cannot be bought until unlocked', () => {
     const s = newGame(1, 'canal');
     s.cash = 100000;
-    expect(apply(s, { type: 'buyEquipment', itemId: 'woodFiredOven' }).error).toMatch(/Locked/);
-    s.rep = 60;
-    expect(apply(s, { type: 'buyEquipment', itemId: 'woodFiredOven' }).error).toBeUndefined();
+    expect(apply(s, { type: 'buyEquipment', itemId: 'stoneHearthOven' }).error).toMatch(/Locked/);
+    s.rep = 45;
+    expect(apply(s, { type: 'buyEquipment', itemId: 'stoneHearthOven' }).error).toBeUndefined();
   });
 
   test('closed without staff, costs still accrue, no crash', () => {

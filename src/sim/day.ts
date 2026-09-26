@@ -81,7 +81,9 @@ export function closedReason(state: GameState, a: Analysis): string | null {
   if (!onMenu.some((r) => r.kind === 'pizza')) return 'There is no pizza on the menu.';
   if (a.room.tables === 0) return 'There are no tables in the dining room.';
   if (a.kitchen.ovens === 0) return 'The kitchen has no oven.';
-  if (a.kitchen.counters === 0) return 'The kitchen has no prep counter.';
+  if (a.kitchen.counters === 0) return 'The kitchen has no prep station.';
+  if (!a.kitchen.hasCold) return 'The kitchen needs a fridge to keep the dough cold.';
+  if (!a.kitchen.hasSink) return 'The kitchen needs a sink.';
   if (a.kitchen.kitchenStaff === 0) return 'Nobody is working in the kitchen. Hire a cook.';
   if (a.service.servers === 0) return 'Nobody is serving tables. Hire a server.';
   return null;
@@ -249,7 +251,11 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     perceivedWait[sv] = a.service.orderTime[sv] + a.service.serveTime[sv] + q * share;
     totalWalk += walk;
     const servedAfter = segs.reduce((x, s) => x + (served[s.id]?.[sv] ?? 0), 0);
-    services.push({ service: sv, demand, served: servedAfter, walkAways: walk, capacity, rho, queueDelay: q, bottleneck, tableCycle: cycle });
+    services.push({
+      service: sv, demand, served: servedAfter, walkAways: walk, capacity, rho, queueDelay: q, bottleneck, tableCycle: cycle,
+      stages: { prep: prepPerHour, oven: k.ovenPerHour, seats: seatPerHour, plates: a.service.platesPerHour / T.kitchen.platesPerCover },
+      demandPerHour: demand / (hours * T.service.utilisation[sv]),
+    });
   }
 
   // ---- Satisfaction, money, dish sales ----

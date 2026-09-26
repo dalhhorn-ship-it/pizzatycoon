@@ -8,6 +8,7 @@ import { HARMONY_CLASHES, HARMONY_MATCHES, INGREDIENTS, SUPPLIERS, TIERS } from 
 import { SEGMENTS } from '../data/segments';
 import type { EquipmentItem, SegmentId, Service, Tag } from '../data/types';
 import { T } from '../data/tunables';
+import { type Flow, kitchenFlow, plateWalk } from './kitchen';
 import type { GameState, PlacedFurniture, Recipe, Staff } from './state';
 
 export const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -41,6 +42,15 @@ export interface KitchenStats {
   maintenancePerWeek: number;
   hasPass: boolean;
   hasDishMachine: boolean;
+  hasCold: boolean;
+  hasSink: boolean;
+  /** Extra minutes per pizza walking plates from the ovens to the pass. */
+  plateWalk: number;
+  flow: Flow;
+  /** Output per prep station by uid, for the kitchen view. */
+  stationPrep: Record<number, number>;
+  /** Output per oven by uid, for the kitchen view. */
+  ovenOutput: Record<number, number>;
 }
 
 export interface RoomStats {
@@ -180,9 +190,10 @@ export function kitchenStats(state: GameState, service: Service = 'dinner'): Kit
       (hasChef ? T.quality.chefSpecialty : 0)
     : T.quality.kitchenBase;
   const items = state.equipment.map((e) => EQUIPMENT[e.itemId]).filter((e): e is EquipmentItem => !!e);
-  const ovens = items.filter((i) => i.role === 'oven');
-  const counters = items.filter((i) => i.role === 'counter');
-  const sheeters = items.filter((i) => i.role === 'sheeter').length;
+  const owned = state.equipment.filter((e) => !!EQUIPMENT[e.itemId]);
+  const ovens = owned.filter((e) => EQUIPMENT[e.itemId]?.role === 'oven');
+  const counters = owned.filter((e) => EQUIPMENT[e.itemId]?.role === 'counter');
+  const flow = kitchenFlow(state);
   const hasPass = items.some((i) => i.role === 'pass');
   const hasDishMachine = items.some((i) => i.role === 'dishMachine');
   const proving = items.find((i) => i.role === 'proving');
@@ -193,30 +204,48 @@ export function kitchenStats(state: GameState, service: Service = 'dinner'): Kit
   let ovenPerHour = 0;
   let cookTimeWeighted = 0;
   let qualityWeighted = 0;
-  for (const o of ovens) {
+  let walkWeighted = 0;
+  const ovenOutput: Record<number, number> = {};
+  for (const oe of ovens) {
+    const o = EQUIPMENT[oe.itemId] as EquipmentItem;
     const speed = ovenSpeed(o, cooks, avgSkill, service);
     const perHour = ((o.slots ?? 0) * 60) / (T.kitchen.bakeMinutes * (o.bakeMult ?? 1) * cookTimeMult) * speed;
     const qmod = avgSkill < o.skillNeeded ? (o.qualityMod * avgSkill) / o.skillNeeded : o.qualityMod;
     ovenPerHour += perHour;
+    ovenOutput[oe.uid] = perHour;
+    walkWeighted += perHour * plateWalk(flow.ovenDPass[oe.uid] ?? 0);
     if (speed > 0) cookTimeWeighted += perHour * ((T.kitchen.bakeMinutes * (o.bakeMult ?? 1) * cookTimeMult) / speed);
     qualityWeighted += perHour * qmod;
   }
-  const cookTime = ovenPerHour > 0 ? cookTimeWeighted / ovenPerHour : T.kitchen.bakeMinutes;
+  const walk = ovenPerHour > 0 ? walkWeighted / ovenPerHour : 0;
+  const cookTime = (ovenPerHour > 0 ? cookTimeWeighted / ovenPerHour : T.kitchen.bakeMinutes) + walk;
   const ovenQ = ovenPerHour > 0 ? qualityWeighted / ovenPerHour : 0;
 
-  // Counters are staffed best first; sheeters attach to staffed counters.
-  const staffedCounters = Math.min(counters.length, cooks.length);
+  // Prep stations (kitchen-builder.md 4): each staffed station gets one cook, best stations first.
   const counterSpeed = cooks.length ? mean(cooks.map((c) => personalSpeed(c, false) * nightOwlMult(c, service))) : 0;
+  const sheeterItem = EQUIPMENT.doughSheeter;
+  const stationRate = (e: (typeof counters)[number]): number => {
+    const it = EQUIPMENT[e.itemId] as EquipmentItem;
+    const st = flow.stations[e.uid];
+    const tool = Math.max(it.prepMult ?? 1, st?.sheeter ? (sheeterItem?.prepMult ?? 1.35) : 1);
+    return T.kitchen.prepRate * counterSpeed * tool * (st?.coldMult ?? 1) * (st?.reachMult ?? 1);
+  };
+  const ranked = [...counters].sort((a, b) => stationRate(b) - stationRate(a) || (EQUIPMENT[b.itemId]?.qualityMod ?? 0) - (EQUIPMENT[a.itemId]?.qualityMod ?? 0));
+  const staffedCounters = Math.min(counters.length, cooks.length);
   let prepPerHour = 0;
   let counterQ = 0;
-  const sortedCounters = [...counters].sort((a, b) => b.qualityMod - a.qualityMod);
-  for (let i = 0; i < staffedCounters; i++) {
-    const c = sortedCounters[i];
-    if (!c) continue;
-    const withSheeter = i < sheeters;
-    prepPerHour += T.kitchen.prepRate * counterSpeed * (c.prepMult ?? 1) * (withSheeter ? 1.35 : 1);
-    counterQ += c.qualityMod + (withSheeter ? (EQUIPMENT.doughSheeter?.qualityMod ?? 0) : 0);
-  }
+  const stationPrep: Record<number, number> = {};
+  ranked.forEach((c, i) => {
+    const rate = stationRate(c);
+    if (i >= staffedCounters) {
+      stationPrep[c.uid] = 0;
+      return;
+    }
+    stationPrep[c.uid] = rate;
+    prepPerHour += rate;
+    const withSheeter = flow.stations[c.uid]?.sheeter ?? false;
+    counterQ += (EQUIPMENT[c.itemId]?.qualityMod ?? 0) + (withSheeter ? (sheeterItem?.qualityMod ?? 0) : 0);
+  });
   counterQ = staffedCounters ? counterQ / staffedCounters : 0;
 
   const E = clamp(
@@ -241,6 +270,12 @@ export function kitchenStats(state: GameState, service: Service = 'dinner'): Kit
     maintenancePerWeek: items.reduce((a, i) => a + i.maintenance, 0),
     hasPass,
     hasDishMachine,
+    hasCold: items.some((i) => i.cold),
+    hasSink: items.some((i) => i.role === 'sink'),
+    plateWalk: walk,
+    flow,
+    stationPrep,
+    ovenOutput,
   };
 }
 
@@ -331,7 +366,8 @@ export function serviceStats(state: GameState, kitchen: Record<Service, KitchenS
   );
   const dishwashers = state.staff.filter((s) => s.role === 'dishwasher');
   const machine = kitchen.dinner.hasDishMachine ? (EQUIPMENT.dishMachine?.effectMult ?? 1) : 1;
-  const platesPerHour = dishwashers.reduce((a, d) => a + T.kitchen.dishwasherRate * personalSpeed(d, false), 0) * machine;
+  const platesPerHour =
+    dishwashers.reduce((a, d) => a + T.kitchen.dishwasherRate * personalSpeed(d, false), 0) * machine * kitchen.dinner.flow.washMult;
   return { servers: servers.length, hasHost, serverSpeed, loadMult, seatTime, orderTime, serveTime, payTime, serviceTime, serviceScore, platesPerHour };
 }
 

@@ -7,6 +7,7 @@ import type { Category, Role, TierId } from '../../src/data/types';
 import { analyse, occupiedTiles, roomStats, salaryFor } from '../../src/sim/analysis';
 import { simulateDay } from '../../src/sim/day';
 import { newGame, tiersFor } from '../../src/sim/game';
+import { autoLayout } from '../../src/sim/kitchen';
 import type { DayReport, GameState, PlacedFurniture } from '../../src/sim/state';
 import { PREMISES } from '../../src/data/districts';
 
@@ -136,7 +137,9 @@ export function buildState(build: BuildId, districtId: string, mainPrice?: numbe
   s.day = 4; // Thursday
   s.cash = 0;
   s.furniture = layout(s, spec);
-  s.equipment = spec.equipment.map((itemId, i) => ({ uid: 5000 + i, itemId }));
+  const { placed, unplaced } = autoLayout([...spec.equipment, 'doughFridge', 'sink'].map((itemId, i) => ({ uid: 5000 + i, itemId })), s.premisesId);
+  if (unplaced.length) throw new Error(`${build}: kitchen auto layout could not place ${unplaced.map((u) => u.itemId).join(', ')}`);
+  s.equipment = placed;
   s.staff = spec.staff.map(([role, skill, fame], i) => ({
     id: 6000 + i, name: `${role} ${i}`, role, skill, potential: skill, fame, traits: [], morale: 50,
     salary: salaryFor(role, skill, fame, ROLE_BASE_SALARY[role]), shiftsWorked: 0, lowMoraleDays: 0, leavingOnDay: null,

@@ -85,6 +85,19 @@ export const T = {
     plateStock: 90,
     resale: 0.8,
   },
+  /** kitchen-builder.md 4: walking distance on the kitchen grid. */
+  kitchenFlow: {
+    prepFreeTiles: 2,
+    prepPenaltyPerTile: 0.04,
+    prepPenaltyCap: 0.2,
+    passFreeTiles: 3,
+    plateWalkPerTile: 0.2,
+    plateWalkCap: 2.0,
+    washFreeTiles: 4,
+    washPenaltyPerTile: 0.03,
+    washPenaltyCap: 0.15,
+    coldAtHandBonus: 0.05,
+  },
   service: {
     seatWithHost: 2,
     seatWithoutHost: 5,
