@@ -716,3 +716,5 @@ Every fair price (food and bar) is multiplied by `1 + 0.3 x (Rep - 50) / 50` abo
 Measured on the cosy starter at full following, best pizza price (x the starter prices) and profit per day: Rep 30 x0.9 $329; Rep 50 x1.0 $422; Rep 65 x1.2 $533; Rep 80 x1.2 $622; Rep 95 x1.3 $702. The reference builds are unchanged at their test prices (their rooms are full); all balance checks pass.
 
 **Hiring board (2026-09-26).** Every board offers every role: chef, cook, server, host, dishwasher and restaurant manager (from day 1). The random candidates are drawn as before; any role the draw missed is filled from its own random stream. Hiring the last candidate of a role brings a new one for that role straight away, and saves from before this rule get the missing roles when they load.
+
+**Menu limits (2026-09-26).** The single 36 item limit is split into 24 food items (antipasti, mains, desserts) and 32 bar items (drinks, wines, aperitivi, digestivi), so a full wine list never blocks a pizza. The menu header shows both counts, and a full section's button says so instead of failing silently.

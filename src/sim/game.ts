@@ -7,7 +7,7 @@ import { FIRE_SAFETY } from '../data/fireSafety';
 import { ROOM_TOUCHES } from '../data/roomTouches';
 import { FURNITURE } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
-import { PIZZA_BASE, PRIMO_BASES, RECIPE_BOOK } from '../data/recipes';
+import { menuSection, PIZZA_BASE, PRIMO_BASES, RECIPE_BOOK } from '../data/recipes';
 import { FIRST_NAMES, LAST_NAMES, ROLE_BASE_SALARY, TRAITS } from '../data/staff';
 import type { EquipmentItem, MainKind, RankId, Role, TierId, TraitId, Unlock } from '../data/types';
 import { T } from '../data/tunables';
@@ -414,7 +414,10 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       const r = state.recipes.find((x) => x.id === cmd.recipeId);
       if (!r) return fail(input, 'Unknown dish.');
       const count = state.recipes.filter((x) => x.onMenu).length;
-      if (cmd.on && !r.onMenu && count >= T.build.menuMaxItems) return fail(input, `The menu holds at most ${T.build.menuMaxItems} items.`);
+      const section = menuSection(state.recipes, r.kind);
+      if (cmd.on && !r.onMenu && section.count >= section.max) {
+        return fail(input, `The ${section.name} menu is full (${section.max} items). Take something off first.`);
+      }
       if (!cmd.on && r.onMenu && count <= T.build.menuMinItems) return fail(input, `Keep at least ${T.build.menuMinItems} items on the menu.`);
       r.onMenu = cmd.on;
       break;

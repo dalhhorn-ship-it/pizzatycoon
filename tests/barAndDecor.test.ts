@@ -142,3 +142,23 @@ test('the wine cellar holds 17 wines, all sold by a supplier', async () => {
   const all = withMenu(s, [...WINE_IDS]);
   expect(day(all).dishSales.sassicaia ?? 0).toBeGreaterThan(0);
 });
+
+describe('menu limits', () => {
+  test('a full wine list and bar never take the place of a pizza', async () => {
+    const { WINE_IDS } = await import('../src/data/recipes');
+    const s = base();
+    for (const r of s.recipes) if (WINE_IDS.has(r.id) || r.kind === 'aperitivo' || r.kind === 'digestivo') r.onMenu = true;
+    const r = apply(s, { type: 'toggleMenu', recipeId: 'diavola', on: true });
+    expect(r.error).toBeUndefined();
+    expect(r.state.recipes.find((x) => x.id === 'diavola')?.onMenu).toBe(true);
+  });
+
+  test('a full food menu says so clearly', () => {
+    const s = base();
+    const food = s.recipes.filter((r) => !['drink', 'aperitivo', 'digestivo'].includes(r.kind));
+    for (const r of food.slice(0, 24)) r.onMenu = true;
+    const next = food.find((r) => !r.onMenu)!;
+    expect(apply(s, { type: 'toggleMenu', recipeId: next.id, on: true }).error).toMatch(/food menu is full/);
+    expect(apply(s, { type: 'toggleMenu', recipeId: 'grappa', on: true }).error).toBeUndefined();
+  });
+});

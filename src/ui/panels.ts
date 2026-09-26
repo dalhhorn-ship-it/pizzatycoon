@@ -7,7 +7,7 @@ import { FIRE_SAFETY, FIRE_SAFETY_IDS, type FireSafetyItem } from '../data/fireS
 import { ROOM_TOUCH_IDS, ROOM_TOUCHES, type RoomTouch, type TouchSpot } from '../data/roomTouches';
 import { FURNITURE } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
-import { isBar, isMain, PRIMO_BASES, WINE_IDS } from '../data/recipes';
+import { isBar, isMain, menuSection, PRIMO_BASES, WINE_IDS } from '../data/recipes';
 import { ROLE_NAMES, TRAITS } from '../data/staff';
 import type { EquipmentItem, MainKind, Role } from '../data/types';
 import { ADDONS, addonEffectText, UPGRADE_PATHS } from '../data/addons';
@@ -88,7 +88,15 @@ export function menuPanel(ctx: PanelCtx): HTMLElement {
         r.kind === 'primo' || r.kind === 'secondo' ? h('span', { class: 'chip', title: 'Cooked on the stove, not in the pizza oven' }, 'no oven') : null),
       h('div', { class: 'row' },
         h('button', { class: 'small', onclick: () => { if (open) expanded.delete(r.id); else expanded.add(r.id); ctx.rerender(); } }, open ? 'Hide ingredients' : 'Ingredients and suppliers'),
-        h('button', { class: 'small', onclick: () => act(ctx, { type: 'toggleMenu', recipeId: r.id, on: !r.onMenu }) }, r.onMenu ? 'Take off menu' : 'Put on menu'),
+        (() => {
+          const sec = menuSection(state.recipes, r.kind);
+          const full = !r.onMenu && sec.count >= sec.max;
+          return h('button', {
+            class: 'small', disabled: full,
+            title: full ? `The ${sec.name} menu holds ${sec.max} items. Take something off first.` : '',
+            onclick: () => act(ctx, { type: 'toggleMenu', recipeId: r.id, on: !r.onMenu }),
+          }, r.onMenu ? 'Take off menu' : full ? `${sec.name === 'bar' ? 'Bar' : 'Menu'} full, take a dish off first` : 'Put on menu');
+        })(),
         r.custom && !r.onMenu ? h('button', { class: 'small ghost', onclick: () => act(ctx, { type: 'deleteRecipe', recipeId: r.id }) }, 'Delete') : null),
       open ? h('div', null, ...r.lines.map((l) => {
         const ing = INGREDIENTS[l.ingredientId];
@@ -154,7 +162,8 @@ export function menuPanel(ctx: PanelCtx): HTMLElement {
 
   const avgQ = onMenu.filter((r) => isMain(r.kind)).reduce((x, r, _, arr) => x + (a.dishes[r.id]?.quality ?? 0) / arr.length, 0);
   return h('div', { class: 'stack' },
-    h('div', { class: 'spread' }, h('h2', null, 'Menu'), h('span', { class: 'muted small' }, `${onMenu.length} of ${T.build.menuMaxItems} items · average main quality ${avgQ.toFixed(0)}`)),
+    h('div', { class: 'spread' }, h('h2', null, 'Menu'), h('span', { class: 'muted small' },
+      `food ${menuSection(state.recipes, 'pizza').count} of ${T.build.menuMaxFood} · bar ${menuSection(state.recipes, 'drink').count} of ${T.build.menuMaxBar} · average main quality ${avgQ.toFixed(0)}`)),
     h('div', { class: 'small muted' }, 'Pick a quality tier for every ingredient: B Basic, S Standard, P Premium, A Artisan. Better tiers raise quality and cost, and spoil faster.'),
     repPriceMult(state.rep) > 1.005
       ? h('div', { class: 'small good' }, `Your reputation (${state.rep.toFixed(0)}) lets you charge more: guests accept prices ${Math.round((repPriceMult(state.rep) - 1) * 100)}% higher than an unknown place. The fair bands below already include it.`)

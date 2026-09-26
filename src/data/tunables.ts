@@ -190,7 +190,9 @@ export const T = {
     /** Fire safety: seats at most 0.55 per dining tile (fresh-start.md 3). */
     maxSeatsPerDiningTile: 0.55,
     menuMinItems: 0,
-    menuMaxItems: 36,
+    /** Separate limits so a long wine list never takes the place of a pizza. */
+    menuMaxFood: 24,
+    menuMaxBar: 32,
   },
   /**
    * Menu complexity (balance.md 4.2): every dish and every ingredient the line has to keep ready slows the cooks down.

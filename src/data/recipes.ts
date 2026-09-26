@@ -1,3 +1,4 @@
+import { T } from './tunables';
 import type { DishKind, MainKind, RecipeTemplate } from './types';
 
 /** Dishes a guest can pick as their main course. The rest are sides that attach to a main. */
@@ -7,6 +8,16 @@ export const isMain = (kind: DishKind): kind is MainKind => (MAIN_KINDS as reado
 /** Kinds served from the bar: no kitchen work, no menu complexity. */
 export const BAR_KINDS: readonly DishKind[] = ['drink', 'aperitivo', 'digestivo'];
 export const isBar = (kind: DishKind): boolean => BAR_KINDS.includes(kind);
+
+/** How many items of the same section (food or bar) are on a menu, and that section's limit. */
+export function menuSection(recipes: readonly { kind: DishKind; onMenu: boolean }[], kind: DishKind): { name: string; count: number; max: number } {
+  const bar = isBar(kind);
+  return {
+    name: bar ? 'bar' : 'food',
+    count: recipes.filter((r) => r.onMenu && isBar(r.kind) === bar).length,
+    max: bar ? T.build.menuMaxBar : T.build.menuMaxFood,
+  };
+}
 
 /** What a custom dish starts from: a pizza always has its base, a primo picks one of these, a secondo starts bare. */
 export const PIZZA_BASE: readonly string[] = ['dough', 'tomatoSauce', 'mozzarella'];
