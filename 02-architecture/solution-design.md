@@ -186,7 +186,8 @@ erDiagram
 
 | Item | Risk | Question that resolves it |
 |---|---|---|
-| Taste match (5.7) | Used in menu fit, choice and satisfaction but not defined | Proposed and implemented: `taste_match = min(1, 0.1 + 0.45 x liked tags on the dish)`; reproduces the worked example within 5%. Game design to confirm. |
+| Taste match (5.7) | Used in menu fit, choice and satisfaction but not defined | Proposed and implemented: `taste_match = min(1, 0.1 + 0.45 x liked tags on the dish)`; reproduces the worked example covers within 1%. Game design to confirm. |
+| Fair price for sides | The pizza formula makes a $3.50 soft drink look far below fair | Implemented: sides use `1.5 + 0.04 x Q + 1.5 x food cost`. Game design to confirm. |
 | Agent sim must match calculator within 10% (AC-72) | Two models drift | Resolved by design: the aggregate model is the only authority (section 5.2) |
 | Apple Pencil hover (F-07, AC-20) | Browser support is partial | Keep as progressive enhancement via Pointer Events `pointerType = pen`; drop hover requirement |
 | Offline plus cloud saves | Conflicts | Explicit conflict chooser (section 8) |

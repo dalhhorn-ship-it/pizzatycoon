@@ -43,7 +43,7 @@
 | Name | Unit | Students | Families | Professionals | Foodies | Seniors | Tourists | Safe range | Read by |
 |---|---|---|---|---|---|---|---|---|---|
 | elasticity e | exponent | 2.0 | 1.5 | 1.0 | 0.6 | 1.2 | 0.8 | 0.3 to 3.0 | price_mult, value_score |
-| budget B | $ per main | 10 | 12 | 16 | 24 | 15 | 20 | 6 to 40 | budget_mult |
+| budget B | $ per main | 11 (was 10, tuned in M0) | 12 | 16 | 24 | 15 | 20 | 6 to 40 | budget_mult |
 | quality appeal qa | multiplier | 0.0 | 0.1 | 0.35 | 1.0 | 0.3 | 0.5 | 0 to 1.5 | quality_mult |
 | quality weight wq | weight | 0.30 | 0.35 | 0.40 | 0.60 | 0.40 | 0.35 | 0.1 to 0.8 | dish choice |
 | wait tolerance | game min | 10 | 12 | 8 lunch, 15 dinner | 20 | 15 | 15 | 5 to 30 | wait_score, walk-aways |
@@ -154,7 +154,7 @@ Other kitchen constants:
 | serve time | game min | 1.5 / server_speed | | Service |
 | pay and bus time | game min | 4 / server_speed | | Service |
 | server_speed | formula | (0.7 + 0.06 x skill) x morale_mult x load_mult | | Service |
-| tables per server before penalty | tables | 4 | 3 to 6 | load_mult |
+| tables per server before penalty | tables | 5 (was 4, tuned in M0) | 3 to 6 | load_mult |
 | load penalty | per extra table | -0.15, floor 0.4 | -0.1 to -0.25 | load_mult |
 | party size fit | fraction of seats usable | 0.75 | 0.6 to 0.9 | Seat capacity |
 | service utilisation U | fraction | lunch 0.60, dinner 0.65 | 0.5 to 0.8 | Service capacity |
@@ -208,7 +208,7 @@ Other kitchen constants:
 |---|---|---|---|---|
 | starting Rep | points | 30 (40 if brand Rep 60+) | 20 to 50 | Reputation |
 | Rep learning rate | fraction of gap per day | 0.05 | 0.03 to 0.10 | Reputation |
-| walk-away penalty | Rep | -1 if walk-aways over 10% of arrivals | | Reputation |
+| walk-away penalty | Rep | -1 if guests who gave up waiting exceed 10% of arrivals (guests turned away by a full house do not count; M0 change) | | Reputation |
 | critic review weight | multiplier | 5 | 3 to 10 | Reputation |
 | marketing brand bonus | Rep | 0 to 5 | | Brand Rep |
 
@@ -445,3 +445,26 @@ Each build is a mature single location at steady state reputation (Rep where dai
 * Artisan equipment throughput must stay below the Deck Oven's 20 servings per hour at skill 5.
 * Hybrid equipment must cost at least twice the best single family item it combines, so it is a late game upgrade, not a shortcut.
 * Any change that moves a reference build's profit by more than 15% requires rerunning sections 2 and 3 and updating AC-10, AC-11, AC-12, AC-105 and AC-114.
+
+---
+
+## 4. M0 tuning log
+
+The M0 simulation (`src/sim`) is now the reference calculator. `npm run balance` prints the live strategy table and enforces the section 3.5 checks. Changes made while implementing it:
+
+| Change | Why |
+|---|---|
+| Students budget B 10 to 11 | With the formulas implemented exactly, the volume build fell 17% short of luxury and only 3% above the middle build in University Quarter. Budget is the first lever in 3.7. |
+| Tables per server before penalty 4 to 5 | The reference volume (34 tables, 7 servers) and middle builds assumed no load penalty. |
+| Walk-away penalty only for guests who gave up waiting | A full luxury room turns guests away every dinner; the reference steady state Rep 86 assumed no penalty for that. |
+| `taste_match = min(1, 0.1 + 0.45 x liked tags)` | Not defined in the PRD; reproduces the starter day covers within 1%. |
+| Sides fair price `1.5 + 0.04 x Q + 1.5 x food cost` | The pizza formula made every side look far below fair. |
+| Volume reference menu targets students (Pepperoni, Diavola, Salsiccia, Quattro Formaggi, Margherita) | A volume player builds for the district's main segment. |
+
+Current results (`npm run balance`, steady reputation, Thursday):
+
+| Build | University Quarter | Canal Quarter | Old Harbour |
+|---|---|---|---|
+| Luxury | about -$5 (best $1,117 at $20) | about $180 | about $1,980 (best about $2,000 at $30) |
+| Volume | about $1,920 (best about $2,000) | loses money | loses money |
+| Middle | best about $1,720 | best about $1,320 (top here) | best about $1,310 |
