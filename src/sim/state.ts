@@ -124,6 +124,10 @@ export interface DayReport {
   reviews: Review[];
   repBefore: number;
   repAfter: number;
+  /** Local following before and after the day, and where satisfaction is pulling it (balance.md 4.3). */
+  followingBefore: number;
+  followingAfter: number;
+  followingTarget: number;
   pnl: PnL;
   cashBefore: number;
   cashAfter: number;
@@ -144,6 +148,8 @@ export interface GameState {
   deposit: number;
   loan: Loan;
   rep: number;
+  /** Local following 0..1: how many locals know and come back to the restaurant. New restaurants start low. */
+  following: number;
   totalServed: number;
   rank: RankId;
   recipes: Recipe[];

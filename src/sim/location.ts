@@ -12,6 +12,8 @@ export interface LocationFacts {
   venue: Venue | null;
   premises: Premises;
   footTraffic: number;
+  /** Share of passers-by who notice the shopfront (premises visibility). */
+  visibility: number;
   shares: Record<SegmentId, number>;
   wealth: number;
   competition: number;
@@ -42,6 +44,7 @@ export function locationFacts(districtId: string, premisesId: string, venueId: s
   return {
     district, venue, premises, shares, rentPerTile, tiles,
     footTraffic: district.footTraffic * (venue?.trafficMult ?? 1),
+    visibility: premises.visibility,
     wealth: district.wealth * (venue?.wealthMult ?? 1),
     competition: clamp(district.competition + (venue?.competitionDelta ?? 0), 0, T.city.competitionMax),
     lunchShare: clamp(district.lunchShare + (venue?.lunchShareDelta ?? 0), T.city.lunchShareMin, T.city.lunchShareMax),

@@ -78,29 +78,45 @@ describe('fresh start', () => {
     expect(T.finance.startingCash - s.cash).toBeCloseTo(5296, 0);
   });
 
-  test('the worked example day: about 33.6 covers and $134 profit (AC-162)', () => {
+  test('opening day: nobody knows the place yet, a handful of guests and a loss (balance.md 4.3)', () => {
     const s = cheapestOpening();
     s.day = 4;
     const r = apply(s, { type: 'runDay' }, { noise: false }).events[0]?.report;
     expect(r?.open).toBe(true);
-    expect(r?.covers).toBeGreaterThan(33.6 * 0.9);
-    expect(r?.covers).toBeLessThan(33.6 * 1.1);
-    expect(r?.pnl.profit).toBeGreaterThan(134 * 0.8);
-    expect(r?.pnl.profit).toBeLessThan(134 * 1.25);
+    expect(r?.covers).toBeGreaterThan(5);
+    expect(r?.covers).toBeLessThan(15);
+    expect(r?.pnl.profit).toBeLessThan(0);
+    expect(r?.followingAfter).toBeGreaterThan(r?.followingBefore ?? 1);
   });
 
-  test('week 1 is tight but profitable and cash never goes below zero (AC-162)', () => {
+  test('the first weeks lose money, word of mouth turns it around, cash stays above zero (AC-162)', () => {
     let s = cheapestOpening();
     let lowest = s.cash;
-    let profit = 0;
-    for (let i = 0; i < 7; i++) {
+    const weekly: number[] = [];
+    for (let i = 0; i < 56; i++) {
       const r = apply(s, { type: 'runDay' }, { noise: false });
       s = r.state;
       lowest = Math.min(lowest, s.cash);
+      if (i % 7 === 0) weekly.push(0);
+      weekly[weekly.length - 1]! += r.events[0]?.report?.pnl.profit ?? 0;
+    }
+    expect(weekly[0]).toBeLessThan(0);
+    expect(weekly[1]).toBeLessThan(0);
+    expect(weekly.at(-1)).toBeGreaterThan(134 * 7 * 0.8);
+    expect(lowest).toBeGreaterThan(0);
+    expect(s.following).toBeGreaterThan(0.5);
+  });
+
+  test('overpricing a new restaurant starves it: +40% prices lose money for weeks (balance.md 4.3)', () => {
+    let s = cheapestOpening();
+    for (const r of s.recipes) if (r.onMenu) r.price *= 1.4;
+    let profit = 0;
+    for (let i = 0; i < 28; i++) {
+      const r = apply(s, { type: 'runDay' }, { noise: false });
+      s = r.state;
       profit += r.events[0]?.report?.pnl.profit ?? 0;
     }
-    expect(lowest).toBeGreaterThan(0);
-    expect(profit).toBeGreaterThan(0);
+    expect(profit).toBeLessThan(-1000);
   });
 
   test('loan terms (AC-165)', () => {

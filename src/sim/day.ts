@@ -133,6 +133,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     return {
       day: state.day, weekday, open: false, closedReason: reason, covers: 0, walkAways: 0, services: [], segments: [],
       dishSales: {}, satisfaction: 0, reviews: [], repBefore: state.rep, repAfter: state.rep, pnl: pnlBase,
+      followingBefore: state.following, followingAfter: state.following * (1 - T.following.closedDecay), followingTarget: 0,
       cashBefore: state.cash, cashAfter: state.cash, weeklyPayments: 0, tips: [reason],
     };
   }
@@ -157,6 +158,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   const cEff = Math.min(T.demand.competitionCap, district.competition);
   const repMult = T.demand.repMultBase + T.demand.repMultSlope * state.rep;
   const weekdayMult = T.time.weekdayMult[weekday] ?? 1;
+  const followMult = followingDemand(state.following);
 
   // ---- Demand per segment and service ----
   interface SegCalc {
@@ -193,8 +195,8 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const fameMult = id === 'foodies' ? 1 + T.demand.chefFameFoodieBonus * chefFame : 1;
     const noise = opts.noise ? clamp(1 + 0.06 * rng.normal(), 0.8, 1.2) : 1;
     const base =
-      district.footTraffic * district.shares[id] * T.demand.captureBase * repMult * weekdayMult *
-      fit * priceMult * budgetMult * qualityMult * fameMult * (1 - T.demand.competitionFactor * cEff) * noise * economyOf(state).demand;
+      district.footTraffic * district.visibility * district.shares[id] * T.demand.captureBase * repMult * weekdayMult *
+      fit * priceMult * budgetMult * qualityMult * fameMult * followMult * (1 - T.demand.competitionFactor * cEff) * noise * economyOf(state).demand;
     const sides: Record<string, Choice | null> = {};
     let check = choice.avgPrice;
     let cost = choice.avgCost;
@@ -346,6 +348,8 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   const fame = Math.min(T.staff.fameRepCap, state.staff.reduce((x, s) => x + s.fame, 0) * T.staff.fameRepPerWeek);
   rep = clamp(rep + fame / 7, 0, 100);
 
+  const follow = nextFollowing(state.following, satisfaction, covers, impatient);
+
   const pnl = fixedCosts(state, a, covers);
   pnl.sales = sales;
   pnl.ingredients = ingredients;
@@ -355,9 +359,31 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   return {
     day: state.day, weekday, open: true, closedReason: null, covers, walkAways: totalWalk, services, segments: segmentReports,
     dishSales, satisfaction, reviews, repBefore: state.rep, repAfter: rep, pnl,
+    followingBefore: state.following, followingAfter: follow.after, followingTarget: follow.target,
     cashBefore: state.cash, cashAfter: state.cash, weeklyPayments: 0,
-    tips: tipsFor(services, a, pnl, segmentReports),
+    tips: [...followingTip(follow.after, follow.target, services), ...tipsFor(services, a, pnl, segmentReports)].slice(0, 3),
   };
+}
+
+/** Share of full demand that comes in: curious walk-ins plus locals who know the place (balance.md 4.3). */
+export function followingDemand(following: number): number {
+  return T.following.walkIn + (1 - T.following.walkIn) * clamp(following, 0, 1);
+}
+
+export function followingTarget(satisfaction: number): number {
+  const f = T.following;
+  return clamp((satisfaction - f.satZero) / (f.satFull - f.satZero), 0, 1);
+}
+
+/** Word of mouth: satisfied guests bring friends, unhappy ones and guests who gave up waiting keep them away. */
+export function nextFollowing(following: number, satisfaction: number, covers: number, impatient: number): { after: number; target: number } {
+  const f = T.following;
+  const target = followingTarget(satisfaction);
+  const reach = clamp(covers / f.wordOfMouthGuests, f.wordOfMouthMin, 1);
+  const rate = target > following ? f.growth * reach : f.decline;
+  const arrivals = covers + impatient;
+  const gaveUp = arrivals > 0 ? impatient / arrivals : 0;
+  return { after: clamp(following + rate * (target - following) - f.walkAwayLoss * gaveUp, 0, 1), target };
 }
 
 function fixedCosts(state: GameState, a: Analysis, covers: number): PnL {
@@ -368,6 +394,15 @@ function fixedCosts(state: GameState, a: Analysis, covers: number): PnL {
   const interest = (state.loan.balance * state.loan.annualRate) / 52 / 7;
   const profit = -(staff + rent + utilities + upkeep + interest);
   return { sales: 0, ingredients: 0, waste: 0, staff, rent, utilities, upkeep, interest, profit };
+}
+
+function followingTip(following: number, target: number, services: ServiceReport[]): string[] {
+  const quiet = services.every((s) => s.rho < 0.8);
+  if (following >= 0.6 || !quiet) return [];
+  if (target <= following + 0.02) {
+    return [`Only ${Math.round(following * 100)}% of locals know you, and today's guests were not happy enough to spread the word. Better food, fair prices or shorter waits would get people talking.`];
+  }
+  return [`Word is still getting around: ${Math.round(following * 100)}% of locals know you. Every happy guest brings friends; quiet first weeks are normal.`];
 }
 
 function tipsFor(services: ServiceReport[], a: Analysis, pnl: PnL, segs: SegmentReport[]): string[] {

@@ -523,7 +523,8 @@ export function moneyPanel(ctx: PanelCtx, extra: HTMLElement): HTMLElement {
       h('h3', null, `Rank: ${RANK_NAMES[state.rank]}`),
       h('div', { class: 'kv' },
         h('span', null, 'Guests served'), h('b', null, Math.round(state.totalServed).toLocaleString()),
-        h('span', null, 'Reputation'), h('b', null, state.rep.toFixed(1))),
+        h('span', null, 'Reputation'), h('b', null, state.rep.toFixed(1)),
+        h('span', null, 'Local following'), h('b', null, `${Math.round(state.following * 100)}%`)),
       h('div', { class: 'small muted' }, `Next: ${nextRank}`)),
     extra);
 }

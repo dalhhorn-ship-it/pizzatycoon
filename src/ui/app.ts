@@ -160,6 +160,15 @@ export class App {
   }
 
   private onUpdate(state: GameState, events: GameEvent[]): void {
+    const week = events.find((e) => e.kind === 'weekCompleted');
+    if (week?.reports) {
+      // Fast forward: no service animation, straight to the week summary.
+      this.shown = state;
+      this.setViews(state);
+      this.renderAll();
+      this.showWeekReport(week.reports, week.stoppedBecause ?? null, events.filter((e) => e.kind !== 'weekCompleted'));
+      return;
+    }
     const day = events.find((e) => e.kind === 'dayCompleted');
     if (day?.report) {
       this.pending = { report: day.report, events: events.filter((e) => e.kind !== 'dayCompleted') };
@@ -259,6 +268,8 @@ export class App {
       h('div', { class: 'stat' }, h('span', null, T.time.weekdayNames[(s.day - 1) % 7] ?? ''), h('b', null, `Day ${s.day}`)),
       h('div', { class: 'stat' }, h('span', null, 'Cash'), h('b', { class: s.cash < 0 ? 'bad' : '' }, money(s.cash))),
       h('div', { class: 'stat' }, h('span', null, `Reputation ${s.rep.toFixed(0)}`), h('b', { class: 'stars' }, stars(s.rep))),
+      h('div', { class: 'stat', title: 'Local following: how many locals know you and come back. It grows by word of mouth from satisfied guests.' },
+        h('span', null, 'Locals'), h('b', null, `${Math.round(s.following * 100)}%`)),
       h('div', { class: 'stat' }, h('span', null, 'Rank'), h('b', null, RANK_NAMES[s.rank])),
       h('div', { class: 'grow' }),
       h('button', { class: 'small', onclick: () => this.showCity() }, '🏠 Buy another restaurant'),
@@ -307,6 +318,7 @@ export class App {
       h('span', { class: 'clock' }, '09:00'),
       h('span', { class: 'small muted' }, `${a.room.seats} seats · oven ${a.kitchen.ovenPerHour.toFixed(0)}/h · ambience ${a.room.ambience.toFixed(0)}`),
       h('div', { style: 'flex:1' }),
+      h('button', { title: 'Run up to 7 days without watching service. Stops early if something needs you.', onclick: () => this.runWeek() }, '⏩ Run a week'),
       h('button', { class: 'primary', onclick: () => this.openForDay() }, 'Open for the day'),
     );
   }
@@ -331,6 +343,13 @@ export class App {
     this.floor.tool = { kind: 'none' };
     this.floor.selected = null;
     const err = this.game.dispatch({ type: 'runDay' });
+    if (err) toast(err, 'warn');
+  }
+
+  private runWeek(): void {
+    this.floor.tool = { kind: 'none' };
+    this.floor.selected = null;
+    const err = this.game.dispatch({ type: 'runWeek' });
     if (err) toast(err, 'warn');
   }
 
@@ -375,6 +394,9 @@ export class App {
             h('span', { class: 'small muted' }, `${Math.round(r.walkAways)} turned away · satisfaction ${r.satisfaction.toFixed(0)}`)),
           h('div', { class: 'card' }, h('span', { class: 'muted small' }, 'Profit'), h('span', { class: `big ${r.pnl.profit >= 0 ? 'good' : 'bad'}` }, money(r.pnl.profit)),
             h('span', { class: 'small muted' }, `Sales ${money(r.pnl.sales)} · reputation ${signed(repDelta, 1)}`))),
+      r.open ? h('div', { class: 'small muted' },
+        `Word of mouth: ${Math.round(r.followingBefore * 100)}% → ${Math.round(r.followingAfter * 100)}% of locals know you. ` +
+        `At today's satisfaction the following heads for ${Math.round(r.followingTarget * 100)}%.`) : null,
       r.open ? h('div', { class: 'card' }, h('h3', null, 'How guests felt'),
         h('div', { class: 'kv' }, ...(['food', 'service', 'ambience', 'value', 'wait'] as const).flatMap((k) => [
           h('span', null, k[0]?.toUpperCase() + k.slice(1)), h('b', { class: sat[k] < 0.45 ? 'bad' : sat[k] > 0.75 ? 'good' : '' }, `${Math.round(sat[k] * 100)}`),
@@ -386,6 +408,40 @@ export class App {
       r.weeklyPayments ? h('div', { class: 'small muted' }, `Sunday bills paid: ${money(r.weeklyPayments)} for wages, rent and loan.`) : null,
       events.length ? h('div', { class: 'stack' }, ...events.map((e) => h('div', { class: e.kind === 'unlocked' || e.kind === 'rankUp' ? 'good' : e.kind === 'restructure' ? 'warn' : '' }, e.text))) : null,
       h('div', { class: 'row', style: 'justify-content:flex-end' }, h('button', { class: 'primary', onclick: () => close() }, 'Tomorrow')));
+    close = modal(content, { onClose: () => undefined });
+  }
+
+  private showWeekReport(reports: DayReport[], stoppedBecause: string | null, events: GameEvent[]): void {
+    let close = (): void => {};
+    const first = reports[0];
+    const last = reports.at(-1);
+    if (!first || !last) return;
+    const sum = (f: (r: DayReport) => number): number => reports.reduce((a, r) => a + f(r), 0);
+    const covers = sum((r) => r.covers);
+    const profit = sum((r) => r.pnl.profit);
+    const open = reports.filter((r) => r.open);
+    const sat = open.length ? open.reduce((a, r) => a + r.satisfaction * r.covers, 0) / Math.max(1, sum((r) => (r.open ? r.covers : 0))) : 0;
+    const bills = sum((r) => r.weeklyPayments);
+    const content = h('div', { class: 'stack' },
+      h('div', { class: 'spread' }, h('h2', null, `Days ${first.day} to ${last.day}`), h('span', { class: 'muted' }, `${reports.length} day${reports.length === 1 ? '' : 's'} fast forwarded`)),
+      stoppedBecause ? h('div', { class: 'warn' }, `Stopped early. ${stoppedBecause}`) : null,
+      h('div', { class: 'grid2' },
+        h('div', { class: 'card' }, h('span', { class: 'muted small' }, 'Guests served'), h('span', { class: 'big' }, Math.round(covers).toString()),
+          h('span', { class: 'small muted' }, `${Math.round(sum((r) => r.walkAways))} turned away · satisfaction ${sat.toFixed(0)}`)),
+        h('div', { class: 'card' }, h('span', { class: 'muted small' }, 'Profit'), h('span', { class: `big ${profit >= 0 ? 'good' : 'bad'}` }, money(profit)),
+          h('span', { class: 'small muted' }, `Cash ${money(first.cashBefore)} → ${money(last.cashAfter)}`))),
+      h('div', { class: 'card' },
+        h('div', { class: 'kv' },
+          h('span', null, 'Reputation'), h('b', null, `${first.repBefore.toFixed(1)} → ${last.repAfter.toFixed(1)}`),
+          h('span', null, 'Local following'), h('b', null, `${Math.round(first.followingBefore * 100)}% → ${Math.round(last.followingAfter * 100)}%`),
+          ...reports.flatMap((r) => [
+            h('span', null, `${T.time.weekdayNames[r.weekday]} ${r.day}`),
+            h('b', { class: r.open ? (r.pnl.profit >= 0 ? 'good' : 'bad') : 'warn' }, r.open ? `${Math.round(r.covers)} guests · ${money(r.pnl.profit)}` : 'closed'),
+          ]))),
+      last.tips.length ? h('div', { class: 'card' }, h('h3', null, 'Your advisor'), ...last.tips.map((t) => h('div', { class: 'small' }, t))) : null,
+      bills ? h('div', { class: 'small muted' }, `Sunday bills paid: ${money(bills)} for wages, rent and loan.`) : null,
+      events.length ? h('div', { class: 'stack' }, ...events.map((e) => h('div', { class: e.kind === 'unlocked' || e.kind === 'rankUp' ? 'good' : e.kind === 'info' ? '' : 'warn' }, e.text))) : null,
+      h('div', { class: 'row', style: 'justify-content:flex-end' }, h('button', { class: 'primary', onclick: () => close() }, 'Continue')));
     close = modal(content, { onClose: () => undefined });
   }
 

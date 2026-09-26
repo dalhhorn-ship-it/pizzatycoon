@@ -47,12 +47,17 @@ export type Command =
   | { type: 'setEconomy'; economy: Partial<Economy> }
   | { type: 'freshStart' }
   | { type: 'rentVenue'; venueId: string }
-  | { type: 'runDay' };
+  | { type: 'runDay' }
+  /** Fast forward: up to 7 days, stopping early when something needs the player (see WEEK_STOPS). */
+  | { type: 'runWeek' };
 
 export interface GameEvent {
-  kind: 'dayCompleted' | 'unlocked' | 'rankUp' | 'restructure' | 'staffLeft' | 'staffNotice' | 'info';
+  kind: 'dayCompleted' | 'weekCompleted' | 'unlocked' | 'rankUp' | 'restructure' | 'staffLeft' | 'staffNotice' | 'info';
   text: string;
   report?: DayReport;
+  /** weekCompleted: every day that ran, and why it stopped early (null when all 7 ran). */
+  reports?: DayReport[];
+  stoppedBecause?: string | null;
 }
 
 export interface Result {
@@ -224,7 +229,7 @@ export function newGame(seed: number, districtId: string, premisesId = 'hole', e
     schemaVersion: SCHEMA_VERSION, seed, day: 1, districtId, premisesId, venueId,
     cash: Math.round(T.finance.startingCash * (economy?.startingCash ?? 1)) - deposit, deposit,
     loan: { balance: 0, annualRate: T.finance.starterLoanRate, weeksLeft: 0, pausedWeeks: 0 },
-    rep: T.reputation.start, totalServed: 0, rank: 'cook', recipes, furniture: [], equipment: [], staff: [], candidates: [],
+    rep: T.reputation.start, following: T.following.start, totalServed: 0, rank: 'cook', recipes, furniture: [], equipment: [], staff: [], candidates: [],
     nextUid: 1, daysBelowZero: 0, history: [], unlockAll: false,
   };
   if (economy) state.economy = clampEconomy(economy);
@@ -270,6 +275,8 @@ export function withStarterKit(state: GameState): GameState {
   // The reference kitchen is drawn for the cosy shop; bigger kitchens move the pass, so tidy it there.
   if (layoutProblem(s.equipment, kitchenDims(s.premisesId))) s.equipment = autoLayout(s.equipment, s.premisesId).placed;
   for (const r of s.recipes) r.onMenu = RECIPE_BOOK.find((t) => t.id === r.id)?.onMenu ?? false;
+  // The reference starter is an established restaurant: the neighbourhood already knows it (balance.md 4.3).
+  s.following = 1;
   s.nextUid = uid;
   return s;
 }
@@ -468,6 +475,7 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       // fresh-start.md 3: overnight move; deposit refunded, new deposit paid, everything re-laid out.
       if (cmd.districtId === state.districtId && cmd.premisesId === state.premisesId) return fail(input, 'You already rent this place.');
       const venueId = venueFor(cmd.districtId, cmd.premisesId);
+      const sameDistrictMove = cmd.districtId === state.districtId;
       const newDeposit = depositFor(cmd.districtId, cmd.premisesId, venueId);
       if (!newDeposit) return fail(input, 'Unknown premises.');
       if (state.cash + state.deposit < newDeposit) return fail(input, `You need ${Math.ceil(newDeposit - state.deposit - state.cash).toLocaleString('en-US')} more for the deposit.`);
@@ -476,6 +484,7 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       state.districtId = cmd.districtId;
       state.premisesId = cmd.premisesId;
       state.venueId = venueId;
+      state.following = followingAfterMove(state.following, sameDistrictMove);
       const notes: string[] = [];
       const kitchen = autoLayout(state.equipment, cmd.premisesId);
       state.equipment = kitchen.placed;
@@ -610,11 +619,19 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       return rentVenue(input, cmd.venueId);
     case 'runDay':
       return runDay(state, opts);
+    case 'runWeek':
+      return runWeek(state, opts);
   }
   return { state, events };
 }
 
 // ---------- Moving (city-map.md 6) ----------
+
+/** Regulars follow you down the street, not across town (balance.md 4.3). */
+export function followingAfterMove(following: number, sameDistrict: boolean): number {
+  const keep = sameDistrict ? T.following.keepSameDistrict : T.following.keepOtherDistrict;
+  return Math.max(T.following.start, following * keep);
+}
 
 export interface MoveQuote {
   newDeposit: number;
@@ -622,6 +639,7 @@ export interface MoveQuote {
   movingFee: number;
   net: number;
   repAfter: number;
+  followingAfter: number;
   sameDistrict: boolean;
   /** Items that will not fit and are sold at the resale rate. */
   soldFurniture: string[];
@@ -678,7 +696,7 @@ export function moveQuote(state: GameState, venueId: string): MoveQuote | null {
   const repAfter = state.rep * keep + T.reputation.start * (1 - keep);
   const net = newDeposit - refund + T.city.movingFee;
   return {
-    newDeposit, refund, movingFee: T.city.movingFee, net, repAfter, sameDistrict,
+    newDeposit, refund, movingFee: T.city.movingFee, net, repAfter, followingAfter: followingAfterMove(state.following, sameDistrict), sameDistrict,
     soldFurniture: dining.unplaced.map((f) => FURNITURE[f.itemId]?.name ?? f.itemId),
     soldEquipment: kitchen.unplaced.map((e) => EQUIPMENT[e.itemId]?.name ?? e.itemId),
     resale,
@@ -698,6 +716,7 @@ function rentVenue(input: GameState, venueId: string): Result {
   state.cash -= quote.total;
   state.deposit = quote.newDeposit;
   state.rep = quote.repAfter;
+  state.following = quote.followingAfter;
   state.districtId = venue.districtId;
   state.premisesId = venue.premisesId;
   state.venueId = venue.id;
@@ -705,6 +724,34 @@ function rentVenue(input: GameState, venueId: string): Result {
   const sold = [...quote.soldFurniture, ...quote.soldEquipment];
   if (sold.length) events.push({ kind: 'info', text: `Sold what did not fit (${sold.join(', ')}) for $${Math.round(quote.resale).toLocaleString('en-US')}.` });
   return { state, events };
+}
+
+// ---------- Fast forward ----------
+
+/** Events that end a fast forward early so the player can react. */
+const WEEK_STOPS: readonly GameEvent['kind'][] = ['staffNotice', 'staffLeft', 'restructure'];
+
+function runWeek(state: GameState, opts: DayOptions): Result {
+  const reports: DayReport[] = [];
+  const events: GameEvent[] = [];
+  let stoppedBecause: string | null = null;
+  for (let i = 0; i < 7; i++) {
+    const r = runDay(state, opts);
+    state = r.state;
+    const day = r.events.find((e) => e.kind === 'dayCompleted');
+    if (day?.report) reports.push(day.report);
+    const others = r.events.filter((e) => e.kind !== 'dayCompleted');
+    events.push(...others);
+    if (day?.report && !day.report.open) stoppedBecause = `Closed on day ${day.report.day}: ${day.report.closedReason}`;
+    const stop = others.find((e) => WEEK_STOPS.includes(e.kind));
+    if (stop) stoppedBecause = stop.text;
+    if (stoppedBecause) break;
+  }
+  const covers = reports.reduce((a, r) => a + r.covers, 0);
+  return {
+    state,
+    events: [{ kind: 'weekCompleted', text: `${reports.length} days run, ${Math.round(covers)} guests served.`, reports, stoppedBecause }, ...events],
+  };
 }
 
 // ---------- Day settlement ----------
@@ -737,6 +784,7 @@ function runDay(state: GameState, opts: DayOptions): Result {
   report.cashAfter = state.cash;
 
   state.rep = report.repAfter;
+  state.following = report.followingAfter;
   state.totalServed += report.covers;
 
   // Staff: morale drift, growth, notices (prd.md 5.8).

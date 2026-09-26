@@ -567,3 +567,40 @@ Measured (steady Rep, Thursday, extras on top of the reference menus):
 | Volume, University | + 10 fancy dishes | 38 / 15 | 60% | 313 (prep bound) | $1,695 |
 
 A few primi that share ingredients pay off: they relieve the oven and lift the check. A long, fancy menu turns prep into the bottleneck and costs covers and profit unless the brigade is skilled. `build.menuMaxItems` went from 16 to 24.
+
+### 4.3 Earning a local following, and visibility (2026-09-26)
+
+Founder request: bring demand closer to capacity, and make getting started hard. A new restaurant has no loyal base yet and has to earn it.
+
+**Why it was easy.** Demand did not depend on the size of the restaurant, so the 12 seat opening in Canal Quarter had 2.1 to 2.4 times more guests wanting in than it could seat from day 1. Price barely mattered: +40% on every dish doubled profit over 100 days.
+
+**Visibility** (new `Premises.visibility`): the share of passers-by who notice the shopfront. Hole in the wall 0.5, cosy corner shop 0.75, corner unit 0.9, trattoria, loft and big hall 1.0. The reference builds use 1.0 premises, so the strategy table (3.3) is unchanged.
+
+**Local following** (new `GameState.following`, tunables `following`), 0 to 100%:
+
+`demand x (0.25 + 0.75 x following)`
+
+A new restaurant starts at 10%, so about a third of full demand comes in. Each open day the following moves toward a target set by the day's satisfaction:
+
+`target = (satisfaction - 35) / (62 - 35)`, clamped to 0..1
+
+It rises at 4% of the gap a day (word of mouth; scaled down when fewer than 30 guests are served) and falls at 4% a day. Guests who give up waiting take away 0.1 x the share who gave up. Closed days lose 2%. Moving within a neighbourhood keeps 60% of the following; moving across town starts over at 10%. Saves from before this change load at 80% (established).
+
+A solidly liked restaurant (satisfaction 62 or more) earns the full following; a mediocre one (52) settles near 63%. Overpricing lowers the value score and so the following, so it now costs guests over time as well as on the day.
+
+**Measured** (cheapest opening in Canal Quarter, fair prices, nothing else changed):
+
+| Day | Following | Guests | Dinner demand / capacity | Profit per day | Cash |
+|---|---|---|---|---|---|
+| 1 | 11% | 8 | 0.26 | -$145 | $1,753 |
+| 7 | 18% | 14 | 0.44 | -$73 | $989 |
+| 14 | 26% | 19 | 0.57 | -$23 | $583 |
+| 28 | 44% | 26 | 0.80 | +$68 | $721 |
+| 56 | 65% | 35 | 1.11 | +$168 | $3,539 |
+| 120 | 78% | 32 | 0.95 | +$137 | $13,724 |
+
+The first three weeks lose money; cash bottoms out around $500 without the loan. The same opening at +40% prices loses money for about 9 weeks. In University Quarter (cheaper rent) the first profitable week is week 2.
+
+Tests updated: the golden starter day (section 2) now runs at an established following with the cosy shop's 0.75 visibility: 52.6 guests at Rep 30 with no bottleneck (was 67.5 with seats full). AC-162 now checks that the first two weeks lose money, week 8 makes at least 80% of the old $134 a day, and cash stays above zero.
+
+**Fast forward.** "Run a week" runs up to 7 days without the service animation and shows a week summary. It stops early when the restaurant cannot open, someone hands in notice or leaves, or the bank restructures the loan.

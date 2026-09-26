@@ -55,7 +55,7 @@ export class Controller {
     const result = apply(this.state, cmd);
     if (result.error) return result.error;
     this.state = result.state;
-    if (cmd.type === 'runDay' || cmd.type === 'freshStart') this.saveNow(true);
+    if (cmd.type === 'runDay' || cmd.type === 'runWeek' || cmd.type === 'freshStart') this.saveNow(true);
     else this.scheduleSave();
     this.publish(result.events);
     return null;

@@ -163,15 +163,19 @@ export function buildState(build: BuildId, districtId: string, mainPrice?: numbe
   return s;
 }
 
-/** Run Thursdays until reputation settles where the daily review score equals Rep (balance.md 3.1). */
+/**
+ * Run Thursdays until reputation and the local following settle (balance.md 3.1, 4.3): an established restaurant,
+ * where the daily review score equals Rep and word of mouth has done its work.
+ */
 export function steadyState(state: GameState): { state: GameState; report: DayReport } {
   const s = structuredClone(state);
   const a = analyse(s);
   let report = simulateDay(s, a, { noise: false });
-  for (let i = 0; i < 400; i++) {
+  for (let i = 0; i < 2000; i++) {
     s.rep = report.repAfter;
+    s.following = report.followingAfter;
     report = simulateDay(s, a, { noise: false });
-    if (Math.abs(report.repAfter - s.rep) < 1e-4) break;
+    if (Math.abs(report.repAfter - s.rep) < 1e-4 && Math.abs(report.followingAfter - s.following) < 1e-5) break;
   }
   return { state: s, report };
 }

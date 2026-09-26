@@ -53,10 +53,10 @@ export const DISTRICTS: Record<string, District> = {
 };
 
 export const PREMISES: Record<string, Premises> = {
-  hole: { id: 'hole', name: 'Hole in the wall', diningWidth: 6, diningHeight: 5, kitchenTiles: 24, kitchenWidth: 10, kitchenHeight: 5 },
-  cosy: { id: 'cosy', name: 'Cosy corner shop', diningWidth: 10, diningHeight: 8, kitchenTiles: 30, kitchenWidth: 14, kitchenHeight: 6 },
-  medium: { id: 'medium', name: 'Neighbourhood trattoria', diningWidth: 10, diningHeight: 10, kitchenTiles: 36, kitchenWidth: 16, kitchenHeight: 6 },
-  large: { id: 'large', name: 'Big hall', diningWidth: 20, diningHeight: 11, kitchenTiles: 60, kitchenWidth: 20, kitchenHeight: 8 },
-  corner: { id: 'corner', name: 'Corner unit', diningWidth: 12, diningHeight: 8, kitchenTiles: 30, kitchenWidth: 14, kitchenHeight: 6 },
-  loft: { id: 'loft', name: 'Warehouse loft', diningWidth: 14, diningHeight: 10, kitchenTiles: 48, kitchenWidth: 18, kitchenHeight: 7 },
+  hole: { id: 'hole', name: 'Hole in the wall', diningWidth: 6, diningHeight: 5, kitchenTiles: 24, kitchenWidth: 10, kitchenHeight: 5, visibility: 0.5 },
+  cosy: { id: 'cosy', name: 'Cosy corner shop', diningWidth: 10, diningHeight: 8, kitchenTiles: 30, kitchenWidth: 14, kitchenHeight: 6, visibility: 0.75 },
+  medium: { id: 'medium', name: 'Neighbourhood trattoria', diningWidth: 10, diningHeight: 10, kitchenTiles: 36, kitchenWidth: 16, kitchenHeight: 6, visibility: 1 },
+  large: { id: 'large', name: 'Big hall', diningWidth: 20, diningHeight: 11, kitchenTiles: 60, kitchenWidth: 20, kitchenHeight: 8, visibility: 1 },
+  corner: { id: 'corner', name: 'Corner unit', diningWidth: 12, diningHeight: 8, kitchenTiles: 30, kitchenWidth: 14, kitchenHeight: 6, visibility: 0.9 },
+  loft: { id: 'loft', name: 'Warehouse loft', diningWidth: 14, diningHeight: 10, kitchenTiles: 48, kitchenWidth: 18, kitchenHeight: 7, visibility: 1 },
 };

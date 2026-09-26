@@ -217,6 +217,29 @@ export const T = {
     freshStartThreshold: -20000,
   },
   /** 01-product/city-map.md 4 and 6. */
+  /**
+   * Local following (balance.md 4.3): a new restaurant has no loyal base yet and has to earn it.
+   * Demand x (walkIn + (1 - walkIn) x following). Following moves toward a target set by satisfaction:
+   * target = (satisfaction - satZero) / (satFull - satZero), clamped to 0..1, at `growth` a day while it rises
+   * (word of mouth, scaled down when fewer than wordOfMouthGuests are served) and `decline` a day while it falls.
+   */
+  following: {
+    start: 0.1,
+    walkIn: 0.25,
+    satZero: 35,
+    satFull: 62,
+    growth: 0.04,
+    decline: 0.04,
+    wordOfMouthGuests: 30,
+    wordOfMouthMin: 0.2,
+    /** Guests who gave up waiting tell their friends too: following drops by this x the share who gave up. */
+    walkAwayLoss: 0.1,
+    closedDecay: 0.02,
+    keepSameDistrict: 0.6,
+    keepOtherDistrict: 0,
+    /** Saves from before the following existed are established restaurants. */
+    established: 0.8,
+  },
   city: {
     sqmPerTile: 1.5,
     movingFee: 1500,

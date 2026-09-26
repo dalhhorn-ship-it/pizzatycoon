@@ -67,6 +67,8 @@ export interface Premises {
   /** The kitchen floor plan the player builds on; roomier than the rented tile count on purpose (founder request). */
   kitchenWidth: number;
   kitchenHeight: number;
+  /** Share of passers-by who notice the place (balance.md 4.3): a narrow shopfront is easy to walk past. */
+  visibility: number;
 }
 
 export interface QualityTier {

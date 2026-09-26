@@ -80,16 +80,18 @@ describe('golden starter day (balance.md 2)', () => {
     expect(a.room.seats).toBe(24);
   });
 
-  test('guests within 5% of 67.5 (fresh-start.md 6) and seats are the bottleneck', () => {
-    expect(r.covers).toBeGreaterThan(67.5 * 0.95);
-    expect(r.covers).toBeLessThan(67.5 * 1.05);
-    expect(r.services.map((x) => x.bottleneck)).toEqual(['seats', 'seats']);
+  // balance.md 4.3: the cosy shopfront is seen by 75% of passers-by, so at Rep 30 demand sits below capacity
+  // (was 67.5 guests with seats full before visibility and the local following).
+  test('guests within 5% of 52.6 and no bottleneck at Rep 30', () => {
+    expect(r.covers).toBeGreaterThan(52.6 * 0.95);
+    expect(r.covers).toBeLessThan(52.6 * 1.05);
+    expect(r.services.map((x) => x.bottleneck)).toEqual(['none', 'none']);
     expect(r.walkAways).toBeLessThan(3);
   });
 
   test('money within tolerance of the worked example', () => {
-    expect(r.pnl.sales).toBeGreaterThan(1281.68 * 0.9);
-    expect(r.pnl.sales).toBeLessThan(1281.68 * 1.1);
+    expect(r.pnl.sales).toBeGreaterThan(1003 * 0.9);
+    expect(r.pnl.sales).toBeLessThan(1003 * 1.1);
     expect(r.pnl.profit).toBeGreaterThan(0);
     expect(r.pnl.staff).toBeCloseTo(2214.4 / 7, 2);
     expect(r.pnl.rent).toBeCloseTo(1210 / 7, 2);

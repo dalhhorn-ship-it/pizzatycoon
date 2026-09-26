@@ -111,3 +111,33 @@ describe('rng', () => {
     expect(c.next()).not.toBe(xa[0]);
   });
 });
+
+describe('fast forward a week', () => {
+  test('runs 7 days and ends exactly where 7 single days end', () => {
+    const s = withStarterKit(newGame(42, 'canal', 'cosy'));
+    const week = apply(s, { type: 'runWeek' });
+    const ev = week.events.find((e) => e.kind === 'weekCompleted');
+    expect(ev?.reports?.length).toBe(7);
+    expect(ev?.stoppedBecause).toBeNull();
+    expect(JSON.stringify(week.state)).toBe(JSON.stringify(run(s, 7)));
+  });
+
+  test('stops early when the restaurant cannot open', () => {
+    const s = withStarterKit(newGame(42, 'canal', 'cosy'));
+    s.staff = s.staff.filter((x) => x.role !== 'server');
+    const ev = apply(s, { type: 'runWeek' }).events.find((e) => e.kind === 'weekCompleted');
+    expect(ev?.reports?.length).toBe(1);
+    expect(ev?.stoppedBecause).toMatch(/server/);
+  });
+
+  test('stops early when someone hands in notice', () => {
+    const s = withStarterKit(newGame(42, 'canal', 'cosy'));
+    const cook = s.staff.find((x) => x.role === 'cook')!;
+    cook.traits = [];
+    cook.morale = 0;
+    cook.lowMoraleDays = 6;
+    const ev = apply(s, { type: 'runWeek' }).events.find((e) => e.kind === 'weekCompleted');
+    expect(ev?.reports?.length).toBe(1);
+    expect(ev?.stoppedBecause).toMatch(/notice/);
+  });
+});

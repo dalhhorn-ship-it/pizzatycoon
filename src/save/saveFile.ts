@@ -3,6 +3,7 @@
 import { SCHEMA_VERSION, type GameState } from '../sim/state';
 import { DISTRICTS, PREMISES } from '../data/districts';
 import { EQUIPMENT } from '../data/equipment';
+import { T } from '../data/tunables';
 import { VENUES, venueFor } from '../data/venues';
 import { withRecipeBook } from '../sim/game';
 import { autoLayout, kitchenDims, layoutProblem } from '../sim/kitchen';
@@ -92,6 +93,8 @@ export function deserialise(text: string): SaveFile {
   if (typeof s.day !== 'number' || typeof s.cash !== 'number' || !Array.isArray(s.recipes)) throw new Error('Save file is damaged.');
   s.schemaVersion = SCHEMA_VERSION;
   withRecipeBook(s);
+  // Saves from before the local following (balance.md 4.3) are established restaurants.
+  if (typeof s.following !== 'number') s.following = T.following.established;
   return { ...raw, schemaVersion: SCHEMA_VERSION, state: s };
 }
 
