@@ -4,7 +4,7 @@
 * Format: Given [context] / When [action] / Then [outcome].
 * **Test type:** **Auto** = automated test against the simulation or data (no UI); **UI** = manual or UI automation; **PT** = playtest measure.
 * Numbers come from prd.md section 5 and `balance.md`. When design retunes a constant, the expected values here are updated in the same change. "About" means within 2% unless stated.
-* Milestones: M0, v0.1, v1.0, v2.0 (see `versions.md`).
+* Milestones: M0, M0.2 (Kitchen Builder, see `kitchen-builder.md`), v0.1, v1.0, v2.0 (see `versions.md`).
 
 ---
 
@@ -217,6 +217,36 @@
 | AC-131 | F-97 | v0.1 | UI | Occupancy rises from 10% to 90% | Ambient audio is sampled | Chatter volume rises with occupancy; a Wood Fired Oven and a Conveyor Oven each have a distinct loop; no alarm or siren sound exists in the audio set |
 | AC-132 | F-98 | v0.1 | UI | Any warning state (stock low, bottleneck, low morale) | It is shown | It uses amber styling and a gentle icon; no full screen flashing or red pulsing is used |
 | AC-133 | F-52, F-44 | v0.1 | Auto | A 120 seat room at full occupancy on the minimum supported iPad | A dinner is run at 1x and at 4x | Frame rate is 60 fps at 1x and never below 30 fps at 4x (M13) |
+
+## O. Kitchen Builder
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-134 | F-100 | M0.2 | Auto | The premises data | It is loaded | Kitchen grids are 10x3 (cosy), 12x3 (trattoria) and 15x4 (big hall), each equal to kitchenTiles, with pass tiles in row 0 at columns 4 and 5, 5 and 6, 6 and 7 respectively |
+| AC-135 | F-100 | M0.2 | Auto | The starter kitchen | A placement is submitted that is off the grid, overlaps an item, covers a pass tile (any item except the Heat Lamp Pass), or leaves any item or the pass without a touching free floor tile | The command fails with the matching reason ("Off the kitchen", "Something is already there", "The pass stays clear", "Needs a free tile to work from") and state, including cash, is unchanged |
+| AC-136 | F-100 | M0.2 | Auto | A Conveyor Oven (3x2) placed in the big hall | It is rotated | It occupies 2x3 tiles; if its distance to the pass and to every prep station is unchanged, all kitchen stats are unchanged |
+| AC-137 | F-100, F-101 | M0.2 | Auto | A kitchen with exactly one oven, one prep station, one cold store and one Sink | The player sells any of these four | The sale is blocked with a reason; selling any other item refunds 80% of its price |
+| AC-138 | F-101 | M0.2 | Auto | Any placed item | It is moved or rotated to a valid spot | Cash is unchanged; the same state and commands always give the same layout and stats; the new stats apply from the next service |
+| AC-139 | F-102 | M0.2 | Auto | A new game in the cosy premises with the starter default layout (kitchen-builder.md 3.4) | Kitchen stats are computed | Every reach_mult is 1.00, plate walk is 0 min, wash penalty is 0, cold at hand is inactive; oven capacity 19.4 and prep capacity 47.5 per hour exactly as AC-56 |
+| AC-140 | F-102 | M0.2 | Auto | The starter default layout | The Deck Oven is moved 5 tiles right (top left from column 2 to column 7) | Prep capacity falls from 47.5 to 40.9 per hour (plus or minus 0.2, reach_mult 0.84 and 0.88); oven capacity stays 19.4; the bottleneck stays "oven" |
+| AC-141 | F-102 | M0.2 | Auto | A prep station whose nearest oven is 12 tiles away | Prep is computed | Its reach_mult is 0.80 (cap), not 0.60 |
+| AC-142 | F-102 | M0.2 | Auto | A kitchen with one oven whose nearest tile is 6 tiles from the pass | Kitchen and service stats are computed | cook_time and service_time each rise by 0.6 min versus the same oven 3 tiles from the pass; across randomly generated valid layouts in all premises the plate walk never exceeds 2.0 min |
+| AC-143 | F-102 | M0.2 | Auto | A kitchen whose nearest Sink or Dish Machine is 7 tiles from the pass | Plates per hour are computed | They are 9% lower than with the Sink within 4 tiles; never more than 15% lower in any layout |
+| AC-144 | F-102 | M0.2 | Auto | The starter default layout | The Dough Fridge is moved so it touches one Prep Counter | Prep capacity rises from 47.5 to 48.7 per hour; a Pizza Prep Fridge touching a Dough Fridge gains no cold at hand bonus |
+| AC-145 | F-103 | M0.2 | Auto | The equipment data | It is loaded | Pizza Prep Fridge with Marble Top: $3,200, 2x1, prep x1.15, quality +1, $25 per week, unlock serve 200 guests, cold store; Dough Fridge: $900, 1x1, $0, start, cold store; Sink: $600, 1x1, $0, start, wash station; every existing item has w x h matching balance.md 1.7 |
+| AC-146 | F-103 | M0.2 | Auto | The starter kitchen | One Prep Counter is replaced by a Pizza Prep Fridge with Marble Top in the same spot | That station's prep is x1.15 and every pizza's Q rises by 0.5 (E counter average +1 over 2 stations); with a Dough Sheeter attached the station multiplier is 1.35, not 1.55 |
+| AC-147 | F-100 | M0.2 | Auto | A Dough Sheeter placed so it touches no prep station | Kitchen stats are computed | The sheeter adds neither speed nor its -2 quality, and its card shows "Not attached"; a station never takes more than one sheeter |
+| AC-148 | F-106 | M0.2 | Auto | Every save fixture from before M0.2, including a cosy kitchen at the old 26 tile cap | It is loaded | Every item has a valid position, one Dough Fridge and one Sink exist, any item that cannot fit is refunded at full price with a note, cash is otherwise unchanged, and loading the same save twice gives an identical layout |
+| AC-149 | F-106, F-81 | M0.2 | Auto | The luxury, volume and middle reference builds (balance.md 3.1) with auto layout | `npm run balance` runs | Flow penalty is zero for all three; each daily profit is within 2% of the pre M0.2 value; all balance.md 3.5 checks (AC-10, AC-11, AC-12) still pass |
+| AC-150 | F-104 | M0.2 | Auto | The starter build of balance.md section 2 | The pipeline is computed | Dough and prep 47.5, Oven 19.4, Pass and serve about 16.2 at lunch and 15.1 at dinner, Dishwashing equal to plates per hour / 3; the highlighted stage is Pass and serve, matching the sim's bottleneck "seats" |
+| AC-151 | F-104 | M0.2 | UI | A day has been played | The Kitchen tab is opened | Each stage shows lunch and dinner bars with a demand marker at service demand / (service hours x U); the bottleneck is outlined amber with its one line suggestion; before any service the marker reads "No service yet" |
+| AC-152 | F-105 | M0.2 | UI | The starter kitchen with $5,000 cash and 1 free 2x1 spot | The player taps a free tile | Only items whose footprint fits with its top left on that tile (either orientation) are listed; locked items show their unlock text; items above cash show "Need $X more" |
+| AC-153 | F-105 | M0.2 | UI | The starter kitchen where seats are the bottleneck | The player previews a Double Deck Oven on a free spot | The row shows the same profit, covers and Q deltas as compare() on the hypothetical state, and the warning "Your seats are the limit, not the oven" |
+| AC-154 | F-101 | M0.2 | UI | The big hall on an 11 inch iPad in landscape | The Kitchen tab is opened | The full 15x4 plan, the side sheet and the pipeline strip are visible without scrolling; tiles are at least 44 pt; buy, move, rotate and sell work with one finger and need no hover |
+| AC-155 | F-108 | M0.2 | UI | The starter kitchen | The player drags a Prep Counter away from the oven | A dotted line to the nearest oven shows the tile count and turns amber beyond 2 tiles; the counter's badge shows the prep penalty (for example "-8% walk") before the drop |
+| AC-156 | F-107 | M0.2 | Auto | Any valid layout | Tidy up is applied | Cash is unchanged and the total flow penalty (sum of prep losses, plate walk, wash loss) is no worse than before; Undo restores the previous layout exactly |
+| AC-157 | F-109 | M0.2 | UI | A phone in portrait | The Kitchen tab is opened | The plan scrolls horizontally at 44 pt tiles, the catalogue opens as a bottom sheet, and the pipeline shows four chips with the bottleneck in amber |
+| AC-158 | F-102 | M0.2 | Auto | Randomly generated valid layouts in all premises with any v0.1 equipment | Kitchen stats are computed | Prep capacity is at least 80% and at most 105% of the same equipment with every reach_mult 1.0 and no cold bonus; all flow constants are read from the data file (changing one changes results with no code change) |
 
 ## Coverage check
 

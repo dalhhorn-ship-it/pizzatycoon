@@ -2,7 +2,7 @@
 
 * Companion to `prd.md` (system specs), `versions.md` (milestones), `acceptance-criteria.md` (tests), `balance.md` (numbers).
 * Priority: **Must** = required for the launch product (v1.0) or for the milestone listed; **Should** = strongly wanted, cut only under schedule pressure (see prd.md 10.4); **Nice** = only if capacity allows.
-* Milestones: **M0** systems prototype, **v0.1** vertical slice, **v1.0** launch, **v2.0** growth. A feature listed at v0.1 with an expansion at v1.0 shows both.
+* Milestones: **M0** systems prototype, **M0.2** Kitchen Builder (`kitchen-builder.md`), **v0.1** vertical slice, **v1.0** launch, **v2.0** growth. A feature listed at v0.1 with an expansion at v1.0 shows both.
 * Loop: **MM** moment to moment, **D** service day, **W** week or season, **LT** long term.
 
 ## A. Core, platform and settings
@@ -174,6 +174,21 @@
 | F-98 | Tactile feedback | Placement snap, flour puff on recipe save, cash chime, savings goal celebration, amber (not red) warnings | MM | Must | v0.1 | F-44 |
 | F-99 | Photo mode | Hide UI, frame and save a picture of the restaurant | MM | Nice | v2.0 | none |
 
+## O. Kitchen Builder (spec: `kitchen-builder.md`)
+
+| ID | Feature | Description | Loop | Priority | Milestone | Depends on |
+|---|---|---|---|---|---|---|
+| F-100 | Kitchen floor plan grid and validity | Tile grid per premises (cosy 10x3, trattoria 12x3, big hall 15x4) with a 2 tile pass on the dining side and a decorative back door; items have w x h footprints, position and 90 degree rotation; validity: inside, no overlap, pass kept for the Heat Lamp Pass only, every item and the pass touch a free floor tile, opening minimum (oven, prep station, cold store, Sink), sheeters work only when touching a prep station; replaces the "kitchenTiles minus 4" footprint cap | W | Must | M0.2 | F-38, F-44 |
+| F-101 | Kitchen builder interaction | Kitchen tab switches the stage to the floor plan; tap a tile to buy there, tap a station for Move, Rotate, Sell (80%) and Replace; drag with ghost and snap; moves are free; time paused; undo within the visit | W | Must | M0.2 | F-100, F-06 |
+| F-102 | Kitchen flow model | Reach: -4% prep per tile beyond 2 from a prep station to its nearest oven (cap -20%); plate walk: +0.2 min cook time per tile beyond 3 from oven to pass (cap +2 min); wash walk: -3% plates per hour per tile beyond 4 from pass to the nearest Sink or Dish Machine (cap -15%); cold at hand: +5% prep for a counter touching a cold store; all constants in data | D | Must | M0.2 | F-100, F-39 |
+| F-103 | New kitchen equipment | Pizza Prep Fridge with Marble Top ($3,200, 2x1, x1.15 prep, +1 quality, cold store, $25 per week, serve 200 guests); Dough Fridge ($900, 1x1, cold store, start); Sink ($600, 1x1, wash station, start); w x h added to all existing items | W | Must | M0.2 | F-38, F-100 |
+| F-104 | Service pipeline panel | Four stages (Dough and prep, Oven, Pass and serve, Dishwashing) in covers per hour for lunch and dinner, last service demand marker, bottleneck outlined amber with a one line suggestion, tap a stage to highlight its stations | D | Must | M0.2 | F-102, F-39 |
+| F-105 | Fit filtered catalogue and impact preview | Tapping an empty tile lists only items that fit there, grouped by station; each row shows price, maintenance and the compare() preview of profit per day, covers, pizza Q and the stage it raises, with the "not the bottleneck" warning; optional "Pin as savings goal" when F-41 exists | W | Must | M0.2 | F-101, F-42 |
+| F-106 | Save migration and auto layout | Schema bump; older saves get a deterministic greedy auto layout plus a free Dough Fridge and Sink if missing; items that cannot fit are refunded at full price with a note; the balance calculator uses the same auto layout | all | Must | M0.2 | F-100, F-04, F-81 |
+| F-107 | Tidy up | Button that previews the auto layout as a ghost with before and after flow badges; apply for free, undoable | W | Should | M0.2 | F-106 |
+| F-108 | Flow lines and badges | While dragging, dotted lines from each prep station to its nearest oven and from each oven to the pass labelled with tile counts, green within the free distance and amber beyond; per station badges (tick, "-8% walk", snowflake for cold at hand) | MM | Should | M0.2 | F-102, F-101 |
+| F-109 | Phone layout for the kitchen | Plan at 44 pt tiles with horizontal scroll, bottom sheet instead of side sheet, pipeline collapsed to four chips | W | Should | M0.2 | F-101, F-104 |
+
 ## Dependency map (critical path)
 
 ```
@@ -191,4 +206,4 @@ v1.0 chain: F-79 Expansion loan + F-69 Manager -> F-83 New locations -> F-85 Off
 
 ## Scope note
 
-99 features is already a lot for a small team. The cut order in prd.md 10.4 applies. Features that carry the two strategies (F-19, F-20, F-38, F-39, F-40, F-53, F-81) are pillars and are not cut.
+109 features is already a lot for a small team. The cut order in prd.md 10.4 applies. Features that carry the two strategies (F-19, F-20, F-38, F-39, F-40, F-53, F-81) are pillars and are not cut.
