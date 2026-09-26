@@ -20,11 +20,12 @@ export const DISTRICTS: Record<string, District> = {
     blurb: 'Cobbled quays, tourists and food lovers who will pay for something special. Pricey rent.',
     footTraffic: 2600,
     shares: { students: 0.03, families: 0.07, professionals: 0.2, foodies: 0.3, seniors: 0.1, tourists: 0.3 },
-    wealth: 1.3, competition: 0.25, rentPerTile: 19, lunchShare: 0.3,
+    wealth: 1.5, competition: 0.25, rentPerTile: 19, lunchShare: 0.3,
   },
 };
 
 export const PREMISES: Record<string, Premises> = {
+  hole: { id: 'hole', name: 'Hole in the wall', diningWidth: 6, diningHeight: 5, kitchenTiles: 24, kitchenWidth: 8, kitchenHeight: 3 },
   cosy: { id: 'cosy', name: 'Cosy corner shop', diningWidth: 10, diningHeight: 8, kitchenTiles: 30, kitchenWidth: 10, kitchenHeight: 3 },
   medium: { id: 'medium', name: 'Neighbourhood trattoria', diningWidth: 10, diningHeight: 10, kitchenTiles: 36, kitchenWidth: 12, kitchenHeight: 3 },
   large: { id: 'large', name: 'Big hall', diningWidth: 20, diningHeight: 11, kitchenTiles: 60, kitchenWidth: 15, kitchenHeight: 4 },

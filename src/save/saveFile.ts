@@ -1,7 +1,7 @@
 // Versioned save format with migrations (solution-design.md 8).
 
 import { SCHEMA_VERSION, type GameState } from '../sim/state';
-import { DISTRICTS } from '../data/districts';
+import { DISTRICTS, PREMISES } from '../data/districts';
 import { EQUIPMENT } from '../data/equipment';
 import { autoLayout } from '../sim/kitchen';
 
@@ -30,6 +30,14 @@ const MIGRATIONS: Record<number, (state: Record<string, unknown>) => Record<stri
     const { placed, unplaced } = autoLayout(items, s.premisesId);
     s.equipment = placed;
     for (const u of unplaced) s.cash += EQUIPMENT[u.itemId]?.price ?? 0;
+    return s;
+  },
+  // v2 to v3: deposits are tracked so moving premises can refund them (fresh-start.md 3). Old games paid 8 weeks.
+  2: (state) => {
+    const s = state as { deposit?: number; districtId: string; premisesId: string };
+    const d = DISTRICTS[s.districtId];
+    const p = PREMISES[s.premisesId];
+    s.deposit = d && p ? (p.diningWidth * p.diningHeight + p.kitchenTiles) * d.rentPerTile * 8 : 0;
     return s;
   },
 };

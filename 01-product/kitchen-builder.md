@@ -81,7 +81,7 @@ Prep station output (dishes per hour), per staffed prep station:
 
   tool_mult  = max(station prep multiplier, 1.35 if a sheeter is attached)
                Prep Counter 1.00, Marble Bench 1.00, Pizza Prep Fridge 1.15
-  cold_mult  = 1.05 if a Prep Counter or Marble Bench touches a cold store (d = 1), else 1.00
+  cold_mult  = 1.05 if a Prep Counter, Old Workbench or Marble Bench touches a cold store (d = 1), else 1.00
                (the Pizza Prep Fridge is its own cold store; its 1.15 already includes it)
   reach_mult = 1 minus min(0.20, 0.04 x max(0, d_oven minus 2))
                d_oven = distance from the station to its nearest oven

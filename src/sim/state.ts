@@ -1,6 +1,6 @@
 import type { DishKind, RankId, Role, SegmentId, Service, TierId, TraitId } from '../data/types';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export interface RecipeLine {
   ingredientId: string;
@@ -127,6 +127,8 @@ export interface GameState {
   districtId: string;
   premisesId: string;
   cash: number;
+  /** Lease deposit held by the landlord; refunded on a move (fresh-start.md 3). */
+  deposit: number;
   loan: Loan;
   rep: number;
   totalServed: number;

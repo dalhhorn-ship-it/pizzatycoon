@@ -3,6 +3,7 @@ import type { FurnitureItem } from './types';
 export const FURNITURE: Record<string, FurnitureItem> = Object.fromEntries(
   (
     [
+      { id: 'foldingTable', name: 'Folding table', kind: 'table', w: 1, h: 1, price: 120, seats: 2, decorPoints: 0, lighting: 0, comfort: -1, color: '#b9a48a' },
       { id: 'table2', name: 'Table for two', kind: 'table', w: 1, h: 1, price: 350, seats: 2, decorPoints: 0, lighting: 0, comfort: 0, color: '#c98b5a' },
       { id: 'table4', name: 'Table for four', kind: 'table', w: 2, h: 1, price: 600, seats: 4, decorPoints: 0, lighting: 0, comfort: 0, color: '#b87945' },
       { id: 'table6', name: 'Long table for six', kind: 'table', w: 3, h: 1, price: 900, seats: 6, decorPoints: 0, lighting: 0, comfort: 0, color: '#a86a3a' },

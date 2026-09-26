@@ -1,12 +1,12 @@
 // Acceptance criteria from 01-product/kitchen-builder.md 12 (AC-134 onward).
 import { describe, expect, test } from 'vitest';
 import { analyse } from '../src/sim/analysis';
-import { apply, newGame } from '../src/sim/game';
+import { apply, newGame, withStarterKit } from '../src/sim/game';
 import { autoLayout, distance, kitchenDims, layoutProblem, rectOf } from '../src/sim/kitchen';
 import type { GameState } from '../src/sim/state';
 import { deserialise } from '../src/save/saveFile';
 
-const starter = (): GameState => newGame(1, 'canal');
+const starter = (): GameState => withStarterKit(newGame(1, 'canal', 'cosy'));
 
 describe('kitchen floor plan', () => {
   test('grids and pass tiles per premises (AC-134)', () => {

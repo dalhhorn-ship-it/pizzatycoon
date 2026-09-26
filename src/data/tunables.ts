@@ -128,6 +128,12 @@ export const T = {
     charmerBonus: 0.05,
     reviewProbability: 0.2,
   },
+  build: {
+    /** Fire safety: seats at most 0.55 per dining tile (fresh-start.md 3). */
+    maxSeatsPerDiningTile: 0.55,
+    menuMinItems: 0,
+    menuMaxItems: 16,
+  },
   ambience: {
     base: 25,
     decorFactor: 5,
@@ -164,11 +170,12 @@ export const T = {
     reviewSlope: 0.8,
   },
   finance: {
-    startingCash: 40000,
-    starterLoanMax: 30000,
+    // fresh-start.md 5: rags to riches.
+    startingCash: 7000,
+    starterLoanMax: 5000,
     starterLoanRate: 0.05,
-    starterLoanWeeks: 104,
-    leaseDepositWeeks: 8,
+    starterLoanWeeks: 52,
+    leaseDepositWeeks: 4,
     utilitiesBase: 30,
     utilitiesPerCover: 0.8,
     upkeepBase: 15,

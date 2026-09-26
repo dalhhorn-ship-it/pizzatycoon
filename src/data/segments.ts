@@ -3,7 +3,7 @@ import type { Segment, SegmentId } from './types';
 export const SEGMENTS: Record<SegmentId, Segment> = {
   students: {
     id: 'students', name: 'Students', elasticity: 2.0, budget: 11, qualityAppeal: 0.0, qualityWeight: 0.3,
-    waitTolerance: { lunch: 10, dinner: 10 }, mealLength: { lunch: 25, dinner: 25 }, partySize: 3.0,
+    waitTolerance: { lunch: 10, dinner: 10 }, mealLength: { lunch: 25, dinner: 45 }, partySize: 3.0,
     likedTags: ['cheesy', 'spicy', 'meaty'], speedAppealAtLunch: true,
   },
   families: {
@@ -17,8 +17,8 @@ export const SEGMENTS: Record<SegmentId, Segment> = {
     likedTags: ['classic', 'veggie'], speedAppealAtLunch: true,
   },
   foodies: {
-    id: 'foodies', name: 'Foodies', elasticity: 0.6, budget: 24, qualityAppeal: 1.0, qualityWeight: 0.6,
-    waitTolerance: { lunch: 20, dinner: 20 }, mealLength: { lunch: 60, dinner: 60 }, partySize: 2.0,
+    id: 'foodies', name: 'Foodies', elasticity: 0.6, budget: 28, qualityAppeal: 1.0, qualityWeight: 0.6,
+    waitTolerance: { lunch: 20, dinner: 20 }, mealLength: { lunch: 60, dinner: 90 }, partySize: 2.0,
     likedTags: ['artisan', 'seasonal'], speedAppealAtLunch: false,
   },
   seniors: {

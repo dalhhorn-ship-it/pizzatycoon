@@ -32,7 +32,7 @@
 | share Foodies | fraction | 0.02 | 0.10 | 0.30 | | Demand |
 | share Seniors | fraction | 0.04 | 0.15 | 0.10 | | Demand |
 | share Tourists | fraction | 0.04 | 0.10 | 0.30 | | Demand |
-| wealth W | multiplier on budgets | 0.8 | 1.0 | 1.3 | 0.6 to 1.6 | Demand (budget_mult) |
+| wealth W | multiplier on budgets | 0.8 | 1.0 | 1.5 (was 1.3, M0.2) | 0.6 to 1.6 | Demand (budget_mult) |
 | competition C | 0..1 | 0.40 | 0.30 | 0.25 | 0 to 0.8 | Demand |
 | rent | $ per tile per week | 8 | 11 | 19 | 5 to 30 | Finance |
 | lunch_share | fraction of daily guests | 0.50 | 0.40 | 0.30 | 0.2 to 0.7 | Demand, service |
@@ -43,11 +43,11 @@
 | Name | Unit | Students | Families | Professionals | Foodies | Seniors | Tourists | Safe range | Read by |
 |---|---|---|---|---|---|---|---|---|---|
 | elasticity e | exponent | 2.0 | 1.5 | 1.0 | 0.6 | 1.2 | 0.8 | 0.3 to 3.0 | price_mult, value_score |
-| budget B | $ per main | 11 (was 10, tuned in M0) | 12 | 16 | 24 | 15 | 20 | 6 to 40 | budget_mult |
+| budget B | $ per main | 11 (was 10, tuned in M0) | 12 | 16 | 28 (was 24, M0.2) | 15 | 20 | 6 to 40 | budget_mult |
 | quality appeal qa | multiplier | 0.0 | 0.1 | 0.35 | 1.0 | 0.3 | 0.5 | 0 to 1.5 | quality_mult |
 | quality weight wq | weight | 0.30 | 0.35 | 0.40 | 0.60 | 0.40 | 0.35 | 0.1 to 0.8 | dish choice |
 | wait tolerance | game min | 10 | 12 | 8 lunch, 15 dinner | 20 | 15 | 15 | 5 to 30 | wait_score, walk-aways |
-| meal length | game min | 25 | 40 | 30 lunch, 50 dinner | 60 | 50 | 45 | 15 to 90 | table cycle |
+| meal length | game min | 25 lunch, 45 dinner (was 25, M0.2) | 40 | 30 lunch, 50 dinner | 60 lunch, 90 dinner (was 60, M0.2) | 50 | 45 | 15 to 120 | table cycle |
 | party size | guests (mean) | 3.0 | 3.8 | 2.2 | 2.0 | 2.0 | 2.5 | 1 to 6 | arrivals |
 | speed appeal | applies at lunch | yes | no | yes | no | no | no | | speed_mult |
 
@@ -131,6 +131,13 @@ Servings per hour are at cook skill 5. Speed: non volume gear 0.7 + 0.06 x skill
 | Marble Bench | Quality | 4,000 | n/a | n/a | 30 dishes (replaces counter) | +2 | none | 2x1 | 10 | Rep 45 | |
 | Hand Stretch and Mozzarella Station (v1.0) | Artisan | 7,500 | n/a | n/a | x0.8 prep (replaces counter) | +5 | 6 | 2x1 | 60 | Rep 60 | |
 | Pro Prep Line (v1.0) | Hybrid | 12,000 | n/a | n/a | x1.4 prep (replaces counter) | +2 | none | 3x1 | 90 | Chain Founder | |
+| Second hand Deck Oven (M0.2) | Basic | 900 | 3 | 1.00 | 15 | -2 | none | 2x2 | 30 | Start | 12 to 18 per hour |
+| Old Workbench (M0.2) | Basic | 300 | n/a | n/a | x0.9 prep (a prep station) | 0 | none | 2x1 | 5 | Start | x0.8 to x0.95 |
+| Pizza Prep Fridge with Marble Top (M0.2) | Quality | 3,200 | n/a | n/a | x1.15 prep (a prep station; a sheeter does not stack, the higher applies); cold store | +1 | none | 2x1 | 25 | Serve 200 guests | x1.10 to x1.25; +1 to +2 |
+| Dough Fridge (M0.2) | Basic | 600 | n/a | n/a | cold store: x1.05 prep for a touching Prep Counter, Old Workbench or Marble Bench | 0 | none | 1x1 | 0 | Start | $400 to $1,000 |
+| Sink (M0.2) | Basic | 400 | n/a | n/a | wash station, required to open | 0 | none | 1x1 | 0 | Start | $250 to $700 |
+
+Kitchen flow constants (M0.2, `kitchen-builder.md` 4): prep free distance 2 tiles, -4% per extra tile, cap -20%; plate walk free 3 tiles, +0.2 min per extra tile, cap +2 min; wash walk free 4 tiles, -3% per extra tile, cap -15%; cold at hand +5%.
 
 Other kitchen constants:
 
@@ -177,6 +184,9 @@ Other kitchen constants:
 | crowding penalty | points per crowded table | -5 | -2 to -10 | Ambience |
 | style set bonus (v1.0) | points | 15 x share of items in one style, only if share is 0.5 or more | max 10 to 20 | Ambience |
 | undo depth | steps | 20 | 10 to 50 | Build mode |
+| seat limit (M0.2) | seats per dining tile | 0.55, floor applied | 0.45 to 0.65 | Build mode, covers ceiling |
+| Folding Table (M0.2) | $, seats, comfort | $120, 2 seats, comfort -1, 1x1 | $80 to $200 | Build, ambience |
+| Table for two, four, six, booth | $, seats | $350 / 2, $600 / 4, $900 / 6, $1,100 / 4 (+1 comfort) | | Build |
 
 ### 1.10 Staff
 
@@ -196,6 +206,7 @@ Other kitchen constants:
 | skill growth | shifts per skill point | 40 | 25 to 60 | Staff |
 | training | $, days | 600, 3 days | | Staff |
 | candidates per week | count | 6 | 4 to 10 | Hiring |
+| first board guarantee (M0.2) | count, skill | at least 2 cooks, 2 servers, 1 dishwasher, skill 2 to 4 | | Hiring (day 1) |
 | fame candidate gate | Rep | 50 | 40 to 70 | Hiring |
 | manager reorder accuracy | formula | 0.70 + 0.03 x m | | Manager |
 | manager profit modifier | formula | -10% + 2% x m | | Manager, off-screen |
@@ -216,9 +227,10 @@ Other kitchen constants:
 
 | Name | Unit | Start | Safe range | Read by |
 |---|---|---|---|---|
-| starting cash | $ | 40,000 | 25,000 to 60,000 | Finance |
-| starter loan | $, rate, term | up to 30,000, 5% per year, 104 weeks | | Finance |
-| lease deposit | weeks of rent | 8 | 4 to 12 | Property |
+| starting cash | $ | 7,000 (was 40,000, M0.2) | 5,000 to 10,000 | Finance |
+| starter loan | $, rate, term | up to 5,000, 5% per year, 52 weeks, $98.62 per week at full amount (was 30,000 over 104 weeks, M0.2) | 3,000 to 8,000 | Finance |
+| lease deposit | weeks of rent | 4 (was 8, M0.2) | 2 to 8 | Property |
+| menu minimum | items | 0 (was 4, M0.2); maximum 16 | | Menu |
 | lease break fee | weeks of rent | 4 | | Property |
 | utilities | $ per day | 30 + 0.80 per cover | | Finance |
 | upkeep | $ per day | 15 + equipment maintenance per week / 7 | | Finance |
@@ -231,9 +243,22 @@ Other kitchen constants:
 | loyalty discount | per 4 weeks, cap | 2%, 8% | | Purchasing |
 | central purchasing discount | at 3 and 6 locations | 5%, 10% | | Purchasing |
 
+### 1.13 Premises (M0.2)
+
+New games start empty (`fresh-start.md`). Rent = tiles x district rent per tile.
+
+| Premises | Dining grid | Kitchen grid | Tiles | Seat limit | Rent per week Univ / Canal / Harbour | Read by |
+|---|---|---|---|---|---|---|
+| Hole in the wall (new) | 6 x 5 | 8 x 3 | 54 | 16 | $432 / $594 / $1,026 | Property, build |
+| Cosy corner shop | 10 x 8 | 10 x 3 | 110 | 44 | $880 / $1,210 / $2,090 | Property, build |
+| Neighbourhood trattoria | 10 x 10 | 12 x 3 | 136 | 55 | $1,088 / $1,496 / $2,584 | Property, build |
+| Big hall | 20 x 11 | 15 x 4 | 280 | 121 | $2,240 / $3,080 / $5,320 | Property, build |
+
 ---
 
 ## 2. Worked example: one full day at the starter restaurant
+
+**M0.2 note.** New games now start empty with $7,000 in a Hole in the wall; that opening and its first week are worked in `fresh-start.md` 7. This section now describes the **cosy corner shop stage** (typically weeks 3 to 8). Its cash lines (starting cash, loan, deposit) are illustrative of the old start and are not a new game state. With the M0.2 dinner meal lengths (Students 45, Foodies 90 min) the dinner seat capacity falls from 15.1 to about 14.2 per hour, so dinner serves about 41.5 instead of 42.7 and profit is about $349 instead of $366; all other lines are unchanged.
 
 ### 2.1 Set-up
 
@@ -372,7 +397,7 @@ Each build is a mature single location at steady state reputation (Rep where dai
 | Harmony H | 85 | 65 | 75 |
 | **Dish quality Q** | **98.4** | **46.1** | **74.0** |
 | Fair price | $21.17 | $10.83 | $15.77 |
-| Reference main price | $28.00 (r 1.32) | $8.50 (r 0.78) | $13.00 (r 0.82) |
+| Reference main price | $38.00 (r 1.80; was $28.00, M0.2) | $8.50 (r 0.78) | $13.00 (r 0.82) |
 | Sides (drink, starter, dessert) | $7.00, $9.00, $8.00 | $3.00, $4.50, $4.00 | $4.50, $7.00, $6.50 |
 | Attach (from ambience) | 0.90, 0.50, 0.45 | 0.80, 0.30, 0.20 | 0.82, 0.34, 0.325 |
 | Equipment maintenance | $350 per week | $520 per week | $140 per week |
@@ -381,36 +406,41 @@ Each build is a mature single location at steady state reputation (Rep where dai
 
 ### 3.2 Results in their home districts (per day)
 
+Luxury column retuned in M0.2 (hand estimate, pending `npm run balance`; pre M0.2 values in brackets). Volume and middle are unchanged by the retune except that middle's dinner queue grows slightly (rho about 0.9).
+
 | | Luxury in Old Harbour | Volume in University Quarter | Middle in Canal Quarter |
 |---|---|---|---|
-| Steady state Rep | 86 | 70 | 80 |
-| Average satisfaction | 82.6 | 62.7 | 74.5 |
-| Demand | 126 | 358 | 143 |
-| Covers served | 106 | 358 | 143 |
-| Walk-aways | 20 (dinner full) | 0 | 0 |
-| Bottleneck | seats at dinner (rho 1.29) | seats and kitchen at the lunch rush (rho 0.92) | none (rho 0.8) |
-| Top segments served | Foodies 59, Tourists 31, Professionals 10 | Students 222, Families 63, Professionals 47 | Professionals 40, Families 31, Seniors 26 |
+| Steady state Rep | about 84 (86) | 70 | 80 |
+| Average satisfaction | about 79.8 (82.6) | 62.7 | 74.5 |
+| Demand | about 88 (126) | 358 | 143 |
+| Covers served | about 79 (106) | 358 | 143 |
+| **Covers per service, lunch / dinner (M0.2)** | **about 26 / 53** (38 / 68) | **about 189 / 169** | **about 55 / 88** |
+| Walk-aways | about 9 turned away at the door, dinner full (20) | 0 | 0 |
+| Bottleneck | seats at dinner (rho about 1.15) | seats and kitchen at the lunch rush (rho 0.92) | none (rho 0.8) |
+| Top segments served | Foodies 52, Tourists 18, Professionals 6 (59, 31, 10) | Students 222, Families 63, Professionals 47 | Professionals 40, Families 31, Seniors 26 |
 | Service time | 23.1 min | 17.3 min (speed_mult 1.16) | 21.8 min |
-| Average check | $42.40 | $13.05 | $21.18 |
+| Average check | $52.40 ($42.40) | $13.05 | $21.18 |
 | Cost per cover | $10.20 | $3.06 | $5.85 |
-| **Sales** | **$4,490.71** | **$4,671.99** | **$3,021.47** |
-| Ingredients used | -$1,080.31 | -$1,095.50 | -$834.73 |
-| Waste | -$97.23 | -$38.34 | -$50.08 |
+| **Sales** | **about $4,155 ($4,490.71)** | **$4,671.99** | **$3,021.47** |
+| Ingredients used | about -$809 (-$1,080.31) | -$1,095.50 | -$834.73 |
+| Waste | about -$73 (-$97.23) | -$38.34 | -$50.08 |
 | Staff | -$700.57 | -$828.11 | -$601.71 |
 | Rent | -$369.14 | -$320.00 | -$235.71 |
-| Utilities | -$114.73 | -$316.41 | -$144.11 |
+| Utilities | about -$93.44 (-$114.73) | -$316.41 | -$144.11 |
 | Upkeep | -$65.00 | -$89.29 | -$35.00 |
-| **Profit per day** | **$2,063.73** | **$1,984.34** | **$1,120.12** |
-| Profit per cover | $19.49 | $5.54 | $7.85 |
+| **Profit per day** | **about $2,045 ($2,063.73)** | **$1,984.34** | **$1,120.12** |
+| Profit per cover | about $25.80 ($19.49) | $5.54 | $7.85 |
 | Payback on capex | about 45 days | about 48 days | about 49 days |
 
 **Reading the comparison.** Luxury and volume land within 4% of each other by opposite routes: luxury earns $19.49 per cover from 106 covers, volume earns $5.54 per cover from 358 covers. Luxury's limit is seats (long dinners), so it prices up; volume's limit is the lunch rush, so it adds ovens and seats. Both need about $92,000 to $95,000 of investment and pay it back in about 6.5 to 7 weeks. The middle build needs less capital, is calmer, and pays back at a similar rate but with roughly half the daily profit.
+
+**M0.2 reading.** After the realism retune luxury is a true fine dining room: about 53 dinner covers over 90 minute foodie evenings at a $52.40 check, $25.80 profit per cover. Volume and luxury stay within 3%.
 
 ### 3.3 Every build in every district (reference prices, profit per day)
 
 | Build | University Quarter | Canal Quarter | Old Harbour |
 |---|---|---|---|
-| Luxury ($28) | -$192 (25 covers) | $58 (35 covers) | **$2,064** (106 covers) |
+| Luxury ($38 since M0.2; rerun required, pre M0.2 values at $28 shown) | -$192 (25 covers) | $58 (35 covers) | **about $2,045** (79 covers; was $2,064, 106 covers) |
 | Volume ($8.50) | **$1,984** (358 covers) | -$50 (147 covers) | -$576 (125 covers) |
 | Middle ($13) | $1,563 (169 covers) | **$1,120** (143 covers) | $1,142 (156 covers) |
 
@@ -418,7 +448,7 @@ Each build is a mature single location at steady state reputation (Rep where dai
 
 | Build (band) | University Quarter | Canal Quarter | Old Harbour |
 |---|---|---|---|
-| Luxury ($20 to $34) | $667 at $20 | $1,014 at $20 | **$2,078 at $30** |
+| Luxury ($20 to $40 since M0.2; rerun required) | $667 at $20 | $1,014 at $20 | **about $2,045 at $38** (was $2,078 at $30) |
 | Volume ($8 to $10) | **$2,106 at $8** | -$50 at $8.50 | -$576 at $8.50 |
 | Middle ($12 to $16) | $1,652 at $12 | **$1,236 at $12** | $1,415 at $16 |
 
@@ -426,16 +456,19 @@ Each build is a mature single location at steady state reputation (Rep where dai
 
 | Check | Rule | Result |
 |---|---|---|
-| Two strategies both win | Luxury home profit and volume home profit within 10% | $2,064 vs $1,984, 4% apart: pass |
+| Two strategies both win | Luxury home profit and volume home profit within 10% | $2,064 vs $1,984, 4% apart: pass (M0.2 estimate $2,045 vs $1,984, 3%) |
 | Neither strictly dominates | No build is the top earner in all districts | Luxury tops Old Harbour, volume tops University Quarter, middle tops Canal Quarter: pass |
 | Middle ground not dominant | Each specialist beats the best middle build in its home district by 15% or more | Volume +27% ($2,106 vs $1,652); luxury +47% ($2,078 vs $1,415): pass |
 | Middle ground possible | Best middle build profit positive in all districts and top in the mixed district | $1,236 to $1,652, top in Canal Quarter: pass |
 | Specialists must fit their district | Specialists lose money in the other specialist's home district | Luxury -$192 in University Quarter, volume -$576 in Old Harbour: pass |
-| No dead end | Minimum viable restaurant at Rep 30 at fair price breaks even in Canal and University | +$33 and +$93 per day: pass (Old Harbour -$55, flagged "ambitious") |
+| No dead end | Minimum viable restaurant at Rep 30 at fair price breaks even in Canal and University | +$33 and +$93 per day: pass (Old Harbour -$55, flagged "ambitious"). Since M0.2 the minimum viable restaurant is the `fresh-start.md` 7 opening: about +$134 in Canal Quarter, more in University Quarter, about +$30 to +$70 in Old Harbour (AC-163) |
+| Fine dining covers (M0.2) | Luxury home dinner covers 40 to 60 | about 53: pass (estimate, AC-169) |
+| Fast turnaround covers (M0.2) | Volume home dinner covers at most 180 | about 169: pass (estimate, AC-169) |
+| Covers ceiling (M0.2) | At the seat limit, all Students, volume service speed: premises below the Big hall at most 180 per dinner, Big hall at most about 250 | 34, 93, 116 and 255: pass (AC-170) |
 
 ### 3.6 Why each strategy works, in the formulas
 
-* **Luxury:** quality_mult for Foodies is 1.6 (capped) at Q 98 and Old Harbour's wealth W 1.3 lifts Foodies' budget to $31.20, so budget_mult stays 1.2 at a $28 main. Tourists (budget $26 in the harbour) still come at 0.86. The Wood Fired Ovens give +10 quality but only 27.6 servings per hour, so the room fills with long 60 minute dinners and the right answer is to raise prices rather than add covers.
+* **Luxury (M0.2):** since the retune, Foodies B 28 x W 1.5 = $42 keeps budget_mult at 1.2 even at a $38 main, and dinners last 90 minutes, so the room serves about 53 dinner covers at a $52.40 check. **Luxury (pre M0.2 text):** quality_mult for Foodies is 1.6 (capped) at Q 98 and Old Harbour's wealth W 1.3 lifts Foodies' budget to $31.20, so budget_mult stays 1.2 at a $28 main. Tourists (budget $26 in the harbour) still come at 0.86. The Wood Fired Ovens give +10 quality but only 27.6 servings per hour, so the room fills with long 60 minute dinners and the right answer is to raise prices rather than add covers.
 * **Volume:** University students' budget is $8 (W 0.8), so at $8.50 their budget_mult is 0.89, while at the middle build's $12 it is 0.44. The conveyor ovens, heat lamp pass and host cut service time to 17.3 minutes, earning speed_mult 1.16 at lunch for Students and Professionals. Volume gear keeps speed high with cheap skill 4 cooks.
 * **Middle:** decent at everything, so it is never punished, but it cannot reach the foodie premium (quality_mult 1.28 instead of 1.6 and a price too low for the harbour) nor the student lunch rush (budget_mult 0.44 and no speed bonus).
 
@@ -468,3 +501,38 @@ Current results (`npm run balance`, steady reputation, Thursday):
 | Luxury | about -$5 (best $1,117 at $20) | about $180 | about $1,980 (best about $2,000 at $30) |
 | Volume | about $1,920 (best about $2,000) | loses money | loses money |
 | Middle | best about $1,720 | best about $1,320 (top here) | best about $1,310 |
+
+### 4.1 M0.2 tuning log: Fresh Start and realistic covers (2026-09-26)
+
+Founder requirements: start from an empty premises with little money (rags to riches), and realistic covers (fine dining about 40 to 60 per dinner, fast turnaround up to about 180, only a warehouse about 250). Specs: `fresh-start.md`, `kitchen-builder.md`. **All results below are hand calculated with the aggregate formulas; engineering must rerun `npm run balance` and paste the live table here (AC-169 to AC-171).**
+
+| Change | Old | New | Why |
+|---|---|---|---|
+| `finance.startingCash` | 40,000 | 7,000 | Rags to riches: the cheapest opening ($5,296 in Canal Quarter) leaves $1,704 |
+| `finance.starterLoanMax` | 30,000 | 5,000 | A small cushion, not a shortcut |
+| `finance.starterLoanWeeks` | 104 | 52 | Keeps the weekly payment small ($98.62) on a small loan |
+| `finance.leaseDepositWeeks` | 8 | 4 | Makes each premises move a step, not a wall |
+| Menu minimum items (`game.ts` toggleMenu, move to data as `menu.minItems`) | 4 | 0 | The menu starts empty; opening needs 1 pizza |
+| New premises `hole` | none | dining 6x5, kitchen 8x3, 54 tiles | Cheap first home: rent $432 to $1,026 per week |
+| `PREMISES` kitchen grids (new fields) | none | cosy 10x3, medium 12x3, large 15x4, hole 8x3 | Kitchen Builder |
+| Seat limit (new, `build.maxSeatsPerDiningTile`) | none | 0.55 | Guarantees the covers ceiling |
+| Students meal length, dinner | 25 | 45 | Realism; lowers the warehouse ceiling to about 255 |
+| Foodies meal length, dinner | 60 | 90 | Fine dining: luxury dinner 68 to about 53 covers |
+| Foodies budget B | 24 | 28 | Luxury keeps its foodies at a $38 main (3.7: budgets first) |
+| Old Harbour wealth W | 1.3 | 1.5 | Same for harbour tourists and professionals; volume in the harbour unaffected (its budgets were capped) |
+| Luxury reference main price and band (balance calculator) | $28, band $20 to $34 | $38, band $20 to $40 | Fewer, longer, pricier dinners |
+| New items | none | Second hand Deck Oven, Old Workbench, Folding Table, Pizza Prep Fridge with Marble Top, Dough Fridge, Sink (1.7, 1.9) | Entry level ladder and Kitchen Builder |
+| New game state | 1 Deck Oven, 2 Prep Counters, starter tables and decor, 5 staff, 4 pizzas and sides on menu | everything empty | Founder requirement 1 |
+| First hiring board | random | at least 2 cooks, 2 servers, 1 dishwasher, skill 2 to 4 | The empty start must always be openable |
+
+Expected results after the change (Thursday, steady Rep):
+
+| Build | Lunch covers | Dinner covers | Profit per day |
+|---|---|---|---|
+| Fresh start opening, Canal, Rep 30 | 13.9 | 19.7 | $134 |
+| Cosy starter (section 2) | 26.3 | about 41.5 | about $349 |
+| Middle, Canal | about 55 | about 88 | about $1,100 |
+| Luxury, Old Harbour | about 26 | about 53 | about $2,045 |
+| Volume, University | about 189 | about 169 (about 228 on a Saturday) | $1,984 |
+
+**Watch list for the rerun.** (1) If the middle build loses the top spot in Canal Quarter because Foodies B 28 lifts luxury there, set Foodies B to 26 first. (2) If volume in University Quarter falls under +15% over the best middle build (it is +16% in the M0 sim), the retune did not cause it, but fix it before M0.2 closes by Students B, per 3.7. (3) The M0 sim's luxury ran about 4% below this document; the $38 price may need to become $36 to $40 after the rerun.
