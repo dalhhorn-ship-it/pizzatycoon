@@ -142,7 +142,13 @@ export function harmonyOf(ingredientIds: string[], maxExtras: number = T.quality
   return clamp(h, 0, 100);
 }
 
-export function dishStats(recipe: Recipe, K: number, E: number, frugal: boolean, costMult = 1): DishStats {
+/** A good name lets a restaurant charge more (balance.md 4.10): fair prices rise above repPremiumFrom. */
+export function repPriceMult(rep: number): number {
+  const p = T.pricing;
+  return 1 + p.repPremium * clamp((rep - p.repPremiumFrom) / (100 - p.repPremiumFrom), 0, 1);
+}
+
+export function dishStats(recipe: Recipe, K: number, E: number, frugal: boolean, costMult = 1, priceMult = 1): DishStats {
   let cost = 0;
   let qSum = 0;
   let wSum = 0;
@@ -177,11 +183,11 @@ export function dishStats(recipe: Recipe, K: number, E: number, frugal: boolean,
     ? T.quality.harmonyBase + 10
     : harmonyOf(ids, recipe.kind === 'pizza' ? T.quality.maxToppingsBeforePenalty : T.quality.maxExtrasBeforePenaltyNonPizza);
   const quality = clamp(T.quality.wIngredients * iq + T.quality.wHarmony * harmony + T.quality.wKitchen * K + E, 0, 100);
-  const fairPrice =
+  const fairPrice = priceMult * (
     (main ? T.pricing.fairIntercept : T.pricing.sideFairIntercept) +
     (main ? T.pricing.fairQualitySlope : T.pricing.sideFairQualitySlope) * quality +
     (isBar(recipe.kind) ? T.pricing.barCostMult : T.pricing.fairFoodCostMult) * cost +
-    (main ? T.pricing.fairKindPremium[recipe.kind as MainKind] : 0);
+    (main ? T.pricing.fairKindPremium[recipe.kind as MainKind] : 0));
   return { recipeId: recipe.id, foodCost: cost, ingredientQuality: iq, harmony, quality, fairPrice, wasteRate, tags, toppings, work: dishWork(recipe) };
 }
 
@@ -436,7 +442,7 @@ export function analyse(state: GameState): Analysis {
   const frugal = state.staff.some((s) => s.role === 'chef' && s.traits.includes('frugal'));
   const dishes: Record<string, DishStats> = {};
   for (const r of state.recipes) {
-    dishes[r.id] = dishStats(r, kitchen.dinner.kitchenSkillK, kitchen.dinner.equipmentE, frugal, economyOf(state).ingredients);
+    dishes[r.id] = dishStats(r, kitchen.dinner.kitchenSkillK, kitchen.dinner.equipmentE, frugal, economyOf(state).ingredients, repPriceMult(state.rep));
   }
   return {
     dishes,

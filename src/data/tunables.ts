@@ -89,6 +89,9 @@ export const T = {
     fairIntercept: 4,
     fairQualitySlope: 0.08,
     fairFoodCostMult: 1.5,
+    /** Reputation premium (balance.md 4.10): fair prices x (1 + repPremium x (Rep - repPremiumFrom) / (100 - repPremiumFrom)). */
+    repPremium: 0.3,
+    repPremiumFrom: 50,
     /** Guests accept a bigger markup on wine and spirits than on food (balance.md 4.7). */
     barCostMult: 2.5,
     /** Sides (drinks, starters, desserts) use a lower intercept and quality slope; not in the PRD, see solution-design.md 11. */

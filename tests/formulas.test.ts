@@ -117,3 +117,23 @@ describe('golden starter day (balance.md 2)', () => {
     expect(T.quality.wIngredients + T.quality.wHarmony + T.quality.wKitchen).toBeCloseTo(1, 10);
   });
 });
+
+describe('reputation premium (balance.md 4.10)', () => {
+  test('a better name raises fair prices from reputation 50 up', async () => {
+    const { repPriceMult } = await import('../src/sim/analysis');
+    expect(repPriceMult(30)).toBe(1);
+    expect(repPriceMult(50)).toBe(1);
+    expect(repPriceMult(75)).toBeCloseTo(1.15, 10);
+    expect(repPriceMult(100)).toBeCloseTo(1.3, 10);
+  });
+
+  test('the fair price of a margherita at reputation 90 is over 20% above reputation 40', () => {
+    const at = (rep: number): number => {
+      const s = withStarterKit(newGame(1, 'canal', 'cosy'));
+      s.rep = rep;
+      const a = analyse(s);
+      return (a.dishes.margherita?.fairPrice ?? 0);
+    };
+    expect(at(90)).toBeGreaterThan(at(40) * 1.2);
+  });
+});

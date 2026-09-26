@@ -12,7 +12,7 @@ import { ROLE_NAMES, TRAITS } from '../data/staff';
 import type { EquipmentItem, MainKind, Role } from '../data/types';
 import { ADDONS, addonEffectText, UPGRADE_PATHS } from '../data/addons';
 import { T } from '../data/tunables';
-import { analyse, roomStats } from '../sim/analysis';
+import { analyse, repPriceMult, roomStats } from '../sim/analysis';
 import { wineListScore } from '../sim/day';
 import { addonProblem, type Command, fireSafetyUnlocked, isUnlocked, seatLimit, loanPayment, RANK_NAMES, suppliersFor, tiersFor, unlockText } from '../sim/game';
 import { buyPrice, sellPrice } from '../sim/economy';
@@ -156,6 +156,9 @@ export function menuPanel(ctx: PanelCtx): HTMLElement {
   return h('div', { class: 'stack' },
     h('div', { class: 'spread' }, h('h2', null, 'Menu'), h('span', { class: 'muted small' }, `${onMenu.length} of ${T.build.menuMaxItems} items · average main quality ${avgQ.toFixed(0)}`)),
     h('div', { class: 'small muted' }, 'Pick a quality tier for every ingredient: B Basic, S Standard, P Premium, A Artisan. Better tiers raise quality and cost, and spoil faster.'),
+    repPriceMult(state.rep) > 1.005
+      ? h('div', { class: 'small good' }, `Your reputation (${state.rep.toFixed(0)}) lets you charge more: guests accept prices ${Math.round((repPriceMult(state.rep) - 1) * 100)}% higher than an unknown place. The fair bands below already include it.`)
+      : h('div', { class: 'small muted' }, `Above reputation ${T.pricing.repPremiumFrom}, guests accept higher prices: up to +${Math.round(T.pricing.repPremium * 100)}% at reputation 100.`),
     ...kinds.flatMap((k) => {
       const items = onMenu.filter((r) => r.kind === k);
       return items.length ? [h('h3', null, kindName[k]), ...items.map(card)] : [];

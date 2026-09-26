@@ -706,3 +706,11 @@ Founder request: a larger wine list should mean higher spend per guest, more foo
 Measured at steady reputation, cosy shop, adding six wines to the house wine: Canal Quarter reputation 61.7 to 64.3, satisfaction 65.1 to 67.3, foodies wanting in 4.3 to 5.4, spend per guest $19.08 to $21.50, profit $411 to $562 a day. Old Harbour (foodie district): reputation 60.4 to 64.4, foodies 14.1 to 18.3, spend $19.13 to $23.30, profit $186 to $399. The reference builds carry only the house wine (score 0), so the strategy table is unchanged.
 
 **Wine cellar (2026-09-26).** Ten more famous Italian wines by the glass, each priced inside its fair band: Lambrusco $6, Nero d'Avola $6.50, Soave Classico $7, Vermentino di Sardegna $7.50, Primitivo di Manduria $8, Franciacorta $11, Barbaresco $13, Amarone della Valpolicella $15, Tignanello $19, Sassicaia $26. That makes 17 wines including the house wine. The wine list score still reaches its maximum at 7 wines (house plus six), so the extra choice is for variety and for pairing the list to the district: budget wines for students and families, the big Tuscans and Piedmontese for foodies and tourists.
+
+### 4.10 A good name lets you charge more (2026-09-26)
+
+Founder request: when reputation improves, allow higher prices.
+
+Every fair price (food and bar) is multiplied by `1 + 0.3 x (Rep - 50) / 50` above reputation 50 (`T.pricing.repPremium`, `repPremiumFrom`): Rep 50 or less x1.00, Rep 75 x1.15, Rep 100 x1.30. A new restaurant is unaffected. Because demand, dish choice and the value score all compare price with fair price, a well known restaurant loses fewer guests at the same price and its best price rises. The Menu tab says how much higher guests accept.
+
+Measured on the cosy starter at full following, best pizza price (x the starter prices) and profit per day: Rep 30 x0.9 $329; Rep 50 x1.0 $422; Rep 65 x1.2 $533; Rep 80 x1.2 $622; Rep 95 x1.3 $702. The reference builds are unchanged at their test prices (their rooms are full); all balance checks pass.
