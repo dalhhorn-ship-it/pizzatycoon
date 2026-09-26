@@ -4,7 +4,7 @@ export type SegmentId = 'students' | 'families' | 'professionals' | 'foodies' | 
 export type Tag = 'cheesy' | 'spicy' | 'classic' | 'artisan' | 'veggie' | 'seasonal' | 'kid friendly' | 'meaty' | 'bold';
 export type TierId = 'basic' | 'standard' | 'premium' | 'artisan';
 export type Category = 'dry' | 'dairy' | 'produce' | 'meat' | 'seafood' | 'drinks';
-export type DishKind = 'pizza' | 'primo' | 'secondo' | 'starter' | 'drink' | 'dessert';
+export type DishKind = 'pizza' | 'primo' | 'secondo' | 'starter' | 'drink' | 'dessert' | 'aperitivo' | 'digestivo';
 /** Guests order one main: a pizza, a primo (pasta, risotto, gnocchi) or a secondo (meat or fish). */
 export type MainKind = 'pizza' | 'primo' | 'secondo';
 export type Service = 'lunch' | 'dinner';
@@ -112,6 +112,8 @@ export interface RecipeTemplate {
   onMenu: boolean;
   /** Extra tags the dish carries regardless of ingredients (sides mostly). */
   tags?: readonly Tag[];
+  /** A wine: a longer wine list gets guests ordering a second glass (balance.md 4.7). */
+  wine?: boolean;
 }
 
 export type EquipmentFamily = 'basic' | 'volume' | 'quality' | 'artisan' | 'hybrid';

@@ -1,7 +1,7 @@
 // Menu complexity (balance.md 4.2): a wider, fancier menu is harder for the kitchen to run.
 
 import { INGREDIENTS } from '../data/ingredients';
-import { isMain } from '../data/recipes';
+import { isBar, isMain } from '../data/recipes';
 import { T } from '../data/tunables';
 import type { GameState, Recipe } from './state';
 
@@ -25,7 +25,7 @@ export function dishWork(recipe: Pick<Recipe, 'kind' | 'lines'>): number {
 }
 
 export function menuComplexity(recipes: readonly Recipe[], avgKitchenSkill: number): MenuComplexity {
-  const food = recipes.filter((r) => r.onMenu && r.kind !== 'drink');
+  const food = recipes.filter((r) => r.onMenu && !isBar(r.kind));
   const ingredients = new Set(food.flatMap((r) => r.lines.map((l) => l.ingredientId))).size;
   const score = T.menu.perDish * food.length + T.menu.perIngredient * ingredients;
   const allowance = T.menu.free + T.menu.perSkill * (avgKitchenSkill - 5);

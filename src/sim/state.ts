@@ -142,7 +142,7 @@ export interface DayReport {
 /** Everything that belongs to one restaurant. The one the player runs lives at the top of GameState. */
 export const LOCATION_KEYS = [
   'districtId', 'premisesId', 'venueId', 'deposit', 'rep', 'following', 'recipes', 'furniture', 'equipment', 'staff',
-  'daysOpen', 'fireSafety', 'history',
+  'daysOpen', 'fireSafety', 'roomTouches', 'history',
 ] as const;
 export type LocationKey = (typeof LOCATION_KEYS)[number];
 export type Location = Pick<GameState, LocationKey> & { id: number };
@@ -186,6 +186,8 @@ export interface GameState {
   daysOpen: number;
   /** Fire safety upgrades installed in this building (src/data/fireSafety.ts). */
   fireSafety: string[];
+  /** Decoration on the walls, tables and ceiling (src/data/roomTouches.ts); takes no floor space. */
+  roomTouches: string[];
   history: DayReport[];
   /** Id of the restaurant the player runs right now (the fields above). */
   locationId: number;

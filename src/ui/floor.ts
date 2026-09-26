@@ -230,6 +230,8 @@ export class Floor {
       for (let i = 0; i < 2; i++) drawPizza(g, hx + hatchW * (0.3 + 0.4 * i), this.oy - wallRows * t * 0.2, t * 0.45);
     }
 
+    this.drawWallTouches(g, s, hx, hatchW, wallRows, secs);
+
     // Dining floor.
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) drawFloorTile(g, this.ox + x * t, this.oy + y * t, t, 'dining', x, y);
     // Entrance.
@@ -250,6 +252,8 @@ export class Floor {
         g.stroke();
       }
     }
+
+    this.drawTableTouches(g, s, secs);
 
     // Guests during playback.
     if (this.playing) this.drawGuests(g, s);
@@ -275,6 +279,175 @@ export class Floor {
 
   private inService(): boolean {
     return (this.clock >= 11.5 * 60 && this.clock <= 15 * 60) || (this.clock >= 18 * 60 && this.clock <= 23 * 60);
+  }
+
+  /** Room touches on the back wall (balance.md 4.8): drawn around the kitchen hatch. */
+  private drawWallTouches(g: CanvasRenderingContext2D, s: GameState, hx: number, hatchW: number, wallRows: number, secs: number): void {
+    const has = (id: string): boolean => (s.roomTouches ?? []).includes(id);
+    const t = this.tile;
+    const { W } = this.dims();
+    const top = this.oy - wallRows * t;
+    const left = { x0: this.ox + t * 0.2, x1: hx - t * 0.2 };
+    const right = { x0: hx + hatchW + t * 0.2, x1: this.ox + W * t - t * 0.2 };
+    if (has('mural')) {
+      const w = right.x1 - right.x0;
+      const y = top + wallRows * t * 0.28;
+      const hgt = wallRows * t * 0.6;
+      const sky = g.createLinearGradient(0, y, 0, y + hgt);
+      sky.addColorStop(0, '#9fd3e6');
+      sky.addColorStop(0.55, '#5fa9c9');
+      sky.addColorStop(1, '#2f7ea8');
+      g.fillStyle = sky;
+      g.fillRect(right.x0, y, w, hgt);
+      g.fillStyle = '#e8c97a';
+      g.fillRect(right.x0, y + hgt * 0.8, w, hgt * 0.2);
+      g.fillStyle = '#4f8f3a';
+      for (let i = 0; i < 4; i++) {
+        const cx = right.x0 + w * (0.12 + 0.25 * i);
+        g.beginPath();
+        g.arc(cx, y + hgt * 0.72, hgt * 0.14, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = '#f2d23c';
+        g.fillRect(cx - 2, y + hgt * 0.66, 3, 3);
+        g.fillStyle = '#4f8f3a';
+      }
+      g.strokeStyle = '#6b4a2e';
+      g.lineWidth = 2;
+      g.strokeRect(right.x0, y, w, hgt);
+    }
+    if (has('photos')) {
+      for (let i = 0; i < 3; i++) {
+        const x = left.x0 + t * 0.3 + i * t * 0.75;
+        const y = top + wallRows * t * (0.32 + (i % 2) * 0.12);
+        g.fillStyle = '#6b4a2e';
+        g.fillRect(x, y, t * 0.5, t * 0.4);
+        g.fillStyle = ['#d9c8a6', '#c9b28c', '#e0d2b8'][i] ?? '#d9c8a6';
+        g.fillRect(x + 3, y + 3, t * 0.5 - 6, t * 0.4 - 6);
+      }
+    }
+    if (has('chalkboard')) {
+      const x = left.x1 - t * 1.1;
+      const y = top + wallRows * t * 0.3;
+      g.fillStyle = '#8a6a44';
+      g.fillRect(x - 2, y - 2, t * 0.9 + 4, t * 0.62 + 4);
+      g.fillStyle = '#2d3a33';
+      g.fillRect(x, y, t * 0.9, t * 0.62);
+      g.strokeStyle = 'rgba(255,255,255,0.75)';
+      g.lineWidth = 1.5;
+      for (let i = 0; i < 3; i++) {
+        g.beginPath();
+        g.moveTo(x + 5, y + 8 + i * t * 0.16);
+        g.lineTo(x + t * 0.9 - 6 - (i % 2) * 6, y + 8 + i * t * 0.16);
+        g.stroke();
+      }
+    }
+    if (has('mirror')) {
+      const cx = has('mural') ? right.x0 - t * 0.02 : (right.x0 + right.x1) / 2;
+      const cy = top + wallRows * t * 0.55;
+      g.fillStyle = '#c9a33b';
+      g.beginPath();
+      g.ellipse(has('mural') ? hx + hatchW + t * 0.5 : cx, cy, t * 0.28, t * 0.36, 0, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#cfe3ea';
+      g.beginPath();
+      g.ellipse(has('mural') ? hx + hatchW + t * 0.5 : cx, cy, t * 0.2, t * 0.28, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+    if (has('vines')) {
+      g.strokeStyle = '#4c7a34';
+      g.lineWidth = 2;
+      g.beginPath();
+      for (let x = this.ox; x <= this.ox + W * t; x += 4) {
+        const y = top + t * 0.22 + Math.sin(x / 9) * 3;
+        if (x === this.ox) g.moveTo(x, y);
+        else g.lineTo(x, y);
+      }
+      g.stroke();
+      g.fillStyle = '#6aa04a';
+      for (let x = this.ox + 6; x < this.ox + W * t; x += 14) {
+        g.beginPath();
+        g.ellipse(x, top + t * 0.22 + Math.sin(x / 9) * 3 + 4, 4, 2.5, 0.6, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.fillStyle = '#6b2f5a';
+      for (let x = this.ox + 20; x < this.ox + W * t; x += 60) for (let k = 0; k < 3; k++) {
+        g.beginPath();
+        g.arc(x + (k % 2) * 3, top + t * 0.3 + k * 3, 2, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    if (has('bunting')) {
+      const colors = ['#2e8b57', '#f4f1e8', '#c8372d'];
+      const y = top + t * 0.06;
+      const step = Math.max(10, t * 0.35);
+      let i = 0;
+      for (let x = this.ox; x + step <= this.ox + W * t; x += step, i++) {
+        g.fillStyle = colors[i % 3] as string;
+        g.beginPath();
+        g.moveTo(x, y);
+        g.lineTo(x + step, y);
+        g.lineTo(x + step / 2, y + step * 0.8);
+        g.closePath();
+        g.fill();
+      }
+    }
+    if (has('sconces')) {
+      const glow = 0.35 + 0.05 * Math.sin(secs * 2);
+      for (const fx of [0.08, 0.3, 0.7, 0.92]) {
+        const x = this.ox + W * t * fx;
+        const y = top + wallRows * t * 0.62;
+        const gr = g.createRadialGradient(x, y, 1, x, y, t * 0.5);
+        gr.addColorStop(0, `rgba(255,214,120,${glow + 0.3})`);
+        gr.addColorStop(1, 'rgba(255,214,120,0)');
+        g.fillStyle = gr;
+        g.fillRect(x - t * 0.5, y - t * 0.5, t, t);
+        g.fillStyle = '#b8892e';
+        g.fillRect(x - 3, y, 6, 8);
+      }
+    }
+  }
+
+  /** Room touches on every table: candles, flowers and pendant lights. */
+  private drawTableTouches(g: CanvasRenderingContext2D, s: GameState, secs: number): void {
+    const has = (id: string): boolean => (s.roomTouches ?? []).includes(id);
+    if (!has('candles') && !has('flowers') && !has('pendants')) return;
+    const t = this.tile;
+    for (const f of s.furniture) {
+      const item = FURNITURE[f.itemId];
+      if (!item || item.kind !== 'table') continue;
+      const cx = this.ox + (f.x + item.w / 2) * t;
+      const cy = this.oy + (f.y + item.h / 2) * t;
+      if (has('pendants')) {
+        const gr = g.createRadialGradient(cx, cy, 2, cx, cy, t * 0.9);
+        gr.addColorStop(0, 'rgba(255,220,140,0.28)');
+        gr.addColorStop(1, 'rgba(255,220,140,0)');
+        g.fillStyle = gr;
+        g.fillRect(cx - t, cy - t, 2 * t, 2 * t);
+      }
+      if (has('flowers')) {
+        g.fillStyle = '#e8e2d4';
+        g.fillRect(cx + t * 0.12 - 2, cy - 3, 4, 6);
+        for (const [dx, dy, c] of [[-3, -5, '#e0526b'], [2, -6, '#f2c14e'], [0, -9, '#d9427a']] as const) {
+          g.fillStyle = c;
+          g.beginPath();
+          g.arc(cx + t * 0.12 + dx, cy + dy, 2.2, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+      if (has('candles')) {
+        const x = cx - t * 0.12;
+        g.fillStyle = '#3f6b3a';
+        g.fillRect(x - 2, cy - 4, 4, 8);
+        const flick = 1 + 0.2 * Math.sin(secs * 9 + f.uid);
+        const gr = g.createRadialGradient(x, cy - 7, 0.5, x, cy - 7, 7 * flick);
+        gr.addColorStop(0, 'rgba(255,230,150,0.95)');
+        gr.addColorStop(1, 'rgba(255,170,60,0)');
+        g.fillStyle = gr;
+        g.beginPath();
+        g.arc(x, cy - 7, 7 * flick, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
   }
 
   private drawGuests(g: CanvasRenderingContext2D, s: GameState): void {

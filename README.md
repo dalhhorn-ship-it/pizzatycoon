@@ -10,6 +10,8 @@ Playable greybox with the full economy of `01-product/balance.md`:
 * Local following: a new restaurant starts unknown and earns its regulars through word of mouth from satisfied guests; small shopfronts are seen by fewer passers-by
 * More than one restaurant: hire a restaurant manager, open another venue, and the manager runs the first one according to their skill
 * Fast forward a week, stopping early when something needs you
+* The bar: an Italian wine list (second glasses for a longer list), aperitivi and digestivi such as grappa and limoncello
+* Room touches: wall, table and ceiling decoration that takes no floor tile
 * Menu complexity: a wide or fancy menu slows the prep line and lengthens ticket times unless the cooks are skilled; primi and secondi spare the oven but load the prep line
 * Kitchen equipment in volume, quality, artisan and basic families with unlocks, throughput and quality effects
 * Dining room build mode (tables, booths, decor, lighting, ambience)

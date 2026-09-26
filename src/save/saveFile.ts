@@ -97,6 +97,8 @@ export function deserialise(text: string): SaveFile {
   if (typeof s.following !== 'number') s.following = T.following.established;
   // Saves from before fire safety: treat every day played as a day open.
   if (!Array.isArray(s.fireSafety)) s.fireSafety = [];
+  if (!Array.isArray(s.roomTouches)) s.roomTouches = [];
+  for (const b of s.branches ?? []) if (!Array.isArray(b.roomTouches)) b.roomTouches = [];
   if (typeof s.daysOpen !== 'number') s.daysOpen = Math.max(0, s.day - 1);
   // Saves from before chains run one restaurant.
   if (!Array.isArray(s.branches)) s.branches = [];

@@ -669,3 +669,26 @@ Reputation now settles near satisfaction itself: 52 gives 47, 60 gives 56, 70 gi
 Strategy table after the change (reference price, best price in band): luxury in Old Harbour $2,155 / $2,166; volume in University Quarter $2,138; middle best $1,699 University, $1,410 Canal, $1,296 Old Harbour. All balance checks pass; the fully upgraded middle build trails volume by 18% and luxury by 43%.
 
 Measured, reputation 50 (the gate for a second restaurant, 4.5): the cheapest opening at fair prices on day 45 (it settles near 54); the same at +40% prices on day 87; a properly set up cosy restaurant (satisfaction about 67) on day 18. The golden starter day at Rep 30 now has 57.0 guests and $1,086 sales (was 52.6 and $1,003), because Rep 30 counts for a little more demand.
+
+### 4.7 The bar: Italian wine list, aperitivi and digestivi (2026-09-26)
+
+Founder request: more drink options to raise revenue per guest (share of wallet): an Italian wine selection and grappa.
+
+**Content.** Drinks: sparkling water, Italian lager, and six wines by the glass (Prosecco, Pinot Grigio, Montepulciano d'Abruzzo, Chianti Classico, Barolo, Brunello di Montalcino; the house wine counts as a wine too). Two new courses: aperitivi (Aperol Spritz, Negroni, Bellini, Campari Soda) and digestivi (espresso, limoncello, grappa, grappa riserva, amaro, sambuca). The menu now holds up to 36 items. Bar items need no kitchen work and do not count toward menu complexity (4.2).
+
+**Rules** (`T.attach`, `T.pricing.barCostMult`):
+* Wine list: every wine on the menu beyond the first adds 5% more drinks per guest (second glasses), up to +25%.
+* Aperitivi: attach 0.12, up to 0.27 with ambience (pivot 55, span 30). Digestivi: 0.15, up to 0.35. Both x segment affinity (students 0.4, families 0.4, professionals 1.1, foodies 1.4, seniors 1.0, tourists 1.3) and x 0.3 at lunch.
+* Guests linger: +6 minutes at the table per aperitivo and +8 per digestivo ordered, so a full room turns tables a little slower.
+* Drinks are chosen against 40% of the segment's meal budget (the main dish rule of 4.1 with budgetShare 0.4): students take the house wine, foodies the Barolo.
+* Fair price for bar items uses 2.5 x cost instead of 1.5: guests accept a bigger markup on wine and spirits.
+
+Measured on the cosy starter at Rep 60, adding four wines, two aperitivi and four digestivi: spend per guest $19.07 to $22.22 (+16%), profit +$146 a day, one guest a day fewer from slower table turns. The reference builds do not use the new items, so the strategy table is unchanged.
+
+### 4.8 Room touches: decoration without giving up a table (2026-09-26)
+
+Founder request: more, smaller decorations to make the room beautiful without sacrificing a table.
+
+`src/data/roomTouches.ts`: 13 one time purchases for the whole room that take no floor tile, grouped as walls (bunting, chalkboard, family photos, gilded mirror, grapevine trellis, Amalfi coast mural), tables (candles, checked tablecloths, fresh flowers, seat cushions), lighting (brass wall sconces, pendant lights) and atmosphere (Italian music). Each adds decor points, lighting and or comfort to ambience exactly like floor decor; fresh flowers ($25), music ($10) and candles ($5) cost a little each week. They move with you; removing one sells it at 80%. The dining room view draws them: wall pieces on the back wall, candles, flowers and pendant light glow on every table.
+
+With everything installed the cosy starter room reaches ambience 94 (from 57), which lifts satisfaction and how many guests order drinks, starters, desserts, aperitivi and digestivi.

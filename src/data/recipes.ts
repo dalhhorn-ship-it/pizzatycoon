@@ -4,6 +4,10 @@ import type { DishKind, MainKind, RecipeTemplate } from './types';
 export const MAIN_KINDS: readonly MainKind[] = ['pizza', 'primo', 'secondo'];
 export const isMain = (kind: DishKind): kind is MainKind => (MAIN_KINDS as readonly DishKind[]).includes(kind);
 
+/** Kinds served from the bar: no kitchen work, no menu complexity. */
+export const BAR_KINDS: readonly DishKind[] = ['drink', 'aperitivo', 'digestivo'];
+export const isBar = (kind: DishKind): boolean => BAR_KINDS.includes(kind);
+
 /** What a custom dish starts from: a pizza always has its base, a primo picks one of these, a secondo starts bare. */
 export const PIZZA_BASE: readonly string[] = ['dough', 'tomatoSauce', 'mozzarella'];
 export const PRIMO_BASES: readonly string[] = ['spaghetti', 'freshPasta', 'rice', 'gnocchi'];
@@ -59,10 +63,36 @@ export const RECIPE_BOOK: readonly RecipeTemplate[] = [
   { id: 'carpaccio', name: 'Carpaccio di manzo', kind: 'starter', ingredients: ['beef', 'rocket', 'parmesan'], price: 12, onMenu: false },
 
   { id: 'softDrink', name: 'Soft drink', kind: 'drink', ingredients: ['softDrink'], price: 3.5, onMenu: true, tags: ['kid friendly'] },
-  { id: 'houseWine', name: 'House wine', kind: 'drink', ingredients: ['houseWine'], price: 5, onMenu: true, tags: ['classic'] },
+  { id: 'houseWine', name: 'House wine', kind: 'drink', ingredients: ['houseWine'], price: 5, onMenu: true, tags: ['classic'], wine: true },
   { id: 'craftBeer', name: 'Craft beer', kind: 'drink', ingredients: ['craftBeer'], price: 5.5, onMenu: false },
+  { id: 'sparklingWater', name: 'Sparkling water', kind: 'drink', ingredients: ['sparklingWater'], price: 3, onMenu: false, tags: ['kid friendly'] },
+  { id: 'lager', name: 'Italian lager', kind: 'drink', ingredients: ['lager'], price: 4.5, onMenu: false },
+  // The wine list (by the glass). Every extra wine on the menu gets more guests ordering a second glass.
+  { id: 'prosecco', name: 'Prosecco', kind: 'drink', ingredients: ['prosecco'], price: 7, onMenu: false, wine: true },
+  { id: 'pinotGrigio', name: 'Pinot Grigio', kind: 'drink', ingredients: ['pinotGrigio'], price: 7, onMenu: false, wine: true },
+  { id: 'montepulciano', name: "Montepulciano d'Abruzzo", kind: 'drink', ingredients: ['montepulciano'], price: 6.5, onMenu: false, wine: true },
+  { id: 'chianti', name: 'Chianti Classico', kind: 'drink', ingredients: ['chianti'], price: 8, onMenu: false, wine: true },
+  { id: 'barolo', name: 'Barolo', kind: 'drink', ingredients: ['barolo'], price: 14, onMenu: false, wine: true },
+  { id: 'brunello', name: 'Brunello di Montalcino', kind: 'drink', ingredients: ['brunello'], price: 15, onMenu: false, wine: true },
+
+  // Aperitivi: before dinner. Guests linger a little longer.
+  { id: 'spritz', name: 'Aperol Spritz', kind: 'aperitivo', ingredients: ['aperol'], price: 8, onMenu: false },
+  { id: 'negroni', name: 'Negroni', kind: 'aperitivo', ingredients: ['campari', 'ginVermouth'], price: 10, onMenu: false },
+  { id: 'bellini', name: 'Bellini', kind: 'aperitivo', ingredients: ['peachPuree'], price: 9, onMenu: false },
+  { id: 'campariSoda', name: 'Campari Soda', kind: 'aperitivo', ingredients: ['campari'], price: 6.5, onMenu: false },
+
+  // Digestivi: after dinner, the last part of the bill.
+  { id: 'espresso', name: 'Espresso', kind: 'digestivo', ingredients: ['espresso'], price: 3, onMenu: false },
+  { id: 'limoncello', name: 'Limoncello', kind: 'digestivo', ingredients: ['limoncello'], price: 6, onMenu: false },
+  { id: 'grappa', name: 'Grappa', kind: 'digestivo', ingredients: ['grappa'], price: 7, onMenu: false },
+  { id: 'grappaRiserva', name: 'Grappa riserva', kind: 'digestivo', ingredients: ['grappaRiserva'], price: 12, onMenu: false },
+  { id: 'amaro', name: 'Amaro', kind: 'digestivo', ingredients: ['amaro'], price: 7, onMenu: false },
+  { id: 'sambuca', name: 'Sambuca', kind: 'digestivo', ingredients: ['sambuca'], price: 6, onMenu: false },
 
   { id: 'tiramisu', name: 'Tiramisu', kind: 'dessert', ingredients: ['mascarpone'], price: 6, onMenu: true, tags: ['classic'] },
   { id: 'pannaCotta', name: 'Panna cotta', kind: 'dessert', ingredients: ['cream'], price: 6, onMenu: false, tags: ['classic'] },
   { id: 'gelato', name: 'Gelato', kind: 'dessert', ingredients: ['gelato'], price: 5, onMenu: false },
 ];
+
+/** Recipe book ids of wines. */
+export const WINE_IDS: ReadonlySet<string> = new Set(RECIPE_BOOK.filter((r) => r.wine).map((r) => r.id));

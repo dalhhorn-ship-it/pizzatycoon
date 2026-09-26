@@ -4,6 +4,7 @@ import { DISTRICTS, PREMISES } from '../data/districts';
 import { ADDONS, type AddonItem, UPGRADE_PATHS } from '../data/addons';
 import { EQUIPMENT } from '../data/equipment';
 import { FIRE_SAFETY } from '../data/fireSafety';
+import { ROOM_TOUCHES } from '../data/roomTouches';
 import { FURNITURE } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
 import { PIZZA_BASE, PRIMO_BASES, RECIPE_BOOK } from '../data/recipes';
@@ -50,6 +51,8 @@ export type Command =
   | { type: 'freshStart' }
   | { type: 'rentVenue'; venueId: string }
   | { type: 'buyFireSafety'; id: string }
+  | { type: 'buyRoomTouch'; id: string }
+  | { type: 'removeRoomTouch'; id: string }
   /** Open a second (third...) restaurant; the current one stays open under its restaurant manager. */
   | { type: 'openRestaurant'; venueId: string }
   /** Go and run another restaurant you own; the one you leave needs a manager. */
@@ -248,7 +251,7 @@ export function newGame(seed: number, districtId: string, premisesId = 'hole', e
     cash: Math.round(T.finance.startingCash * (economy?.startingCash ?? 1)) - deposit, deposit,
     loan: { balance: 0, annualRate: T.finance.starterLoanRate, weeksLeft: 0, pausedWeeks: 0 },
     rep: T.reputation.start, following: startFollowing({ economy }), totalServed: 0, rank: 'cook', recipes, furniture: [], equipment: [], staff: [], candidates: [],
-    nextUid: 1, daysBelowZero: 0, daysOpen: 0, fireSafety: [], history: [], locationId: 1, branches: [], unlockAll: false,
+    nextUid: 1, daysBelowZero: 0, daysOpen: 0, fireSafety: [], roomTouches: [], history: [], locationId: 1, branches: [], unlockAll: false,
   };
   if (economy) state.economy = clampEconomy(economy);
   state.candidates = generateCandidates(state);
@@ -650,6 +653,23 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       events.push({ kind: 'info', text: `${item.name} installed. The room now allows ${seatLimit(state.premisesId, state.fireSafety)} seats.` });
       break;
     }
+    case 'buyRoomTouch': {
+      const item = ROOM_TOUCHES[cmd.id];
+      if (!item) return fail(input, 'Unknown decoration.');
+      if (state.roomTouches.includes(item.id)) return fail(input, 'Already in the room.');
+      const cost = buyPrice(state, item.price);
+      if (state.cash < cost) return fail(input, 'Not enough cash.');
+      state.cash -= cost;
+      state.roomTouches.push(item.id);
+      break;
+    }
+    case 'removeRoomTouch': {
+      const item = ROOM_TOUCHES[cmd.id];
+      if (!item || !state.roomTouches.includes(item.id)) return fail(input, 'Not in the room.');
+      state.roomTouches = state.roomTouches.filter((x) => x !== item.id);
+      state.cash += sellPrice(state, item.price);
+      break;
+    }
     case 'openRestaurant': {
       const venue = VENUES[cmd.venueId];
       if (!venue) return fail(input, 'Unknown venue.');
@@ -667,7 +687,7 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       applyLocation(state, {
         id, districtId: venue.districtId, premisesId: venue.premisesId, venueId: venue.id, deposit,
         rep: T.reputation.start, following: startFollowing(state), recipes: structuredClone(state.recipes),
-        furniture: [], equipment: [], staff: [], daysOpen: 0, fireSafety: [], history: [],
+        furniture: [], equipment: [], staff: [], daysOpen: 0, fireSafety: [], roomTouches: [], history: [],
       });
       state.cash -= deposit;
       events.push({ kind: 'info', text: `You signed the lease on ${venue.name}. ${here} carries on under its manager.` });

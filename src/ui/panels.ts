@@ -4,14 +4,15 @@ import { DISTRICTS } from '../data/districts';
 import { VENUES } from '../data/venues';
 import { EQUIPMENT } from '../data/equipment';
 import { FIRE_SAFETY, FIRE_SAFETY_IDS, type FireSafetyItem } from '../data/fireSafety';
+import { ROOM_TOUCH_IDS, ROOM_TOUCHES, type RoomTouch, type TouchSpot } from '../data/roomTouches';
 import { FURNITURE } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
-import { isMain, PRIMO_BASES } from '../data/recipes';
+import { isBar, isMain, PRIMO_BASES, WINE_IDS } from '../data/recipes';
 import { ROLE_NAMES, TRAITS } from '../data/staff';
 import type { EquipmentItem, MainKind, Role } from '../data/types';
 import { ADDONS, addonEffectText, UPGRADE_PATHS } from '../data/addons';
 import { T } from '../data/tunables';
-import { analyse } from '../sim/analysis';
+import { analyse, roomStats } from '../sim/analysis';
 import { addonProblem, type Command, fireSafetyUnlocked, isUnlocked, seatLimit, loanPayment, RANK_NAMES, suppliersFor, tiersFor, unlockText } from '../sim/game';
 import { buyPrice, sellPrice } from '../sim/economy';
 import { kitchenDims, layoutProblem } from '../sim/kitchen';
@@ -56,9 +57,10 @@ export function menuPanel(ctx: PanelCtx): HTMLElement {
   const a = analyse(state);
   const onMenu = state.recipes.filter((r) => r.onMenu);
   const book = state.recipes.filter((r) => !r.onMenu);
-  const kinds: Recipe['kind'][] = ['starter', 'pizza', 'primo', 'secondo', 'dessert', 'drink'];
+  const kinds: Recipe['kind'][] = ['aperitivo', 'starter', 'pizza', 'primo', 'secondo', 'dessert', 'digestivo', 'drink'];
   const kindName: Record<Recipe['kind'], string> = {
-    starter: 'Antipasti', pizza: 'Pizzas', primo: 'Primi piatti', secondo: 'Secondi', dessert: 'Desserts', drink: 'Drinks',
+    aperitivo: 'Aperitivi', starter: 'Antipasti', pizza: 'Pizzas', primo: 'Primi piatti', secondo: 'Secondi', dessert: 'Desserts',
+    digestivo: 'Digestivi and coffee', drink: 'Drinks and wine',
   };
 
   const card = (r: Recipe): HTMLElement => {
@@ -158,6 +160,7 @@ export function menuPanel(ctx: PanelCtx): HTMLElement {
       return items.length ? [h('h3', null, kindName[k]), ...items.map(card)] : [];
     }),
     complexity,
+    barCard(state),
     h('h2', null, 'Recipe book'),
     ...kinds.flatMap((k) => {
       const items = book.filter((r) => r.kind === k);
@@ -171,6 +174,32 @@ export function menuPanel(ctx: PanelCtx): HTMLElement {
       ];
     }),
     creator);
+}
+
+/** The bar's share of the bill (balance.md 4.7): wine list, aperitivi and digestivi. */
+function barCard(state: GameState): HTMLElement {
+  const on = state.recipes.filter((r) => r.onMenu);
+  const wines = on.filter((r) => WINE_IDS.has(r.id)).length;
+  const second = Math.min(T.attach.wineListCap, T.attach.wineListPerWine * Math.max(0, wines - 1));
+  const has = (k: Recipe['kind']): boolean => on.some((r) => r.kind === k);
+  const last = [...state.history].reverse().find((d) => d.open);
+  let barSales = 0;
+  if (last) for (const [id, n] of Object.entries(last.dishSales)) {
+    const r = state.recipes.find((x) => x.id === id);
+    if (r && isBar(r.kind)) barSales += n * r.price;
+  }
+  return h('div', { class: 'card' },
+    h('h3', null, h('span', null, 'The bar'), last && last.covers > 0
+      ? h('span', { class: 'small muted' }, `${money(last.pnl.sales / last.covers, true)} a guest · bar ${Math.round((barSales / Math.max(1, last.pnl.sales)) * 100)}% of sales`)
+      : null),
+    h('div', { class: 'kv' },
+      h('span', null, 'Wines on the list'), h('b', { class: second > 0 ? 'good' : '' }, `${wines}${second > 0 ? ` · +${Math.round(second * 100)}% second glasses` : ''}`),
+      h('span', null, 'Aperitivi'), h('b', null, has('aperitivo') ? 'on the menu' : 'none yet'),
+      h('span', null, 'Digestivi and coffee'), h('b', null, has('digestivo') ? 'on the menu' : 'none yet')),
+    h('div', { class: 'small muted' },
+      'Drinks raise what every guest spends and need no kitchen work. Each wine beyond the first gets more guests ordering a second glass. ' +
+      'Aperitivi and digestivi sell best at dinner, in a lovely room and to foodies, tourists and professionals; guests linger a little longer over them. ' +
+      'Students and families stick to cheaper drinks.'));
 }
 
 // ---------- Kitchen (kitchen-builder.md 7) ----------
@@ -440,6 +469,7 @@ export function roomPanel(ctx: PanelCtx): HTMLElement {
         h('span', null, 'Squeezed tables'), h('b', { class: r.crowdedTables ? 'warn' : '' }, String(r.crowdedTables))),
       meter(r.ambience, 100, r.ambience > 70 ? 'warm' : ''),
       h('div', { class: 'small muted' }, 'Ambience lifts satisfaction and how many guests add drinks, starters and desserts. Every table needs a free tile beside it.')),
+    roomTouchesCard(ctx),
     fireSafetyCard(ctx),
     h('div', { class: 'row' },
       h('button', { class: tool.kind === 'none' ? 'active' : '', onclick: () => setTool({ kind: 'none' }) }, 'Select'),
@@ -459,6 +489,33 @@ export function roomPanel(ctx: PanelCtx): HTMLElement {
     h('b', null, h('span', { class: 'swatch', style: `background:${f.color}` }), f.name),
     h('span', { class: 'small muted' }, `${money(buyPrice(state, f.price))} · ${f.w}x${f.h}`),
     h('span', { class: 'small' }, f.kind === 'table' ? `${f.seats} seats` : `+${f.decorPoints} decor${f.lighting ? `, +${f.lighting} light` : ''}`)))));
+}
+
+/** Decoration that takes no floor tile (balance.md 4.8): walls, tables, ceiling. */
+function roomTouchesCard(ctx: PanelCtx): HTMLElement {
+  const { state } = ctx;
+  const now = roomStats(state).ambience;
+  const spots: [TouchSpot, string][] = [['wall', 'On the walls'], ['table', 'On the tables'], ['ceiling', 'Lighting'], ['room', 'Atmosphere']];
+  return h('div', { class: 'card' },
+    h('h3', null, h('span', null, 'Make it beautiful'), h('span', { class: 'small muted' }, `ambience ${now.toFixed(0)}`)),
+    h('div', { class: 'small muted' }, 'Decoration for the walls, the tables and the ceiling. None of it takes a floor tile, so you keep every table.'),
+    ...spots.flatMap(([spot, label]) => [
+      h('div', { class: 'small', style: 'margin-top:6px' }, h('b', null, label)),
+      ...ROOM_TOUCH_IDS.filter((id) => ROOM_TOUCHES[id]?.spot === spot).map((id) => {
+        const it = ROOM_TOUCHES[id] as RoomTouch;
+        const have = state.roomTouches.includes(id);
+        const cost = buyPrice(state, it.price);
+        const gain = roomStats({ ...state, roomTouches: [...state.roomTouches, id] }).ambience - now;
+        return h('div', { class: 'line' },
+          h('div', null,
+            h('div', null, it.name),
+            h('div', { class: 'small muted' }, `${it.blurb}${it.upkeep ? ` · ${money(it.upkeep)}/week` : ''}`)),
+          have
+            ? h('button', { class: 'small ghost', title: 'Take it down and sell it at 80%', onclick: () => act(ctx, { type: 'removeRoomTouch', id }) }, 'Installed · remove')
+            : h('button', { class: 'small', disabled: state.cash < cost, onclick: () => act(ctx, { type: 'buyRoomTouch', id }, `${it.name} added`) },
+              `${money(cost)}${gain > 0.05 ? ` · +${gain.toFixed(1)} ambience` : ''}`));
+      }),
+    ]));
 }
 
 function fireSafetyCard(ctx: PanelCtx): HTMLElement {

@@ -5,8 +5,9 @@ import { DISTRICTS, PREMISES } from '../data/districts';
 import { ADDONS } from '../data/addons';
 import { EQUIPMENT } from '../data/equipment';
 import { FURNITURE } from '../data/furniture';
+import { ROOM_TOUCHES } from '../data/roomTouches';
 import { HARMONY_CLASHES, HARMONY_MATCHES, INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
-import { isMain } from '../data/recipes';
+import { isBar, isMain } from '../data/recipes';
 import { SEGMENTS } from '../data/segments';
 import type { EquipmentItem, MainKind, SegmentId, Service, Tag } from '../data/types';
 import { T } from '../data/tunables';
@@ -179,7 +180,7 @@ export function dishStats(recipe: Recipe, K: number, E: number, frugal: boolean,
   const fairPrice =
     (main ? T.pricing.fairIntercept : T.pricing.sideFairIntercept) +
     (main ? T.pricing.fairQualitySlope : T.pricing.sideFairQualitySlope) * quality +
-    T.pricing.fairFoodCostMult * cost +
+    (isBar(recipe.kind) ? T.pricing.barCostMult : T.pricing.fairFoodCostMult) * cost +
     (main ? T.pricing.fairKindPremium[recipe.kind as MainKind] : 0);
   return { recipeId: recipe.id, foodCost: cost, ingredientQuality: iq, harmony, quality, fairPrice, wasteRate, tags, toppings, work: dishWork(recipe) };
 }
@@ -344,6 +345,13 @@ export function roomStats(state: GameState): RoomStats {
   let decorPoints = 0;
   let lighting = 0;
   let comfort = 0;
+  for (const id of state.roomTouches ?? []) {
+    const r = ROOM_TOUCHES[id];
+    if (!r) continue;
+    decorPoints += r.decorPoints;
+    lighting += r.lighting;
+    comfort += r.comfort;
+  }
   let crowded = 0;
   for (const f of state.furniture) {
     const item = FURNITURE[f.itemId];

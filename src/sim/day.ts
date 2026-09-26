@@ -2,7 +2,8 @@
 // Formulas: 01-product/prd.md 5.7, 5.10, 5.11 and balance.md 1.4, 1.8, 1.12.
 
 import { FIRE_SAFETY } from '../data/fireSafety';
-import { isMain } from '../data/recipes';
+import { ROOM_TOUCHES } from '../data/roomTouches';
+import { isMain, WINE_IDS } from '../data/recipes';
 import { SEGMENTS, SEGMENT_IDS } from '../data/segments';
 import type { DishKind, SegmentId, Service } from '../data/types';
 import { T } from '../data/tunables';
@@ -18,7 +19,10 @@ export interface DayOptions {
 }
 
 const SERVICES: Service[] = ['lunch', 'dinner'];
-const SIDE_KINDS: Exclude<DishKind, 'pizza' | 'primo' | 'secondo'>[] = ['drink', 'starter', 'dessert'];
+type SideKind = Exclude<DishKind, 'pizza' | 'primo' | 'secondo'>;
+const SIDE_KINDS: SideKind[] = ['drink', 'starter', 'dessert', 'aperitivo', 'digestivo'];
+/** Bar courses whose attach depends on the segment and on lunch or dinner (balance.md 4.7). */
+const BAR_COURSES = ['aperitivo', 'digestivo'] as const;
 
 interface Choice {
   probs: { recipe: Recipe; stats: DishStats; p: number }[];
@@ -38,7 +42,7 @@ export function valueScore(r: number, elasticity: number): number {
   return clamp(T.pricing.valueBase - T.pricing.valueSlope * (r - 1) * elasticity, 0, 1);
 }
 
-export function attachRate(kind: 'drink' | 'starter' | 'dessert', ambience: number): number {
+export function attachRate(kind: SideKind, ambience: number): number {
   const a = T.attach[kind];
   return a.base + a.bonus * clamp((ambience - a.pivot) / a.span, 0, 1);
 }
@@ -49,11 +53,11 @@ export function queueDelay(rho: number): number {
 }
 
 /** Logit dish choice for one segment among dishes of one kind (prd.md 5.7 "Dish choice"). */
-export function chooseDishes(recipes: Recipe[], a: Analysis, segment: SegmentId, wealth?: number): Choice | null {
+export function chooseDishes(recipes: Recipe[], a: Analysis, segment: SegmentId, wealth?: number, budgetShare = 1): Choice | null {
   if (!recipes.length) return null;
   const seg = SEGMENTS[segment];
   // With a district's wealth, guests steer away from dishes well beyond their budget (a student skips the ossobuco).
-  const budget = wealth === undefined ? Infinity : seg.budget * wealth;
+  const budget = wealth === undefined ? Infinity : seg.budget * wealth * budgetShare;
   const appeals = recipes.map((r) => {
     const st = a.dishes[r.id] as DishStats;
     const value = valueScore(r.price / st.fairPrice, seg.elasticity);
@@ -146,11 +150,10 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     Recipe[]
   >;
   const ambience = a.room.ambience;
-  const attach = {
-    drink: sidesByKind.drink.length ? attachRate('drink', ambience) : 0,
-    starter: sidesByKind.starter.length ? attachRate('starter', ambience) : 0,
-    dessert: sidesByKind.dessert.length ? attachRate('dessert', ambience) : 0,
-  };
+  const attach = Object.fromEntries(SIDE_KINDS.map((k) => [k, sidesByKind[k].length ? attachRate(k, ambience) : 0])) as Record<SideKind, number>;
+  // A wider wine list: more guests order a second glass (balance.md 4.7).
+  const wines = sidesByKind.drink.filter((r) => WINE_IDS.has(r.id)).length;
+  attach.drink *= 1 + Math.min(T.attach.wineListCap, T.attach.wineListPerWine * Math.max(0, wines - 1));
   const kitchenBy = { lunch: kitchenStats(state, 'lunch'), dinner: kitchenStats(state, 'dinner') };
   const sideLoad = T.kitchen.prepLoadFactor * (attach.starter + attach.dessert);
 
@@ -166,6 +169,10 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     id: SegmentId;
     choice: Choice;
     sides: Record<string, Choice | null>;
+    /** Side orders per guest by kind, for this segment. */
+    sideAttach: Record<SideKind, number>;
+    /** Extra minutes at the table from aperitivi and digestivi. */
+    extraMeal: Record<Service, number>;
     r: number;
     demand: Record<Service, number>;
     check: number;
@@ -199,20 +206,30 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
       district.footTraffic * district.visibility * district.shares[id] * T.demand.captureBase * repMult * weekdayMult *
       fit * priceMult * budgetMult * qualityMult * fameMult * followMult * (1 - T.demand.competitionFactor * cEff) * noise * economyOf(state).demand;
     const sides: Record<string, Choice | null> = {};
+    const demandBy = { lunch: base * district.lunchShare * speedMult, dinner: base * (1 - district.lunchShare) };
+    const dinnerFrac = demandBy.lunch + demandBy.dinner > 0 ? demandBy.dinner / (demandBy.lunch + demandBy.dinner) : 1;
+    const affinity = T.attach.barAffinity[id] ?? 1;
+    const sideAttach = { ...attach };
+    for (const k of BAR_COURSES) sideAttach[k] = attach[k] * affinity * (dinnerFrac + (1 - dinnerFrac) * T.attach.barLunch);
+    const barMinutes = (sv: Service): number => {
+      const f = affinity * (sv === 'lunch' ? T.attach.barLunch : 1);
+      return f * (attach.aperitivo * T.attach.aperitivoMinutes + attach.digestivo * T.attach.digestivoMinutes);
+    };
     let check = choice.avgPrice;
     let cost = choice.avgCost;
     let waste = choice.wasteCost;
     for (const k of SIDE_KINDS) {
-      const c = chooseDishes(sidesByKind[k], a, id);
+      const bar = k === 'drink' || k === 'aperitivo' || k === 'digestivo';
+      const c = chooseDishes(sidesByKind[k], a, id, bar ? district.wealth : undefined, T.attach.barBudgetShare);
       sides[k] = c;
       if (!c) continue;
-      check += attach[k] * c.avgPrice;
-      cost += attach[k] * c.avgCost;
-      waste += attach[k] * c.wasteCost;
+      check += sideAttach[k] * c.avgPrice;
+      cost += sideAttach[k] * c.avgCost;
+      waste += sideAttach[k] * c.wasteCost;
     }
     segs.push({
-      id, choice, sides, r,
-      demand: { lunch: base * district.lunchShare * speedMult, dinner: base * (1 - district.lunchShare) },
+      id, choice, sides, sideAttach, extraMeal: { lunch: barMinutes('lunch'), dinner: barMinutes('dinner') }, r,
+      demand: demandBy,
       check, costPerCover: cost, wastePerCover: waste,
     });
   }
@@ -228,7 +245,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   for (const sv of SERVICES) {
     const hours = sv === 'lunch' ? T.time.lunchHours : T.time.dinnerHours;
     const demand = segs.reduce((x, s) => x + s.demand[sv], 0);
-    const meal = demand > 0 ? segs.reduce((x, s) => x + s.demand[sv] * SEGMENTS[s.id].mealLength[sv], 0) / demand : 45;
+    const meal = demand > 0 ? segs.reduce((x, s) => x + s.demand[sv] * (SEGMENTS[s.id].mealLength[sv] + s.extraMeal[sv]), 0) / demand : 45;
     const cycle = a.service.serviceTime[sv] + meal;
     const seatPerHour = (a.room.seats * T.service.partySizeFit * 60) / cycle;
     const k = kitchenBy[sv];
@@ -325,7 +342,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     for (const k of SIDE_KINDS) {
       const c = s.sides[k];
       if (!c) continue;
-      for (const p of c.probs) dishSales[p.recipe.id] = (dishSales[p.recipe.id] ?? 0) + n * attach[k] * p.p;
+      for (const p of c.probs) dishSales[p.recipe.id] = (dishSales[p.recipe.id] ?? 0) + n * s.sideAttach[k] * p.p;
     }
   }
   const satisfaction = covers > 0 ? satWeighted / covers : 0;
@@ -404,7 +421,8 @@ function fixedCosts(state: GameState, a: Analysis, covers: number): PnL {
   const staff = a.weeklySalaries / 7;
   const rent = a.weeklyRent / 7;
   const utilities = T.finance.utilitiesBase + T.finance.utilitiesPerCover * covers;
-  const fireUpkeep = (state.fireSafety ?? []).reduce((x, id) => x + (FIRE_SAFETY[id]?.upkeep ?? 0), 0);
+  const fireUpkeep = (state.fireSafety ?? []).reduce((x, id) => x + (FIRE_SAFETY[id]?.upkeep ?? 0), 0) +
+    (state.roomTouches ?? []).reduce((x, id) => x + (ROOM_TOUCHES[id]?.upkeep ?? 0), 0);
   const upkeep = T.finance.upkeepBase + (a.kitchen.maintenancePerWeek + fireUpkeep) / 7;
   const interest = (state.loan.balance * state.loan.annualRate) / 52 / 7;
   const profit = -(staff + rent + utilities + upkeep + interest);

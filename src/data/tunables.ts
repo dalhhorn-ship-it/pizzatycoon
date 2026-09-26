@@ -42,6 +42,21 @@ export const T = {
     drink: { base: 0.8, bonus: 0.1, pivot: 60, span: 25 },
     starter: { base: 0.3, bonus: 0.2, pivot: 60, span: 25 },
     dessert: { base: 0.2, bonus: 0.25, pivot: 45, span: 40 },
+    // Bar (balance.md 4.7). Aperitivi and digestivi also depend on who the guest is and lunch or dinner.
+    aperitivo: { base: 0.12, bonus: 0.15, pivot: 55, span: 30 },
+    digestivo: { base: 0.15, bonus: 0.2, pivot: 55, span: 30 },
+    /** How much each segment likes an aperitivo or a digestivo. */
+    barAffinity: { students: 0.4, families: 0.4, professionals: 1.1, foodies: 1.4, seniors: 1.0, tourists: 1.3 } as Record<string, number>,
+    /** At lunch guests order this share of what they would at dinner. */
+    barLunch: 0.3,
+    /** Every wine on the menu beyond the first: this many more drinks per guest (a second glass), up to wineListCap. */
+    wineListPerWine: 0.05,
+    wineListCap: 0.25,
+    /** Drinks are chosen against this share of the segment's meal budget: students skip the Barolo. */
+    barBudgetShare: 0.4,
+    /** Extra minutes at the table per aperitivo and per digestivo ordered. */
+    aperitivoMinutes: 6,
+    digestivoMinutes: 8,
   },
   quality: {
     wIngredients: 0.5,
@@ -66,6 +81,8 @@ export const T = {
     fairIntercept: 4,
     fairQualitySlope: 0.08,
     fairFoodCostMult: 1.5,
+    /** Guests accept a bigger markup on wine and spirits than on food (balance.md 4.7). */
+    barCostMult: 2.5,
     /** Sides (drinks, starters, desserts) use a lower intercept and quality slope; not in the PRD, see solution-design.md 11. */
     sideFairIntercept: 1.5,
     sideFairQualitySlope: 0.04,
@@ -162,7 +179,7 @@ export const T = {
     /** Fire safety: seats at most 0.55 per dining tile (fresh-start.md 3). */
     maxSeatsPerDiningTile: 0.55,
     menuMinItems: 0,
-    menuMaxItems: 24,
+    menuMaxItems: 36,
   },
   /**
    * Menu complexity (balance.md 4.2): every dish and every ingredient the line has to keep ready slows the cooks down.
