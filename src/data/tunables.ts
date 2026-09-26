@@ -135,6 +135,12 @@ export const T = {
     charmerBonus: 0.05,
     reviewProbability: 0.2,
   },
+  /** kitchen-upgrades.md 7. */
+  addons: {
+    maxPerStation: 2,
+    qualityCap: 2,
+    coldReachTiles: 2,
+  },
   build: {
     /** Fire safety: seats at most 0.55 per dining tile (fresh-start.md 3). */
     maxSeatsPerDiningTile: 0.55,
@@ -209,6 +215,16 @@ export const T = {
     restructureDays: 7,
     restructureWeeks: 4,
     freshStartThreshold: -20000,
+  },
+  /** 01-product/city-map.md 4 and 6. */
+  city: {
+    sqmPerTile: 1.5,
+    movingFee: 1500,
+    repKeepSameDistrict: 0.9,
+    repKeepOtherDistrict: 0.6,
+    competitionMax: 0.9,
+    lunchShareMin: 0.15,
+    lunchShareMax: 0.8,
   },
   progression: {
     ownerServed: 1000,

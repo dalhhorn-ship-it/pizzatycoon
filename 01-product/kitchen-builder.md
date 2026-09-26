@@ -36,9 +36,12 @@ Today the Kitchen tab is a list. The Kitchen Builder turns it into a place: a to
 | Premises | Kitchen grid (w x h) | Tiles (matches `kitchenTiles`) | Pass tiles (row 0) |
 |---|---|---|---|
 | Hole in the wall (new, `fresh-start.md`) | 8 x 3 | 24 | columns 3 and 4 |
-| Cosy corner shop | 10 x 3 | 30 | columns 4 and 5 |
-| Neighbourhood trattoria | 12 x 3 | 36 | columns 5 and 6 |
-| Big hall | 15 x 4 | 60 | columns 6 and 7 |
+| Hole in the wall | 10 x 5 | 24 (rent) | columns 4 and 5 |
+| Cosy corner shop | 14 x 6 | 30 (rent) | columns 6 and 7 |
+| Neighbourhood trattoria | 16 x 6 | 36 (rent) | columns 7 and 8 |
+| Big hall | 20 x 8 | 60 (rent) | columns 9 and 10 |
+
+Founder change (M0.3): kitchens are deliberately roomier than the rented tile count so there is space to expand and to leave room between appliances. Rent and deposits still use the original tile counts; walking distances still apply, so a tight line stays the best layout.
 
 * Row 0 borders the dining room. The **pass** is a hatch in that wall; its two tiles sit in row 0 at columns `floor((W minus 2) / 2)` and the next one.
 * The **back door** is drawn on the back wall at the last column. It is decoration only in M0.2 (no reserved tile, no rule).

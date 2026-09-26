@@ -1,6 +1,7 @@
 // Kitchen floor plan view (01-product/kitchen-builder.md 7, 8). Canvas2D, renders on change.
 // Placement validity comes from the sim (layoutProblem); this view only draws and reports gestures.
 
+import { ADDONS } from '../data/addons';
 import { EQUIPMENT } from '../data/equipment';
 import type { EquipmentItem } from '../data/types';
 import { T } from '../data/tunables';
@@ -343,6 +344,31 @@ export class KitchenView {
       g.fillText(it.short, x + w / 2, labelY, w - 6);
     }
     this.drawBadges(it, r, uid, a);
+    this.drawAddonDots(r, uid);
+  }
+
+  /** One dot per installed add-on (kitchen-upgrades.md 6): gold quality, orange speed, blue cold and waste, teal wash and serve. */
+  private drawAddonDots(r: Rect, uid: number): void {
+    const e = this.state?.equipment.find((x) => x.uid === uid);
+    if (!e?.addons?.length) return;
+    const g = this.g;
+    const t = this.tile;
+    const size = Math.max(8, t * 0.18);
+    e.addons.forEach((inst, i) => {
+      const a = ADDONS[inst.id];
+      if (!a) return;
+      const color = a.qualityAdd ? '#e0b43a' : a.bakeMult || a.prepMult || a.slotsAdd ? '#e0782f' : a.wasteMult || a.coldReach ? '#4a86b5' : '#2f9a8f';
+      const cx = this.ox + r.x * t + size * (0.9 + i * 1.3);
+      const cy = this.oy + (r.y + r.h) * t - size * 0.9;
+      g.fillStyle = '#1d1512';
+      g.beginPath();
+      g.arc(cx, cy, size / 2 + 1.5, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = color;
+      g.beginPath();
+      g.arc(cx, cy, size / 2, 0, Math.PI * 2);
+      g.fill();
+    });
   }
 
   private drawBadges(it: EquipmentItem, r: Rect, uid: number, a: ReturnType<typeof analyse>): void {

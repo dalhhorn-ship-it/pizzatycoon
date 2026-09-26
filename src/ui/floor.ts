@@ -329,7 +329,7 @@ export class Floor {
 }
 
 function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  const rr = Math.min(r, w / 2, h / 2);
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
   g.beginPath();
   g.moveTo(x + rr, y);
   g.arcTo(x + w, y, x + w, y + h, rr);

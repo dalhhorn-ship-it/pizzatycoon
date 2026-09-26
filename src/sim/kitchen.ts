@@ -1,6 +1,7 @@
 // Kitchen floor plan: geometry, placement rules, flow and auto layout (01-product/kitchen-builder.md 3, 4, 9).
 
 import { PREMISES } from '../data/districts';
+import { ADDONS, type AddonItem } from '../data/addons';
 import { EQUIPMENT } from '../data/equipment';
 import type { EquipmentItem } from '../data/types';
 import { T } from '../data/tunables';
@@ -94,6 +95,25 @@ export interface StationFlow {
   reachMult: number;
   coldMult: number;
   sheeter: boolean;
+  /** The sheeter attached to this station, if any. */
+  sheeterUid: number | null;
+}
+
+// ---------- Add-ons (kitchen-upgrades.md 3) ----------
+
+export function addonsOf(e: Pick<OwnedEquipment, 'addons'>): AddonItem[] {
+  return (e.addons ?? []).map((a) => ADDONS[a.id]).filter((a): a is AddonItem => !!a);
+}
+
+type MultField = 'bakeMult' | 'prepMult' | 'washMult' | 'serveMult' | 'wasteMult';
+type AddField = 'slotsAdd' | 'qualityAdd';
+
+export function addonProduct(e: Pick<OwnedEquipment, 'addons'>, field: MultField): number {
+  return addonsOf(e).reduce((p, a) => p * (a[field] ?? 1), 1);
+}
+
+export function addonSum(e: Pick<OwnedEquipment, 'addons'>, field: AddField): number {
+  return addonsOf(e).reduce((p, a) => p + (a[field] ?? 0), 0);
 }
 
 export interface Flow {
@@ -120,11 +140,11 @@ export function kitchenFlow(state: GameState): Flow {
   const pass = passRect(d);
 
   const stations: Record<number, StationFlow> = {};
-  const taken = new Set<number>();
+  const taken = new Map<number, number>();
   const unattached: number[] = [];
   for (const s of sheeters) {
     const target = counters.find((c) => !taken.has(c.uid) && distance(rectOf(s), rectOf(c)) === 1);
-    if (target) taken.add(target.uid);
+    if (target) taken.set(target.uid, s.uid);
     else unattached.push(s.uid);
   }
   for (const c of counters) {
@@ -132,8 +152,10 @@ export function kitchenFlow(state: GameState): Flow {
     const dOven = ovens.length ? Math.min(...ovens.map((o) => distance(r, rectOf(o)))) : 99;
     const reachMult = 1 - Math.min(f.prepPenaltyCap, f.prepPenaltyPerTile * Math.max(0, dOven - f.prepFreeTiles));
     const selfCold = !!itemOf(c)?.cold;
-    const coldMult = !selfCold && colds.some((k) => k.uid !== c.uid && distance(r, rectOf(k)) === 1) ? 1 + f.coldAtHandBonus : 1;
-    stations[c.uid] = { uid: c.uid, dOven, reachMult, coldMult, sheeter: taken.has(c.uid) };
+    // A Drawer Unit add-on lets a cold store reach benches 2 tiles away (kitchen-upgrades.md 3).
+    const reach = (k: OwnedEquipment): number => (addonsOf(k).some((a) => a.coldReach) ? T.addons.coldReachTiles : 1);
+    const coldMult = !selfCold && colds.some((k) => k.uid !== c.uid && distance(r, rectOf(k)) <= reach(k)) ? 1 + f.coldAtHandBonus : 1;
+    stations[c.uid] = { uid: c.uid, dOven, reachMult, coldMult, sheeter: taken.has(c.uid), sheeterUid: taken.get(c.uid) ?? null };
   }
   const ovenDPass: Record<number, number> = {};
   for (const o of ovens) ovenDPass[o.uid] = distance(rectOf(o), pass);

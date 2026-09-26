@@ -37,3 +37,7 @@
 .sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 18px; }
 .slider { display: grid; gap: 4px; font-size: 14px; }
 .slider input[type='range'] { width: 100%; min-height: 32px; accent-color: var(--accent); }
+
+/* Upgrades */
+.fit.upgrade { border-color: var(--gold); }
+.fit.installed { background: var(--panel-2); }
