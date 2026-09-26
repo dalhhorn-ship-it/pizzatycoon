@@ -5,7 +5,7 @@ import { SEGMENT_IDS } from '../src/data/segments';
 import { T } from '../src/data/tunables';
 import { VENUES } from '../src/data/venues';
 import { deserialise, serialise } from '../src/save/saveFile';
-import { apply, moveQuote, newGame, newGameAt } from '../src/sim/game';
+import { apply, moveQuote, newGame, newGameAt, seatLimit, venueDeposit, withStarterKit } from '../src/sim/game';
 import { layoutProblem, kitchenDims } from '../src/sim/kitchen';
 import { locationFacts } from '../src/sim/location';
 import type { GameState } from '../src/sim/state';
@@ -30,9 +30,15 @@ describe('city map venues (city-map.md)', () => {
     }
   });
 
-  test('AC-176: every venue fits the starter dining room and kitchen', () => {
-    for (const v of venues) {
-      const s = newGameAt(1, v.id);
+  test('AC-176: new players can afford several venues with money left to fit out', () => {
+    const affordable = venues.filter((v) => T.finance.startingCash - venueDeposit(v.id) >= 2920);
+    expect(affordable.length).toBeGreaterThanOrEqual(5);
+    expect(new Set(affordable.map((v) => v.districtId)).size).toBeGreaterThanOrEqual(5);
+  });
+
+  test('AC-176: the reference starter kit fits every venue big enough for it', () => {
+    for (const v of venues.filter((x) => x.premisesId !== 'hole')) {
+      const s = withStarterKit(newGameAt(1, v.id));
       const p = PREMISES[v.premisesId]!;
       for (const f of s.furniture) {
         const it = FURNITURE[f.itemId]!;
@@ -59,11 +65,13 @@ describe('city map venues (city-map.md)', () => {
     expect(f.weeklyRent).toBe((12 * 8 + 30) * 19);
     expect(f.footTraffic).toBeCloseTo(4200 * 1.15);
     expect(f.sqm).toBe((12 * 8 + 30) * T.city.sqmPerTile);
+    expect(s.deposit).toBe(f.weeklyRent * T.finance.leaseDepositWeeks);
+    expect(s.cash).toBe(T.finance.startingCash - s.deposit);
   });
 
   test('every venue can run a day and makes sales', () => {
-    for (const v of venues) {
-      const s = run(newGameAt(5, v.id), 7);
+    for (const v of venues.filter((x) => x.premisesId !== 'hole')) {
+      const s = run(withStarterKit(newGameAt(5, v.id)), 7);
       const sales = s.history.reduce((a, d) => a + d.pnl.sales, 0);
       expect(sales, v.id).toBeGreaterThan(0);
     }
@@ -72,14 +80,16 @@ describe('city map venues (city-map.md)', () => {
 
 describe('rentVenue (city-map.md 6)', () => {
   test('AC-179, AC-183: charges the quote and keeps team, menu and loan', () => {
-    let s = newGameAt(9, 'lockKeeper');
+    let s = withStarterKit(newGameAt(9, 'lockKeeper'));
     s = apply(s, { type: 'takeLoan', amount: 5000 }).state;
+    s = { ...s, cash: s.cash + 5000 };
     const q = moveQuote(s, 'bridgeStreet')!;
     expect(q.total).toBeCloseTo(q.newDeposit - q.refund + T.city.movingFee - q.resale);
     const r = apply(s, { type: 'rentVenue', venueId: 'bridgeStreet' });
     expect(r.error).toBeUndefined();
     expect(r.state.cash).toBeCloseTo(s.cash - q.total);
     expect(r.state.venueId).toBe('bridgeStreet');
+    expect(r.state.deposit).toBe(venueDeposit('bridgeStreet'));
     expect(r.state.premisesId).toBe('medium');
     expect(r.state.staff).toEqual(s.staff);
     expect(r.state.recipes).toEqual(s.recipes);
@@ -99,16 +109,32 @@ describe('rentVenue (city-map.md 6)', () => {
     expect(apply(s, { type: 'rentVenue', venueId: 'lockKeeper' }).error).toMatch(/already/);
   });
 
-  test('AC-181: furniture outside a smaller room and extra equipment are sold', () => {
-    let s = newGameAt(9, 'parkside');
-    s = { ...s, cash: 100000 };
-    s = apply(s, { type: 'placeFurniture', itemId: 'table4', x: 16, y: 8 }).state;
-    const q = moveQuote(s, 'villageHigh')!;
+  test('AC-181: what does not fit a smaller venue is sold, the rest is laid out again', () => {
+    const s = { ...withStarterKit(newGameAt(9, 'parkside')), cash: 100000 };
+    const q = moveQuote(s, 'towpathKiosk')!;
     expect(q.soldFurniture.length).toBeGreaterThan(0);
-    const r = apply(s, { type: 'rentVenue', venueId: 'villageHigh' });
+    const r = apply(s, { type: 'rentVenue', venueId: 'towpathKiosk' });
     expect(r.error).toBeUndefined();
     expect(r.state.furniture.length).toBe(s.furniture.length - q.soldFurniture.length);
-    expect(layoutProblem(r.state.equipment, kitchenDims('cosy'))).toBeNull();
+    expect(r.state.equipment.length).toBe(s.equipment.length - q.soldEquipment.length);
+    expect(r.state.cash).toBeCloseTo(s.cash - q.total);
+    const seats = r.state.furniture.reduce((a, f) => a + (FURNITURE[f.itemId]?.seats ?? 0), 0);
+    expect(seats).toBeLessThanOrEqual(seatLimit('hole'));
+    expect(layoutProblem(r.state.equipment, kitchenDims('hole'))).toBeNull();
+  });
+
+  test('moving between same size venues keeps the player layout', () => {
+    const s = { ...withStarterKit(newGameAt(9, 'lockKeeper')), cash: 100000 };
+    const r = apply(s, { type: 'rentVenue', venueId: 'villageHigh' });
+    expect(r.state.furniture).toEqual(s.furniture);
+    expect(r.state.equipment).toEqual(s.equipment);
+  });
+
+  test('movePremises from the market lands on the matching venue', () => {
+    const s = { ...newGameAt(9, 'towpathKiosk'), cash: 100000 };
+    const r = apply(s, { type: 'movePremises', districtId: 'harbour', premisesId: 'medium' });
+    expect(r.state.venueId).toBe('lighthouseView');
+    expect(r.state.deposit).toBe(venueDeposit('lighthouseView'));
   });
 
   test('AC-182: reputation carry depends on the neighbourhood', () => {
@@ -127,14 +153,16 @@ describe('rentVenue (city-map.md 6)', () => {
   });
 });
 
-describe('save migration v2 to v3', () => {
-  test('AC-185: old saves get the matching venue and keep playing', () => {
+describe('save migration v2 to v4', () => {
+  test('AC-185: old saves get a deposit and the matching venue and keep playing', () => {
     const s = newGame(4, 'harbour', 'cosy') as Partial<GameState>;
     delete s.venueId;
+    delete (s as { deposit?: number }).deposit;
     const raw = JSON.parse(serialise(s as GameState, 1));
     raw.schemaVersion = 2;
     const loaded = deserialise(JSON.stringify(raw));
     expect(loaded.state.venueId).toBe('quaysideNook');
+    expect(loaded.state.deposit).toBeGreaterThan(0);
     expect(run(loaded.state, 2).day).toBe(3);
   });
 });

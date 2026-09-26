@@ -8,17 +8,31 @@ import type { Controller } from '../game/controller';
 import { fromSaveCode, toSaveCode } from '../save/saveFile';
 import { analyse } from '../sim/analysis';
 import { type GameEvent, moveQuote, RANK_NAMES } from '../sim/game';
+import { ECONOMY_LABELS, ECONOMY_RANGE, type Economy, type EconomyKey, economyOf, PRESETS, presetName } from '../sim/economy';
+import { outlook } from './impact';
 import type { DayReport, GameState } from '../sim/state';
 import { h, modal, money, signed, stars, toast } from './dom';
 import { CityView } from './city';
 import { Floor } from './floor';
 import { KitchenView } from './kitchenView';
 import { pipelineStrip } from './pipeline';
+import { checklistCard } from './checklist';
 import { kitchenPanel, menuPanel, moneyPanel, type PanelCtx, roomPanel, staffPanel } from './panels';
 
 type Tab = 'menu' | 'kitchen' | 'room' | 'staff' | 'money';
 const TABS: [Tab, string][] = [['menu', 'Menu'], ['kitchen', 'Kitchen'], ['room', 'Room'], ['staff', 'Staff'], ['money', 'Money']];
 const TAB_KEY = 'pizzad:ui:tab';
+const ECONOMY_KEY = 'pizzad:economy';
+
+/** Difficulty last chosen on this device; used for new games. */
+function savedEconomy(): Economy | undefined {
+  try {
+    const raw = localStorage.getItem(ECONOMY_KEY);
+    return raw ? (JSON.parse(raw) as Economy) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 const clockText = (m: number): string => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
 
@@ -26,6 +40,7 @@ export class App {
   private floor = new Floor();
   private kitchen = new KitchenView();
   private pipelineHost = h('div', { class: 'pipeline-host' });
+  private checklistHost = h('div');
   private hud = h('header', { class: 'hud' });
   private panel = h('div', { class: 'panel' });
   private tabs = h('nav', { class: 'tabs', role: 'tablist' });
@@ -56,7 +71,7 @@ export class App {
         this.kitchen.invalidate();
       }
     };
-    const side = h('aside', { class: 'side' }, this.tabs, this.panel);
+    const side = h('aside', { class: 'side', style: 'grid-template-rows: auto auto minmax(0, 1fr)' }, this.tabs, this.checklistHost, this.panel);
     this.main = h('main', { class: 'main' }, stage, side);
     this.city.el.hidden = true;
     root.append(this.hud, this.main, this.city.el);
@@ -198,7 +213,31 @@ export class App {
     }
   }
 
+  private renderChecklist(): void {
+    const s = this.game.state;
+    const card = s && !this.floor.playing ? checklistCard(s, (tab) => this.switchTab(tab)) : null;
+    this.checklistHost.replaceChildren(...(card ? [card] : []));
+  }
+
+  private switchTab(id: Tab): void {
+    this.tab = id;
+    try {
+      localStorage.setItem(TAB_KEY, id);
+    } catch {
+      // ignore
+    }
+    if (id !== 'room') {
+      this.floor.tool = { kind: 'none' };
+      this.floor.selected = null;
+      this.floor.invalidate();
+    }
+    this.renderTabs();
+    this.applyStageMode();
+    this.renderPanel();
+  }
+
   private renderAll(): void {
+    this.renderChecklist();
     this.applyStageMode();
     this.renderHud();
     this.renderTabs();
@@ -221,6 +260,8 @@ export class App {
       h('div', { class: 'stat' }, h('span', null, `Reputation ${s.rep.toFixed(0)}`), h('b', { class: 'stars' }, stars(s.rep))),
       h('div', { class: 'stat' }, h('span', null, 'Rank'), h('b', null, RANK_NAMES[s.rank])),
       h('div', { class: 'grow' }),
+      h('button', { class: 'small', onclick: () => this.showCity() }, '🏠 Buy another restaurant'),
+      h('button', { class: 'small', onclick: () => this.showSettings() }, '⚙ Settings'),
       h('span', { class: `cloud ${status}` }, cloudText[status]),
     );
   }
@@ -241,22 +282,7 @@ export class App {
   private renderTabs(): void {
     this.tabs.replaceChildren(...TABS.map(([id, label]) => h('button', {
       class: this.tab === id ? 'active' : '', role: 'tab', 'aria-selected': this.tab === id ? 'true' : 'false',
-      onclick: () => {
-        this.tab = id;
-        try {
-          localStorage.setItem(TAB_KEY, id);
-        } catch {
-          // ignore
-        }
-        if (id !== 'room') {
-          this.floor.tool = { kind: 'none' };
-          this.floor.selected = null;
-          this.floor.invalidate();
-        }
-        this.renderTabs();
-        this.applyStageMode();
-        this.renderPanel();
-      },
+      onclick: () => this.switchTab(id),
     }, label)));
   }
 
@@ -294,7 +320,7 @@ export class App {
       case 'kitchen': content = kitchenPanel(ctx, this.kitchen); break;
       case 'room': content = roomPanel(ctx); break;
       case 'staff': content = staffPanel(ctx); break;
-      case 'money': content = moneyPanel(ctx, this.settingsCard()); break;
+      case 'money': content = moneyPanel(ctx, h('button', { class: 'small', onclick: () => this.showSettings() }, '⚙ Settings, saves and difficulty')); break;
     }
     this.panel.replaceChildren(content);
     this.panel.scrollTop = scroll;
@@ -365,22 +391,35 @@ export class App {
   /** A new game starts on the city map (city-map.md 2). */
   showNewGame(): void {
     const hadGame = !!this.game.state;
+    const economy = savedEconomy();
     this.setView('city');
     this.city.open({
       mode: 'new',
       state: null,
+      startCash: Math.round(T.finance.startingCash * (economy?.startingCash ?? 1)),
+      difficulty: presetName(economyOf({ economy })),
       onBack: hadGame ? () => this.showShop() : null,
       onRent: (venueId) => {
-        if (hadGame && !confirm('Start a new pizzeria here? This replaces your current game everywhere it is synced.')) return;
-        this.game.start(Math.floor(Math.random() * 2 ** 31), venueId);
+        this.game.start(Math.floor(Math.random() * 2 ** 31), venueId, economy);
         this.shown = this.game.state;
         this.setViews(this.game.state as GameState);
         this.setView('shop');
         this.renderAll();
       },
-      onLinkDevice: () => this.showLinkDevice(true),
+      onLinkDevice: hadGame ? undefined : () => this.showLinkDevice(true),
     });
     this.hud.replaceChildren(h('div', { class: 'logo' }, 'Pizza D'), h('div', { class: 'grow' }));
+  }
+
+  /** Property market: move to another restaurant (fresh-start.md 3). */
+  private confirmRestart(): void {
+    let close = (): void => {};
+    close = modal(h('div', { class: 'stack' },
+      h('h2', null, 'Restart the game?'),
+      h('div', { class: 'muted' }, 'This starts a brand new pizzeria from scratch with $7,000. Your current game is replaced on this device and in the cloud.'),
+      h('div', { class: 'row', style: 'justify-content:flex-end' },
+        h('button', { class: 'ghost', onclick: () => close() }, 'Keep playing'),
+        h('button', { class: 'primary', onclick: () => { close(); this.showNewGame(); } }, 'Restart'))));
   }
 
   private showConflict(): void {
@@ -432,65 +471,126 @@ export class App {
     close = modal(content);
   }
 
-  private settingsCard(): HTMLElement {
-    const status = this.game.saves.status;
-    const codeBox = h('div', { class: 'small' });
-    return h('div', { class: 'card' },
-      h('h3', null, 'Saves and settings'),
-      h('div', { class: 'small muted' }, status === 'offline'
-        ? 'Your game is saved on this device. Cloud saves start when the game is online.'
-        : 'Your game is saved on this device and in the cloud. Link another device (iPad, laptop) to continue there.'),
-      h('div', { class: 'row' },
-        h('button', { class: 'small', disabled: status === 'offline', onclick: async () => {
-          try {
-            this.game.saveNow(true);
-            const { code, expiresAt } = await this.game.saves.linkCode();
-            codeBox.replaceChildren(h('div', { class: 'big', style: 'letter-spacing:4px' }, code), `Enter this on your other device within ${Math.round((expiresAt - Date.now()) / 60000)} minutes.`);
-          } catch (err) {
-            toast((err as Error).message, 'warn');
-          }
-        } }, 'Link a device'),
-        h('button', { class: 'small', onclick: () => this.showLinkDevice() }, 'I have a code'),
-        h('button', { class: 'small', onclick: async () => {
-          const code = toSaveCode(this.game.state as GameState, Date.now());
-          try {
-            await navigator.clipboard.writeText(code);
-            toast('Save code copied. Paste it anywhere safe.', 'good');
-          } catch {
-            prompt('Copy your save code:', code);
-          }
-        } }, 'Copy save code'),
-        h('button', { class: 'small', onclick: () => {
-          const code = prompt('Paste a save code:');
-          if (!code) return;
-          try {
-            this.game.load(fromSaveCode(code).state);
-            this.start();
-            toast('Save loaded.', 'good');
-          } catch (err) {
-            toast((err as Error).message, 'warn');
-          }
-        } }, 'Load save code')),
-      codeBox,
-      h('label', { class: 'row small' },
-        h('input', { type: 'checkbox', checked: this.game.state?.unlockAll, onchange: (e: Event) => this.game.dispatch({ type: 'setUnlockAll', on: (e.target as HTMLInputElement).checked }) }),
-        'Sandbox: unlock all equipment (for playtesting)'),
-      h('div', { class: 'row' },
-        h('button', { class: 'small', onclick: () => {
-          const root = document.documentElement;
-          const next = root.dataset.theme === 'dark' ? 'light' : root.dataset.theme === 'light' ? '' : 'dark';
-          if (next) root.dataset.theme = next;
-          else delete root.dataset.theme;
-          try {
-            localStorage.setItem('pizzad:ui:theme', next);
-          } catch {
-            // ignore
-          }
-          this.floor.invalidate();
-        } }, 'Theme: light / dark / auto'),
-        (this.game.state?.cash ?? 0) <= T.finance.freshStartThreshold
-          ? h('button', { class: 'small', onclick: () => this.game.dispatch({ type: 'freshStart' }) }, 'Fresh start (keep recipes and unlocks)')
-          : null,
-        h('button', { class: 'small ghost', onclick: () => this.showNewGame() }, 'New game')));
+  /** One place for game, difficulty, saves and display settings. */
+  private showSettings(): void {
+    let close = (): void => {};
+    const body = h('div', { class: 'stack' });
+    const render = (): void => {
+      const st = this.game.state;
+      if (!st) return;
+      const eco = economyOf(st);
+      const preset = presetName(eco);
+      const o = outlook(st);
+      const status = this.game.saves.status;
+      const codeBox = h('div', { class: 'small' });
+      const setEco = (e: Partial<Economy>): void => {
+        const err = this.game.dispatch({ type: 'setEconomy', economy: e });
+        if (err) toast(err, 'warn');
+        try {
+          localStorage.setItem(ECONOMY_KEY, JSON.stringify(economyOf(this.game.state as GameState)));
+        } catch {
+          // ignore
+        }
+        render();
+      };
+      const slider = (k: EconomyKey): HTMLElement => {
+        const label = ECONOMY_LABELS[k];
+        const v = eco[k];
+        const pct = Math.round(v * 100);
+        const easier = label.easier === 'up' ? v > 1 : v < 1;
+        return h('label', { class: 'slider' },
+          h('span', { class: 'spread' }, h('span', null, label.name), h('b', { class: v === 1 ? '' : easier ? 'good' : 'warn' }, `${pct}%`)),
+          h('input', {
+            type: 'range', min: ECONOMY_RANGE.min, max: ECONOMY_RANGE.max, step: ECONOMY_RANGE.step, value: v,
+            'aria-label': label.name,
+            onchange: (e: Event) => setEco({ [k]: Number((e.target as HTMLInputElement).value) }),
+          }));
+      };
+      body.replaceChildren(
+        h('div', { class: 'spread' }, h('h2', null, 'Settings'), h('button', { class: 'small', onclick: () => close() }, 'Close')),
+
+        h('div', { class: 'card' },
+          h('h3', null, 'Game'),
+          h('div', { class: 'row' },
+            h('button', { onclick: () => { close(); this.showCity(); } }, '🏠 Buy another restaurant'),
+            h('button', { onclick: () => { close(); this.confirmRestart(); } }, '↺ Restart game'),
+            st.cash <= T.finance.freshStartThreshold
+              ? h('button', { onclick: () => { close(); this.game.dispatch({ type: 'freshStart' }); } }, 'Fresh start (keep recipes and unlocks)')
+              : null)),
+
+        h('div', { class: 'card' },
+          h('h3', null, 'Economy and difficulty'),
+          h('div', { class: 'small muted' }, 'Make the game easier or harder at any time. Changes apply from the next service. Selling equipment never pays more than the normal 80%, whatever the price slider says.'),
+          h('div', { class: 'seg' }, ...(['easy', 'normal', 'hard'] as const).map((p) =>
+            h('button', { class: preset === p ? 'on' : '', onclick: () => setEco(PRESETS[p]) }, p[0]?.toUpperCase() + p.slice(1))),
+            h('button', { class: preset === 'custom' ? 'on' : '', disabled: true }, 'Custom')),
+          h('div', { class: 'sliders' }, ...(Object.keys(ECONOMY_LABELS) as EconomyKey[]).map(slider)),
+          o.covers > 0
+            ? h('div', { class: 'impact' }, 'With these settings an average day earns about ', h('b', { class: o.profit >= 0 ? 'good' : 'bad' }, money(o.profit)), ` from ${o.covers.toFixed(0)} guests (at your current reputation).`)
+            : h('div', { class: 'impact' }, 'Set up and open your pizzeria to see what these settings do to a day\'s profit.')),
+
+        h('div', { class: 'card' },
+          h('h3', null, 'Saves and devices'),
+          h('div', { class: 'small muted' }, status === 'offline'
+            ? 'Your game is saved on this device. Cloud saves start when the game is online.'
+            : 'Your game is saved on this device and in the cloud. Link another device (iPad, laptop) to continue there.'),
+          h('div', { class: 'row' },
+            h('button', { class: 'small', disabled: status === 'offline', onclick: async () => {
+              try {
+                this.game.saveNow(true);
+                const { code, expiresAt } = await this.game.saves.linkCode();
+                codeBox.replaceChildren(h('div', { class: 'big', style: 'letter-spacing:4px' }, code), `Enter this on your other device within ${Math.round((expiresAt - Date.now()) / 60000)} minutes.`);
+              } catch (err) {
+                toast((err as Error).message, 'warn');
+              }
+            } }, 'Link a device'),
+            h('button', { class: 'small', onclick: () => { close(); this.showLinkDevice(); } }, 'I have a code'),
+            h('button', { class: 'small', onclick: async () => {
+              const code = toSaveCode(this.game.state as GameState, Date.now());
+              try {
+                await navigator.clipboard.writeText(code);
+                toast('Save code copied. Paste it anywhere safe.', 'good');
+              } catch {
+                prompt('Copy your save code:', code);
+              }
+            } }, 'Copy save code'),
+            h('button', { class: 'small', onclick: () => {
+              const code = prompt('Paste a save code:');
+              if (!code) return;
+              try {
+                this.game.load(fromSaveCode(code).state);
+                close();
+                this.start();
+                toast('Save loaded.', 'good');
+              } catch (err) {
+                toast((err as Error).message, 'warn');
+              }
+            } }, 'Load save code')),
+          codeBox),
+
+        h('div', { class: 'card' },
+          h('h3', null, 'Display and playtesting'),
+          h('div', { class: 'row' },
+            h('button', { class: 'small', onclick: () => {
+              const root = document.documentElement;
+              const next = root.dataset.theme === 'dark' ? 'light' : root.dataset.theme === 'light' ? '' : 'dark';
+              if (next) root.dataset.theme = next;
+              else delete root.dataset.theme;
+              try {
+                localStorage.setItem('pizzad:ui:theme', next);
+              } catch {
+                // ignore
+              }
+              this.floor.invalidate();
+              this.kitchen.invalidate();
+            } }, 'Theme: light / dark / auto')),
+          h('label', { class: 'row small' },
+            h('input', { type: 'checkbox', checked: st.unlockAll, onchange: (e: Event) => { this.game.dispatch({ type: 'setUnlockAll', on: (e.target as HTMLInputElement).checked }); render(); } }),
+            'Sandbox: unlock all equipment')),
+      );
+    };
+    render();
+    close = modal(body, { wide: true });
   }
+
 }

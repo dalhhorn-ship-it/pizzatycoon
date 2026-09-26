@@ -12,7 +12,7 @@ Playable greybox with the full economy of `01-product/balance.md`:
 * Staff with skill, potential, traits, morale and salary; hiring board with a measurable impact preview
 * Day simulation for lunch and dinner: demand by customer segment, dish choice, kitchen and seat capacity, turnover, satisfaction, reviews, reputation
 * Daily and weekly finance, starter loan, safety net (no game over)
-* City map of Porto Verde: 7 neighbourhoods and 19 rentable venues with demographic cards, foot traffic, rent and floor area in m², plus moving between venues (`01-product/city-map.md`)
+* City map of Porto Verde: 7 neighbourhoods and 24 rentable venues with demographic cards, foot traffic, rent and floor area in m², plus moving between venues (`01-product/city-map.md`)
 * Local first saves, cloud sync on Cloudflare D1, device linking with a 6 character code, conflict chooser
 
 ## Project layout

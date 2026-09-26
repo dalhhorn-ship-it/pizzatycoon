@@ -8,6 +8,7 @@ import { SEGMENTS } from '../data/segments';
 import type { SegmentId } from '../data/types';
 import { occupiedTiles } from '../sim/analysis';
 import { Rng } from '../sim/rng';
+import { drawDoormat, drawFloorTile, drawFurniture, drawGuest, drawPizza, drawWall, seatSpots } from './sprites';
 import type { DayReport, GameState } from '../sim/state';
 
 export type Tool = { kind: 'none' } | { kind: 'place'; itemId: string } | { kind: 'move'; uid: number };
@@ -206,51 +207,33 @@ export class Floor {
     g.clearRect(0, 0, cw, ch);
     if (!s) return;
     const { W, H } = this.dims();
-    const kitchenRows = 2.4;
+    const wallRows = 1.2;
     const pad = 16;
-    this.tile = Math.floor(Math.min((cw - pad * 2) / W, (ch - pad * 2) / (H + kitchenRows + 1)));
+    this.tile = Math.floor(Math.min((cw - pad * 2) / W, (ch - pad * 2) / (H + wallRows + 1)));
     const t = this.tile;
     this.ox = Math.round((cw - W * t) / 2);
-    this.oy = Math.round(pad + kitchenRows * t + (ch - pad * 2 - (H + kitchenRows + 1) * t) / 2);
+    this.oy = Math.round(pad + wallRows * t + (ch - pad * 2 - (H + wallRows + 1) * t) / 2);
+    const secs = performance.now() / 1000;
 
-    // Kitchen strip.
-    const ky = this.oy - kitchenRows * t;
-    g.fillStyle = css('--kitchen');
-    roundRect(g, this.ox, ky, W * t, kitchenRows * t - 6, 10);
-    g.fill();
-    const items = s.equipment.map((e) => EQUIPMENT[e.itemId]).filter((e) => !!e);
-    const totalFoot = items.reduce((a, i) => a + i.footprint, 0) || 1;
-    let kx = this.ox + 8;
-    const kw = W * t - 16;
-    g.font = `600 ${Math.max(9, Math.min(12, t * 0.34))}px ${css('--sans') || 'system-ui'}`;
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    for (const it of items) {
-      const w = (it.footprint / totalFoot) * kw - 4;
-      const color = it.role === 'oven' ? (it.family === 'artisan' ? '#9c4a2a' : it.family === 'quality' ? '#7a5a44' : it.family === 'volume' ? '#5f6f86' : '#6f6a64') : '#a39d95';
-      g.fillStyle = color;
-      roundRect(g, kx, ky + 8, Math.max(8, w), kitchenRows * t - 22, 6);
-      g.fill();
-      if (it.role === 'oven' && this.playing && this.inService()) {
-        g.fillStyle = 'rgba(255,170,60,0.55)';
-        roundRect(g, kx + 4, ky + kitchenRows * t - 26, Math.max(4, w - 8), 6, 3);
-        g.fill();
-      }
-      if (w > 28) {
-        g.fillStyle = '#fff';
-        g.fillText(shortName(it.name), kx + w / 2, ky + (kitchenRows * t - 14) / 2 + 4, w - 4);
-      }
-      kx += w + 4;
+    // Back wall with the kitchen hatch.
+    drawWall(g, this.ox, this.oy - wallRows * t, W * t, wallRows * t, 'brick');
+    const hatchW = Math.min(2, W) * t;
+    const hx = this.ox + Math.round((W * t - hatchW) / 2);
+    g.fillStyle = '#3b2a20';
+    g.fillRect(hx, this.oy - wallRows * t * 0.75, hatchW, wallRows * t * 0.55);
+    const ovens = s.equipment.filter((e) => EQUIPMENT[e.itemId]?.role === 'oven');
+    if (ovens.length) {
+      g.fillStyle = this.playing && this.inService() ? `rgba(255,150,50,${0.55 + 0.25 * Math.sin(secs * 6)})` : 'rgba(255,150,50,0.18)';
+      g.fillRect(hx + 3, this.oy - wallRows * t * 0.72, hatchW - 6, wallRows * t * 0.49);
+    }
+    if (this.playing && this.inService()) {
+      for (let i = 0; i < 2; i++) drawPizza(g, hx + hatchW * (0.3 + 0.4 * i), this.oy - wallRows * t * 0.2, t * 0.45);
     }
 
-    // Dining floor with a soft checker.
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      g.fillStyle = (x + y) % 2 ? css('--floor') : css('--floor-2');
-      g.fillRect(this.ox + x * t, this.oy + y * t, t, t);
-    }
+    // Dining floor.
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) drawFloorTile(g, this.ox + x * t, this.oy + y * t, t, 'dining', x, y);
     // Entrance.
-    g.fillStyle = css('--accent');
-    g.fillRect(this.ox + (W / 2 - 1) * t, this.oy + H * t, 2 * t, 5);
+    drawDoormat(g, this.ox + (W / 2 - 1) * t, this.oy + H * t - t * 0.15, 2 * t, t * 0.35, t);
 
     // Furniture.
     for (const f of s.furniture) {
@@ -258,8 +241,7 @@ export class Floor {
       if (!item) continue;
       const moving = this.tool.kind === 'move' && this.tool.uid === f.uid;
       g.globalAlpha = moving ? 0.35 : 1;
-      drawItem(g, item.id, item.color, item.kind, this.ox + f.x * t, this.oy + f.y * t, item.w * t, item.h * t, t);
-      if (item.kind === 'table') drawChairs(g, this.ox + f.x * t, this.oy + f.y * t, item.w * t, item.h * t, item.seats, t);
+      drawFurniture(g, item.id, this.ox + f.x * t, this.oy + f.y * t, item.w * t, item.h * t, t, secs);
       g.globalAlpha = 1;
       if (this.selected === f.uid) {
         g.strokeStyle = css('--accent');
@@ -280,8 +262,8 @@ export class Floor {
         const occ = occupiedTiles(s.furniture, this.tool.kind === 'move' ? this.tool.uid : undefined);
         let ok = this.hover.x + item.w <= W && this.hover.y + item.h <= H;
         for (let dx = 0; dx < item.w && ok; dx++) for (let dy = 0; dy < item.h && ok; dy++) if (occ.has(`${this.hover.x + dx},${this.hover.y + dy}`)) ok = false;
-        g.globalAlpha = 0.55;
-        drawItem(g, item.id, item.color, item.kind, this.ox + this.hover.x * t, this.oy + this.hover.y * t, item.w * t, item.h * t, t);
+        g.globalAlpha = 0.6;
+        drawFurniture(g, item.id, this.ox + this.hover.x * t, this.oy + this.hover.y * t, item.w * t, item.h * t, t);
         g.globalAlpha = 1;
         g.strokeStyle = ok ? css('--good') : css('--bad');
         g.lineWidth = 3;
@@ -299,60 +281,51 @@ export class Floor {
     const t = this.tile;
     const { W, H } = this.dims();
     const doorX = this.ox + (W / 2) * t;
-    const doorY = this.oy + H * t - t * 0.4;
+    const doorY = this.oy + H * t - t * 0.45;
+    const size = Math.max(14, t * 0.62);
+    const secs = performance.now() / 1000;
     let queue = 0;
-    const r = Math.max(3, t * 0.16);
-    for (const p of this.parties) {
+    this.parties.forEach((p, idx) => {
       const c = this.clock;
-      if (c < p.arrive || c > p.leave + 4) continue;
-      g.fillStyle = SEG_COLORS[p.segment];
+      if (c < p.arrive || c > p.leave + 4) return;
+      const color = SEG_COLORS[p.segment];
       if (p.tableUid === null) {
         // Walked away: fade out at the door.
-        if (c > p.arrive + 6) continue;
+        if (c > p.arrive + 6) return;
         g.globalAlpha = 1 - (c - p.arrive) / 6;
-        for (let i = 0; i < p.size; i++) dot(g, doorX + (i - p.size / 2) * r * 2.2, doorY + t * 0.6, r);
+        for (let i = 0; i < p.size; i++) drawGuest(g, doorX + (i - p.size / 2) * size * 0.6, doorY + t * 0.5, size, color, false, secs, { variant: idx + i, walking: true });
         g.globalAlpha = 1;
-        continue;
+        return;
       }
       if (c < p.seat) {
-        for (let i = 0; i < p.size; i++) dot(g, doorX - t + (queue % 6) * r * 2.4, doorY - Math.floor(queue / 6) * r * 2.4, r);
-        queue += p.size;
-        continue;
+        for (let i = 0; i < p.size; i++) {
+          drawGuest(g, doorX - t * 1.2 + (queue % 7) * size * 0.55, doorY - Math.floor(queue / 7) * size * 0.6, size, color, false, secs, { variant: idx + i });
+          queue += 1;
+        }
+        return;
       }
       const f = s.furniture.find((x) => x.uid === p.tableUid);
       const item = f ? FURNITURE[f.itemId] : undefined;
-      if (!f || !item) continue;
+      if (!f || !item) return;
       const cx = this.ox + (f.x + item.w / 2) * t;
       const cy = this.oy + (f.y + item.h / 2) * t;
       if (c > p.leave) {
         if (p.happy) {
           g.fillStyle = '#e25b6a';
           g.font = `${Math.round(t * 0.5)}px system-ui`;
+          g.textAlign = 'center';
           g.fillText('♥', cx, cy - t * 0.3 - (c - p.leave) * 3);
         }
-        continue;
+        return;
       }
-      const seats = seatPositions(item.w * t, item.h * t, item.seats, t);
+      const seats = seatSpots(item.id, item.w * t, item.h * t, item.seats, t);
       for (let i = 0; i < p.size; i++) {
         const sp = seats[i];
-        if (sp) dot(g, this.ox + f.x * t + sp[0], this.oy + f.y * t + sp[1], r);
+        if (sp) drawGuest(g, this.ox + f.x * t + sp[0], this.oy + f.y * t + sp[1], size, color, true, secs, { variant: idx * 3 + i, back: i % 2 === 0 });
       }
-      if (c - p.seat > 4 && c < p.leave - 6) {
-        g.fillStyle = '#f2c65b';
-        dot(g, cx, cy, Math.max(3, t * 0.14));
-      }
-    }
+      if (c - p.seat > 4 && c < p.leave - 6) drawPizza(g, cx, cy, Math.max(10, t * 0.42));
+    });
   }
-}
-
-function shortName(name: string): string {
-  return name.replace(' Oven', '').replace('Prep Counter', 'Prep').replace('Heat Lamp Pass', 'Pass').replace('Dish Machine', 'Dishes').replace('Proving Cabinet', 'Proving');
-}
-
-function dot(g: CanvasRenderingContext2D, x: number, y: number, r: number): void {
-  g.beginPath();
-  g.arc(x, y, r, 0, Math.PI * 2);
-  g.fill();
 }
 
 function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
@@ -366,63 +339,3 @@ function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number,
   g.closePath();
 }
 
-function seatPositions(w: number, h: number, seats: number, t: number): [number, number][] {
-  const out: [number, number][] = [];
-  const inset = t * 0.12;
-  const perSide = Math.ceil(seats / 2);
-  const horizontal = w >= h;
-  for (let i = 0; i < seats; i++) {
-    const side = i % 2;
-    const k = Math.floor(i / 2);
-    if (horizontal) out.push([((k + 0.5) / perSide) * w, side ? h - inset : inset]);
-    else out.push([side ? w - inset : inset, ((k + 0.5) / perSide) * h]);
-  }
-  return out;
-}
-
-function drawChairs(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, seats: number, t: number): void {
-  g.fillStyle = 'rgba(80,50,30,0.25)';
-  for (const [sx, sy] of seatPositions(w, h, seats, t)) {
-    roundRect(g, x + sx - t * 0.13, y + sy - t * 0.13, t * 0.26, t * 0.26, 4);
-    g.fill();
-  }
-}
-
-function drawItem(g: CanvasRenderingContext2D, id: string, color: string, kind: string, x: number, y: number, w: number, h: number, t: number): void {
-  if (kind === 'table') {
-    const m = t * 0.22;
-    g.fillStyle = color;
-    roundRect(g, x + m, y + m, w - 2 * m, h - 2 * m, 6);
-    g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.18)';
-    roundRect(g, x + m + 2, y + m + 2, w - 2 * m - 4, (h - 2 * m) * 0.35, 4);
-    g.fill();
-    return;
-  }
-  const cx = x + w / 2;
-  const cy = y + h / 2;
-  g.fillStyle = color;
-  if (id === 'plant') {
-    g.fillStyle = '#9a6b4a';
-    roundRect(g, cx - t * 0.18, cy + t * 0.05, t * 0.36, t * 0.3, 4);
-    g.fill();
-    g.fillStyle = color;
-    dot(g, cx, cy - t * 0.05, t * 0.3);
-  } else if (id === 'lamp' || id === 'lanterns') {
-    const glow = g.createRadialGradient(cx, cy, 1, cx, cy, t * 0.9);
-    glow.addColorStop(0, 'rgba(255,210,120,0.55)');
-    glow.addColorStop(1, 'rgba(255,210,120,0)');
-    g.fillStyle = glow;
-    g.fillRect(cx - t, cy - t, 2 * t, 2 * t);
-    g.fillStyle = color;
-    dot(g, cx, cy, t * 0.2);
-  } else if (id === 'fountain') {
-    g.fillStyle = '#b8b2a8';
-    dot(g, cx, cy, Math.min(w, h) * 0.42);
-    g.fillStyle = color;
-    dot(g, cx, cy, Math.min(w, h) * 0.32);
-  } else {
-    roundRect(g, x + t * 0.12, y + t * 0.12, w - t * 0.24, h - t * 0.24, 5);
-    g.fill();
-  }
-}

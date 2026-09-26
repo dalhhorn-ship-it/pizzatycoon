@@ -139,7 +139,7 @@ export function kitchenFlow(state: GameState): Flow {
   for (const o of ovens) ovenDPass[o.uid] = distance(rectOf(o), pass);
   const wash = eq.filter((e) => itemOf(e)?.role === 'sink' || itemOf(e)?.role === 'dishMachine');
   const dWash = wash.length ? Math.min(...wash.map((w) => distance(rectOf(w), pass))) : 99;
-  const washMult = 1 - Math.min(f.washPenaltyCap, f.washPenaltyPerTile * Math.max(0, dWash - f.washFreeTiles));
+  const washMult = wash.length ? 1 - Math.min(f.washPenaltyCap, f.washPenaltyPerTile * Math.max(0, dWash - f.washFreeTiles)) : 1;
   return { stations, walkMin: 0, ovenDPass, washMult, dWash, unattachedSheeters: unattached };
 }
 
@@ -214,7 +214,7 @@ export function bestSpot(placed: Placed[], uid: number, itemId: string, d: Kitch
 const ORDER: Record<string, number> = { pass: 0, oven: 1, counter: 2, sheeter: 3, cold: 4, sink: 5, dishMachine: 6, proving: 7 };
 
 /** Deterministic greedy layout; returns the placed items and the ones that did not fit. */
-export function autoLayout(items: { uid: number; itemId: string }[], premisesId: string): { placed: Placed[]; unplaced: { uid: number; itemId: string }[] } {
+export function autoLayout<I extends { uid: number; itemId: string }>(items: I[], premisesId: string): { placed: (I & Placed)[]; unplaced: I[] } {
   const d = kitchenDims(premisesId);
   const sorted = [...items].sort((a, b) => {
     const ia = EQUIPMENT[a.itemId];
@@ -226,11 +226,12 @@ export function autoLayout(items: { uid: number; itemId: string }[], premisesId:
     const outB = (ib?.slots ?? 0) / (ib?.bakeMult ?? 1) + (ib?.qualityMod ?? 0) / 100;
     return outB - outA || a.uid - b.uid;
   });
-  const placed: Placed[] = [];
-  const unplaced: { uid: number; itemId: string }[] = [];
+  const placed: (I & Placed)[] = [];
+  const unplaced: I[] = [];
   for (const item of sorted) {
     const spot = bestSpot(placed, item.uid, item.itemId, d);
-    if (spot) placed.push(spot);
+    // Keep everything the item carries (price paid, add-ons) and take the new position.
+    if (spot) placed.push({ ...item, x: spot.x, y: spot.y, rot: spot.rot });
     else unplaced.push(item);
   }
   return { placed, unplaced };

@@ -10,6 +10,7 @@ import type { EquipmentItem, Role } from '../data/types';
 import { T } from '../data/tunables';
 import { analyse } from '../sim/analysis';
 import { type Command, isUnlocked, loanPayment, RANK_NAMES, suppliersFor, tiersFor, unlockText } from '../sim/game';
+import { buyPrice, sellPrice } from '../sim/economy';
 import { kitchenDims, layoutProblem } from '../sim/kitchen';
 import type { GameState, OwnedEquipment, Recipe } from '../sim/state';
 import { h, meter, money, signed, toast } from './dom';
@@ -183,15 +184,15 @@ export function kitchenPanel(ctx: PanelCtx, view: KitchenView): HTMLElement {
           const hyp = structuredClone(state);
           hyp.equipment.push(spot);
           const d = compare(state, hyp);
-          impact = impactLine(d, d.profit > 1 ? `pays back in about ${Math.ceil(it.price / d.profit)} days` : 'does not raise your bottleneck today');
+          impact = impactLine(d, d.profit > 1 ? `pays back in about ${Math.ceil(buyPrice(state, it.price) / d.profit)} days` : 'does not raise your bottleneck today');
         }
         return h('div', { class: `fit ${unlocked ? '' : 'locked'}` },
-          h('div', { class: 'spread' }, h('b', null, it.name), h('b', null, money(it.price))),
+          h('div', { class: 'spread' }, h('b', null, it.name), h('b', null, money(buyPrice(state, it.price)))),
           h('div', { class: 'row' }, h('span', { class: `chip family-${it.family}` }, it.family), h('span', { class: 'small muted' }, it.blurb)),
           h('div', { class: 'small' }, itemStats(it)),
           impact,
           unlocked
-            ? h('button', { class: 'primary small', disabled: state.cash < it.price, onclick: () => {
+            ? h('button', { class: 'primary small', disabled: state.cash < buyPrice(state, it.price), onclick: () => {
               const err = ctx.dispatch({ type: 'buyEquipment', itemId: it.id, x: spot.x, y: spot.y, rot: spot.rot });
               if (err) toast(err, 'warn');
               else {
@@ -200,7 +201,7 @@ export function kitchenPanel(ctx: PanelCtx, view: KitchenView): HTMLElement {
                 view.select(added ? { kind: 'station', uid: added.uid } : { kind: 'none' });
                 ctx.rerender();
               }
-            } }, state.cash < it.price ? `Need ${money(it.price - state.cash)} more` : 'Buy and install here')
+            } }, state.cash < buyPrice(state, it.price) ? `Need ${money(buyPrice(state, it.price) - state.cash)} more` : 'Buy and install here')
             : h('span', { class: 'small muted' }, `🔒 ${unlockText(it.unlock)}`));
       }).filter((x) => x !== null) as HTMLElement[];
       return rows.length ? [h('div', { class: 'group-title' }, title), ...rows] : [];
@@ -242,10 +243,10 @@ export function kitchenPanel(ctx: PanelCtx, view: KitchenView): HTMLElement {
             ? h('button', { onclick: () => act(ctx, { type: 'moveEquipment', uid: e.uid, x: e.x, y: e.y, rot: e.rot ? 0 : 1 }) }, 'Rotate')
             : null,
           h('button', { onclick: () => {
-            if (!confirm(`Sell the ${it.name} for ${money(it.price * T.kitchen.resale)}?`)) return;
+            if (!confirm(`Sell the ${it.name} for ${money(sellPrice(state, it.price, e.paid))}?`)) return;
             view.select({ kind: 'none' });
-            act(ctx, { type: 'sellEquipment', uid: e.uid }, `Sold for ${money(it.price * T.kitchen.resale)}`);
-          } }, `Sell ${money(it.price * T.kitchen.resale)}`)));
+            act(ctx, { type: 'sellEquipment', uid: e.uid }, `Sold for ${money(sellPrice(state, it.price, e.paid))}`);
+          } }, `Sell ${money(sellPrice(state, it.price, e.paid))}`)));
     }
   }
 
@@ -309,15 +310,15 @@ export function roomPanel(ctx: PanelCtx): HTMLElement {
         h('h3', null, selItem.name),
         h('div', { class: 'row' },
           h('button', { onclick: () => { floor.tool = { kind: 'move', uid: sel.uid }; floor.invalidate(); ctx.rerender(); } }, 'Move'),
-          h('button', { onclick: () => { floor.selected = null; act(ctx, { type: 'removeFurniture', uid: sel.uid }, `Sold for ${money(selItem.price * T.kitchen.resale)}`); } }, `Sell for ${money(selItem.price * T.kitchen.resale)}`)))
+          h('button', { onclick: () => { floor.selected = null; act(ctx, { type: 'removeFurniture', uid: sel.uid }, `Sold for ${money(sellPrice(state, selItem.price, sel.paid))}`); } }, `Sell for ${money(sellPrice(state, selItem.price, sel.paid))}`)))
       : null,
     h('div', { class: 'palette' }, ...Object.values(FURNITURE).map((f) => h('button', {
       class: tool.kind === 'place' && tool.itemId === f.id ? 'on' : '',
-      disabled: state.cash < f.price,
+      disabled: state.cash < buyPrice(state, f.price),
       onclick: () => setTool({ kind: 'place', itemId: f.id }),
     },
     h('b', null, h('span', { class: 'swatch', style: `background:${f.color}` }), f.name),
-    h('span', { class: 'small muted' }, `${money(f.price)} · ${f.w}x${f.h}`),
+    h('span', { class: 'small muted' }, `${money(buyPrice(state, f.price))} · ${f.w}x${f.h}`),
     h('span', { class: 'small' }, f.kind === 'table' ? `${f.seats} seats` : `+${f.decorPoints} decor${f.lighting ? `, +${f.lighting} light` : ''}`)))));
 }
 

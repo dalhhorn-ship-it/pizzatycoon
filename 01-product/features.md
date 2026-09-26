@@ -2,7 +2,7 @@
 
 * Companion to `prd.md` (system specs), `versions.md` (milestones), `acceptance-criteria.md` (tests), `balance.md` (numbers).
 * Priority: **Must** = required for the launch product (v1.0) or for the milestone listed; **Should** = strongly wanted, cut only under schedule pressure (see prd.md 10.4); **Nice** = only if capacity allows.
-* Milestones: **M0** systems prototype, **M0.2** Kitchen Builder (`kitchen-builder.md`), **v0.1** vertical slice, **v1.0** launch, **v2.0** growth. A feature listed at v0.1 with an expansion at v1.0 shows both.
+* Milestones: **M0** systems prototype, **M0.2** Kitchen Builder and Fresh Start (`kitchen-builder.md`, `fresh-start.md`), **v0.1** vertical slice, **v1.0** launch, **v2.0** growth. A feature listed at v0.1 with an expansion at v1.0 shows both.
 * Loop: **MM** moment to moment, **D** service day, **W** week or season, **LT** long term.
 
 ## A. Core, platform and settings
@@ -178,16 +178,40 @@
 
 | ID | Feature | Description | Loop | Priority | Milestone | Depends on |
 |---|---|---|---|---|---|---|
-| F-100 | Kitchen floor plan grid and validity | Tile grid per premises (cosy 10x3, trattoria 12x3, big hall 15x4) with a 2 tile pass on the dining side and a decorative back door; items have w x h footprints, position and 90 degree rotation; validity: inside, no overlap, pass kept for the Heat Lamp Pass only, every item and the pass touch a free floor tile, opening minimum (oven, prep station, cold store, Sink), sheeters work only when touching a prep station; replaces the "kitchenTiles minus 4" footprint cap | W | Must | M0.2 | F-38, F-44 |
+| F-100 | Kitchen floor plan grid and validity | Tile grid per premises (hole in the wall 8x3, cosy 10x3, trattoria 12x3, big hall 15x4) with a 2 tile pass on the dining side and a decorative back door; items have w x h footprints, position and 90 degree rotation; validity: inside, no overlap, pass kept for the Heat Lamp Pass only, every item and the pass touch a free floor tile, opening minimum (oven, prep station, cold store, Sink), sheeters work only when touching a prep station; replaces the "kitchenTiles minus 4" footprint cap | W | Must | M0.2 | F-38, F-44 |
 | F-101 | Kitchen builder interaction | Kitchen tab switches the stage to the floor plan; tap a tile to buy there, tap a station for Move, Rotate, Sell (80%) and Replace; drag with ghost and snap; moves are free; time paused; undo within the visit | W | Must | M0.2 | F-100, F-06 |
 | F-102 | Kitchen flow model | Reach: -4% prep per tile beyond 2 from a prep station to its nearest oven (cap -20%); plate walk: +0.2 min cook time per tile beyond 3 from oven to pass (cap +2 min); wash walk: -3% plates per hour per tile beyond 4 from pass to the nearest Sink or Dish Machine (cap -15%); cold at hand: +5% prep for a counter touching a cold store; all constants in data | D | Must | M0.2 | F-100, F-39 |
-| F-103 | New kitchen equipment | Pizza Prep Fridge with Marble Top ($3,200, 2x1, x1.15 prep, +1 quality, cold store, $25 per week, serve 200 guests); Dough Fridge ($900, 1x1, cold store, start); Sink ($600, 1x1, wash station, start); w x h added to all existing items | W | Must | M0.2 | F-38, F-100 |
+| F-103 | New kitchen equipment | Pizza Prep Fridge with Marble Top ($3,200, 2x1, x1.15 prep, +1 quality, cold store, $25 per week, serve 200 guests); Dough Fridge ($600, 1x1, cold store, start); Sink ($400, 1x1, wash station, start); w x h added to all existing items | W | Must | M0.2 | F-38, F-100 |
 | F-104 | Service pipeline panel | Four stages (Dough and prep, Oven, Pass and serve, Dishwashing) in covers per hour for lunch and dinner, last service demand marker, bottleneck outlined amber with a one line suggestion, tap a stage to highlight its stations | D | Must | M0.2 | F-102, F-39 |
 | F-105 | Fit filtered catalogue and impact preview | Tapping an empty tile lists only items that fit there, grouped by station; each row shows price, maintenance and the compare() preview of profit per day, covers, pizza Q and the stage it raises, with the "not the bottleneck" warning; optional "Pin as savings goal" when F-41 exists | W | Must | M0.2 | F-101, F-42 |
 | F-106 | Save migration and auto layout | Schema bump; older saves get a deterministic greedy auto layout plus a free Dough Fridge and Sink if missing; items that cannot fit are refunded at full price with a note; the balance calculator uses the same auto layout | all | Must | M0.2 | F-100, F-04, F-81 |
 | F-107 | Tidy up | Button that previews the auto layout as a ghost with before and after flow badges; apply for free, undoable | W | Should | M0.2 | F-106 |
 | F-108 | Flow lines and badges | While dragging, dotted lines from each prep station to its nearest oven and from each oven to the pass labelled with tile counts, green within the free distance and amber beyond; per station badges (tick, "-8% walk", snowflake for cold at hand) | MM | Should | M0.2 | F-102, F-101 |
 | F-109 | Phone layout for the kitchen | Plan at 44 pt tiles with horizontal scroll, bottom sheet instead of side sheet, pipeline collapsed to four chips | W | Should | M0.2 | F-101, F-104 |
+
+## P. Fresh Start economy (spec: `fresh-start.md`)
+
+| ID | Feature | Description | Loop | Priority | Milestone | Depends on |
+|---|---|---|---|---|---|---|
+| F-110 | Empty premises start and opening checklist | New game has no tables, decor, equipment or staff and an empty menu (recipe book full; menu minimum 4 removed); opening requires 1 pizza, 1 table, 1 oven, 1 prep station, 1 cold store, 1 Sink, 1 cook, 1 server; HUD checklist shows each missing item with its cheapest option and a suggested $2,920 opening kit | D | Must | M0.2 | F-100, F-103 |
+| F-111 | Hole in the wall premises and 4 week deposits | New premises: dining 6x5, kitchen 8x3, 54 tiles; lease deposit 4 weeks of rent for all premises (was 8) | LT | Must | M0.2 | F-14 |
+| F-112 | Entry level and second hand items | Second hand Deck Oven ($900, 15 per hour, -2 quality, $30 per week), Old Workbench ($300, prep x0.9, $5 per week), Folding Table ($120, 2 seats, comfort -1) | W | Must | M0.2 | F-38, F-45 |
+| F-113 | Fresh start finance | Starting cash $7,000; starter loan up to $5,000 at 5% over 52 weeks | LT | Must | M0.2 | F-76 |
+| F-114 | First hiring board guarantee | Day 1 board offers at least 2 cooks, 2 servers and 1 dishwasher of skill 2 to 4 | W | Must | M0.2 | F-62 |
+| F-115 | Move premises | Overnight move to a vacant premises in any district; old deposit refunded, new deposit paid; furniture and equipment move by auto layout, misfits sold at 80%; staff, recipes, Rep and unlocks carry over | LT | Must | M0.2 | F-106, F-111 |
+| F-116 | Seat limit | Seats at most floor(0.55 x dining tiles): hole in the wall 16, cosy 44, trattoria 55, big hall 121; shown as "Seats 24 of 44" | W | Must | M0.2 | F-44 |
+| F-117 | Realistic covers retune | Foodies dinner meal 90 min, Students dinner meal 45 min, Foodies budget $28, Old Harbour W 1.5, luxury reference price $38 (band $20 to $40); automated covers per service and ceiling checks added to the balance suite | all | Must | M0.2 | F-81, F-53 |
+
+## Q. Kitchen upgrades and add-ons (spec: `kitchen-upgrades.md`)
+
+| ID | Feature | Description | Loop | Priority | Milestone | Depends on |
+|---|---|---|---|---|---|---|
+| F-118 | Add-on data and install rules | 18 add-ons in a data file (id, name, fits, price, maintenance per week, unlock, blurb, effects); installed on an owned station with no footprint; at most 2 per station and no duplicates; remove refunds 80%; selling a station refunds 80% of it and of each add-on; add-ons move with the station; `addons: string[]` on owned equipment with save migration | W | Must | M0.3 | F-100, F-101, F-103 |
+| F-119 | Generic add-on effects in the sim | Eight effect fields only: slotsAdd and bakeMult (ovens), prepMult (prep stations), qualityAdd (oven, prep, attached sheeter, pass, proving; kitchen total capped at +3 E), washMult (best equipped wash station), serveMult (pass), wasteMult (cold stores; only the best counts), coldReach (cold at hand within 2 tiles); add-on maintenance in upkeep; `T.addons` tunables | D | Must | M0.3 | F-118, F-102, F-39 |
+| F-120 | Upgrades section in the station card | Installed add-ons with plain word effect and Remove (refund shown); compatible add-ons with price, maintenance, plain effect, compare() impact preview and Install; states for short cash, locked, station full and quality cap reached | W | Must | M0.3 | F-118, F-105 |
+| F-121 | Add-on dots on the floor plan | One 8 pt dot per installed add-on in the station's top right corner, coloured by effect family (quality, speed, cold and waste, wash and serve) | MM | Should | M0.3 | F-118, F-101 |
+| F-122 | Station upgrade path (trade in) | "Upgrade to X" on the station card for Second hand Deck Oven to Deck Oven, Deck Oven to Double Deck or Stone Hearth, Old Workbench to Prep Counter, Prep Counter to Marble Bench or Prep Fridge; same tiles; net cost new price minus 80% of old; compatible add-ons kept, others refunded at 80%; Replace also carries compatible add-ons | W | Should | M0.3 | F-118, F-101 |
+| F-123 | Add-on balance checks | Reference builds carry no add-ons; new check that the fully upgraded middle build is still beaten by each specialist's best home profit by 15% or more; `npm run balance` prints each add-on's payback in its reference scenario | all | Must | M0.3 | F-119, F-81 |
 
 ## Dependency map (critical path)
 
@@ -206,4 +230,4 @@ v1.0 chain: F-79 Expansion loan + F-69 Manager -> F-83 New locations -> F-85 Off
 
 ## Scope note
 
-109 features is already a lot for a small team. The cut order in prd.md 10.4 applies. Features that carry the two strategies (F-19, F-20, F-38, F-39, F-40, F-53, F-81) are pillars and are not cut.
+123 features is already a lot for a small team. The cut order in prd.md 10.4 applies. Features that carry the two strategies (F-19, F-20, F-38, F-39, F-40, F-53, F-81) are pillars and are not cut.

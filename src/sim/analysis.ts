@@ -8,6 +8,7 @@ import { HARMONY_CLASHES, HARMONY_MATCHES, INGREDIENTS, SUPPLIERS, TIERS } from 
 import { SEGMENTS } from '../data/segments';
 import type { EquipmentItem, SegmentId, Service, Tag } from '../data/types';
 import { T } from '../data/tunables';
+import { economyOf } from './economy';
 import { type Flow, kitchenFlow, plateWalk } from './kitchen';
 import { stateLocation } from './location';
 import type { GameState, PlacedFurniture, Recipe, Staff } from './state';
@@ -129,7 +130,7 @@ export function harmonyOf(ingredientIds: string[]): number {
   return clamp(h, 0, 100);
 }
 
-export function dishStats(recipe: Recipe, K: number, E: number, frugal: boolean): DishStats {
+export function dishStats(recipe: Recipe, K: number, E: number, frugal: boolean, costMult = 1): DishStats {
   let cost = 0;
   let qSum = 0;
   let wSum = 0;
@@ -158,6 +159,7 @@ export function dishStats(recipe: Recipe, K: number, E: number, frugal: boolean)
   }
   if (cost > 0 && artisanCost / cost >= T.quality.artisanShareForTag) tags.add('artisan');
   if (frugal) cost *= 1 - T.staff.frugalDiscount;
+  cost *= costMult;
   const harmony = recipe.kind === 'pizza' ? harmonyOf(ids) : T.quality.harmonyBase + 10;
   const quality = clamp(T.quality.wIngredients * iq + T.quality.wHarmony * harmony + T.quality.wKitchen * K + E, 0, 100);
   const pizza = recipe.kind === 'pizza';
@@ -374,7 +376,7 @@ export function serviceStats(state: GameState, kitchen: Record<Service, KitchenS
 
 export function weeklyRent(state: GameState): number {
   if (!PREMISES[state.premisesId] || !DISTRICTS[state.districtId]) return 0;
-  return stateLocation(state).weeklyRent;
+  return stateLocation(state).weeklyRent * economyOf(state).rent;
 }
 
 export function analyse(state: GameState): Analysis {
@@ -384,14 +386,14 @@ export function analyse(state: GameState): Analysis {
   const frugal = state.staff.some((s) => s.role === 'chef' && s.traits.includes('frugal'));
   const dishes: Record<string, DishStats> = {};
   for (const r of state.recipes) {
-    dishes[r.id] = dishStats(r, kitchen.dinner.kitchenSkillK, kitchen.dinner.equipmentE, frugal);
+    dishes[r.id] = dishStats(r, kitchen.dinner.kitchenSkillK, kitchen.dinner.equipmentE, frugal, economyOf(state).ingredients);
   }
   return {
     dishes,
     kitchen: kitchen.dinner,
     room,
     service,
-    weeklySalaries: state.staff.reduce((a, s) => a + s.salary, 0),
+    weeklySalaries: state.staff.reduce((a, s) => a + s.salary, 0) * economyOf(state).wages,
     weeklyRent: weeklyRent(state),
     frugal,
   };

@@ -7,7 +7,7 @@ import { type BuildId, buildState, steadyState } from './builds';
 const DISTRICTS = ['university', 'canal', 'harbour'] as const;
 const HOME: Record<BuildId, (typeof DISTRICTS)[number]> = { luxury: 'harbour', volume: 'university', middle: 'canal' };
 const BANDS: Record<BuildId, number[]> = {
-  luxury: [20, 22, 24, 26, 28, 30, 32, 34],
+  luxury: [20, 24, 28, 32, 34, 36, 38, 40],
   volume: [8, 8.5, 9, 9.5, 10],
   middle: [12, 13, 14, 15, 16],
 };

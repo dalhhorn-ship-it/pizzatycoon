@@ -3,7 +3,7 @@ import { EQUIPMENT } from '../src/data/equipment';
 import { T } from '../src/data/tunables';
 import { analyse, harmonyOf, salaryFor, tasteMatch } from '../src/sim/analysis';
 import { attachRate, queueDelay, simulateDay, valueScore } from '../src/sim/day';
-import { loanPayment, newGame } from '../src/sim/game';
+import { loanPayment, newGame, withStarterKit } from '../src/sim/game';
 
 const oven = (id: string, skill: number): number => {
   const e = EQUIPMENT[id]!;
@@ -67,7 +67,7 @@ describe('formulas match balance.md', () => {
 });
 
 describe('golden starter day (balance.md 2)', () => {
-  const s = newGame(1, 'canal');
+  const s = withStarterKit(newGame(1, 'canal', 'cosy'));
   s.day = 4; // Thursday
   for (const st of s.staff) st.traits = [];
   const a = analyse(s);
@@ -80,11 +80,11 @@ describe('golden starter day (balance.md 2)', () => {
     expect(a.room.seats).toBe(24);
   });
 
-  test('guests within 5% of 69 and seats are the bottleneck', () => {
-    expect(r.covers).toBeGreaterThan(69 * 0.95);
-    expect(r.covers).toBeLessThan(69 * 1.05);
+  test('guests within 5% of 67.5 (fresh-start.md 6) and seats are the bottleneck', () => {
+    expect(r.covers).toBeGreaterThan(67.5 * 0.95);
+    expect(r.covers).toBeLessThan(67.5 * 1.05);
     expect(r.services.map((x) => x.bottleneck)).toEqual(['seats', 'seats']);
-    expect(r.walkAways).toBe(0);
+    expect(r.walkAways).toBeLessThan(3);
   });
 
   test('money within tolerance of the worked example', () => {

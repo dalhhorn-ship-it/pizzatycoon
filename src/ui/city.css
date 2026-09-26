@@ -25,7 +25,7 @@
 
 .city { min-height: 0; overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 12px; align-content: start; -webkit-overflow-scrolling: touch; }
 .city[hidden], .main[hidden] { display: none; }
-.city-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.city-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; }
 .city-head .back { font-weight: 700; }
 .city-title { display: grid; gap: 2px; flex: 1; min-width: 220px; }
 .city-body { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr); gap: 14px; align-items: start; }
@@ -55,9 +55,9 @@
 .city-map .pin.here .dot { fill: var(--gold); stroke: var(--ink); }
 .city-map .flag { font-size: 2.1px; font-weight: 800; fill: var(--ink); text-anchor: middle; paint-order: stroke; stroke: var(--panel); stroke-width: 0.7px; pointer-events: none; }
 
-.city-legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 0 4px; }
+.city-legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 6px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
 .lg { display: inline-block; border-radius: 50%; background: var(--ink); }
-.lg.s { width: 8px; height: 8px; } .lg.m { width: 11px; height: 11px; } .lg.l { width: 14px; height: 14px; }
+.lg.xs { width: 6px; height: 6px; } .lg.s { width: 8px; height: 8px; } .lg.m { width: 11px; height: 11px; } .lg.l { width: 14px; height: 14px; }
 .lg.here { width: 11px; height: 11px; background: var(--gold); border: 1px solid var(--ink); }
 
 .venue-list select { min-height: 34px; font-size: 13px; }

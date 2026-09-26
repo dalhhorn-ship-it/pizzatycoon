@@ -8,13 +8,14 @@ import { RECIPE_BOOK } from '../data/recipes';
 import { FIRST_NAMES, LAST_NAMES, ROLE_BASE_SALARY, TRAITS } from '../data/staff';
 import type { EquipmentItem, RankId, Role, TierId, TraitId, Unlock } from '../data/types';
 import { T } from '../data/tunables';
-import { VENUES } from '../data/venues';
+import { VENUES, venueFor } from '../data/venues';
 import { analyse, occupiedTiles, salaryFor } from './analysis';
 import { type DayOptions, simulateDay } from './day';
+import { buyPrice, clampEconomy, type Economy, economyOf, sellPrice } from './economy';
 import { autoLayout, bestSpot, kitchenDims, layoutProblem, rectOf } from './kitchen';
-import { locationFacts, stateLocation } from './location';
+import { locationFacts } from './location';
 import { Rng } from './rng';
-import { type DayReport, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION, type Staff } from './state';
+import { type DayReport, type GameState, type Recipe, type RecipeLine, SCHEMA_VERSION, type Staff } from './state';
 
 export type Command =
   | { type: 'setTier'; recipeId: string; ingredientId: string; tier: TierId }
@@ -30,12 +31,14 @@ export type Command =
   | { type: 'moveEquipment'; uid: number; x: number; y: number; rot: 0 | 1 }
   | { type: 'sellEquipment'; uid: number }
   | { type: 'tidyKitchen' }
+  | { type: 'movePremises'; districtId: string; premisesId: string }
   | { type: 'hire'; candidateId: number }
   | { type: 'fire'; staffId: number }
   | { type: 'giveRaise'; staffId: number }
   | { type: 'takeLoan'; amount: number }
   | { type: 'repayLoan'; amount: number }
   | { type: 'setUnlockAll'; on: boolean }
+  | { type: 'setEconomy'; economy: Partial<Economy> }
   | { type: 'freshStart' }
   | { type: 'rentVenue'; venueId: string }
   | { type: 'runDay' };
@@ -124,9 +127,12 @@ function generateCandidates(state: GameState): Staff[] {
   const traitIds = Object.keys(TRAITS) as TraitId[];
   const out: Staff[] = [];
   let fameUsed = false;
+  // fresh-start.md 4: the day 1 board always offers 2 cooks, 2 servers and a dishwasher of skill 2 to 4.
+  const firstBoard: Role[] = state.day === 1 ? ['cook', 'cook', 'server', 'server', 'dishwasher'] : [];
   for (let i = 0; i < T.staff.candidatesPerWeek; i++) {
-    const role = rng.pick(roles);
-    const skill = rng.int(role === 'chef' ? 5 : 2, role === 'chef' ? 9 : 7);
+    const fixed = firstBoard[i];
+    const role = fixed ?? rng.pick(roles);
+    const skill = fixed ? rng.int(2, 4) : rng.int(role === 'chef' ? 5 : 2, role === 'chef' ? 9 : 7);
     const potential = Math.min(10, skill + rng.int(0, 3));
     let fame = 0;
     if (!fameUsed && state.rep >= T.staff.fameCandidateRep && skill >= 7 && rng.chance(0.5)) {
@@ -162,6 +168,52 @@ function unlockedIds(state: GameState): Set<string> {
 
 // ---------- New game ----------
 
+export function depositFor(districtId: string, premisesId: string, venueId: string | null = null): number {
+  if (!DISTRICTS[districtId] || !PREMISES[premisesId]) return 0;
+  return locationFacts(districtId, premisesId, venueId).weeklyRent * T.finance.leaseDepositWeeks;
+}
+
+/** Deposit for a venue on the city map (city-map.md 6). */
+export function venueDeposit(venueId: string): number {
+  const v = VENUES[venueId];
+  return v ? depositFor(v.districtId, v.premisesId, v.id) : 0;
+}
+
+export function seatLimit(premisesId: string): number {
+  const p = PREMISES[premisesId];
+  return p ? Math.floor(T.build.maxSeatsPerDiningTile * p.diningWidth * p.diningHeight) : 0;
+}
+
+/** fresh-start.md 2: a new restaurant is empty. Only the deposit is paid. */
+/** Start at a venue on the city map (city-map.md 2). */
+export function newGameAt(seed: number, venueId: string, economy?: Economy): GameState {
+  const venue = VENUES[venueId];
+  if (!venue) throw new Error('Unknown venue');
+  return newGame(seed, venue.districtId, venue.premisesId, economy, venueId);
+}
+
+export function newGame(seed: number, districtId: string, premisesId = 'hole', economy?: Economy, venueId: string | null = null): GameState {
+  const district = DISTRICTS[districtId];
+  const premises = PREMISES[premisesId];
+  if (!district || !premises) throw new Error('Unknown district or premises');
+  const recipes: Recipe[] = RECIPE_BOOK.map((t) => ({
+    id: t.id, name: t.name, kind: t.kind, lines: makeLines(t.ingredients), price: t.price, onMenu: false,
+    extraTags: [...(t.tags ?? [])], custom: false,
+  }));
+  const deposit = depositFor(districtId, premisesId, venueId);
+  const state: GameState = {
+    schemaVersion: SCHEMA_VERSION, seed, day: 1, districtId, premisesId, venueId,
+    cash: Math.round(T.finance.startingCash * (economy?.startingCash ?? 1)) - deposit, deposit,
+    loan: { balance: 0, annualRate: T.finance.starterLoanRate, weeksLeft: 0, pausedWeeks: 0 },
+    rep: T.reputation.start, totalServed: 0, rank: 'cook', recipes, furniture: [], equipment: [], staff: [], candidates: [],
+    nextUid: 1, daysBelowZero: 0, history: [], unlockAll: false,
+  };
+  if (economy) state.economy = clampEconomy(economy);
+  state.candidates = generateCandidates(state);
+  state.nextUid += T.staff.candidatesPerWeek;
+  return state;
+}
+
 const STARTER_LAYOUT: [string, number, number][] = [
   ['table4', 1, 1], ['table4', 5, 1], ['table2', 8, 1],
   ['table4', 1, 4], ['table4', 5, 4], ['table2', 8, 4],
@@ -171,52 +223,69 @@ const STARTER_LAYOUT: [string, number, number][] = [
   ['painting', 3, 3], ['painting', 7, 3],
 ];
 
-/** Start at a venue on the city map (city-map.md 6). */
-export function newGameAt(seed: number, venueId: string): GameState {
-  const venue = VENUES[venueId];
-  if (!venue) throw new Error('Unknown venue');
-  return newGame(seed, venue.districtId, venue.premisesId, venueId);
-}
-
-export function newGame(seed: number, districtId: string, premisesId = 'cosy', venueId: string | null = null): GameState {
-  const district = DISTRICTS[districtId];
-  const premises = PREMISES[premisesId];
-  if (!district || !premises) throw new Error('Unknown district or premises');
-  let uid = 1;
-  const furniture = STARTER_LAYOUT.map(([itemId, x, y]) => ({ uid: uid++, itemId, x, y }));
-  // kitchen-builder.md 3.4 starter layout.
-  const equipment: OwnedEquipment[] = [
+/**
+ * The balance.md 2 reference starter (cosy shop, 8 tables, deck oven, 5 staff, classic menu).
+ * Not how the game starts any more; kept for the golden day tests and as a sandbox shortcut.
+ */
+export function withStarterKit(state: GameState): GameState {
+  const s = structuredClone(state);
+  let uid = s.nextUid;
+  s.furniture = STARTER_LAYOUT.map(([itemId, x, y]) => ({ uid: uid++, itemId, x, y }));
+  s.equipment = [
     { itemId: 'prepCounter', x: 0, y: 0, rot: 0 as const },
     { itemId: 'deckOven', x: 2, y: 0, rot: 0 as const },
     { itemId: 'prepCounter', x: 2, y: 2, rot: 0 as const },
     { itemId: 'sink', x: 6, y: 0, rot: 0 as const },
     { itemId: 'doughFridge', x: 9, y: 2, rot: 0 as const },
   ].map((e) => ({ uid: uid++, ...e }));
-  // The reference layout is drawn for the cosy kitchen; bigger kitchens move the pass, so tidy it there.
-  const starterKitchen = layoutProblem(equipment, kitchenDims(premisesId)) ? autoLayout(equipment, premisesId).placed : equipment;
-  const staff: Staff[] = [
+  s.staff = [
     makeStaff(uid++, 'Giulia Rossi', 'cook', 5, 7, 0, ['steady']),
     makeStaff(uid++, 'Marco Bakker', 'cook', 4, 7, 0, ['crowdPleaser']),
     makeStaff(uid++, 'Sofia Moreau', 'server', 5, 7, 0, ['charmer']),
     makeStaff(uid++, 'Luca Silva', 'server', 4, 6, 0, ['nightOwl']),
     makeStaff(uid++, 'Kofi Mensah', 'dishwasher', 4, 6, 0, ['steady']),
   ];
-  const recipes: Recipe[] = RECIPE_BOOK.map((t) => ({
-    id: t.id, name: t.name, kind: t.kind, lines: makeLines(t.ingredients), price: t.price, onMenu: t.onMenu,
-    extraTags: [...(t.tags ?? [])], custom: false,
-  }));
-  const deposit = locationFacts(districtId, premisesId, venueId).weeklyRent * T.finance.leaseDepositWeeks;
-  const fitOut = furniture.reduce((a, f) => a + (FURNITURE[f.itemId]?.price ?? 0), 0);
-  const state: GameState = {
-    schemaVersion: SCHEMA_VERSION, seed, day: 1, districtId, premisesId, venueId,
-    cash: T.finance.startingCash - deposit - fitOut,
-    loan: { balance: 0, annualRate: T.finance.starterLoanRate, weeksLeft: 0, pausedWeeks: 0 },
-    rep: T.reputation.start, totalServed: 0, rank: 'cook', recipes, furniture, equipment: starterKitchen, staff, candidates: [],
-    nextUid: uid, daysBelowZero: 0, history: [], unlockAll: false,
-  };
-  state.candidates = generateCandidates(state);
-  state.nextUid += T.staff.candidatesPerWeek;
-  return state;
+  // The reference kitchen is drawn for the cosy shop; bigger kitchens move the pass, so tidy it there.
+  if (layoutProblem(s.equipment, kitchenDims(s.premisesId))) s.equipment = autoLayout(s.equipment, s.premisesId).placed;
+  for (const r of s.recipes) r.onMenu = RECIPE_BOOK.find((t) => t.id === r.id)?.onMenu ?? false;
+  s.nextUid = uid;
+  return s;
+}
+
+/** Tables first in a simple grid with aisles, then decor in free spots; respects the seat limit. */
+function relayoutDining(furniture: GameState['furniture'], premisesId: string): { placed: GameState['furniture']; unplaced: GameState['furniture'] } {
+  const p = PREMISES[premisesId];
+  const W = p?.diningWidth ?? 10;
+  const H = p?.diningHeight ?? 8;
+  const limit = seatLimit(premisesId);
+  const sorted = [...furniture].sort((a, b) => Number(FURNITURE[b.itemId]?.kind === 'table') - Number(FURNITURE[a.itemId]?.kind === 'table'));
+  const placed: GameState['furniture'] = [];
+  const unplaced: GameState['furniture'] = [];
+  let seats = 0;
+  for (const f of sorted) {
+    const it = FURNITURE[f.itemId];
+    if (!it) continue;
+    const table = it.kind === 'table';
+    if (table && seats + it.seats > limit) {
+      unplaced.push(f);
+      continue;
+    }
+    let spot: { x: number; y: number } | null = null;
+    const occ = occupiedTiles(placed);
+    const step = table ? 2 : 1;
+    for (let y = table ? 1 : 0; y + it.h <= H && !spot; y += step) {
+      for (let x = table ? 1 : 0; x + it.w <= W && !spot; x += table ? it.w + 1 : 1) {
+        let free = true;
+        for (let dx = 0; dx < it.w && free; dx++) for (let dy = 0; dy < it.h && free; dy++) if (occ.has(`${x + dx},${y + dy}`)) free = false;
+        if (free) spot = { x, y };
+      }
+    }
+    if (spot) {
+      placed.push({ ...f, ...spot });
+      if (table) seats += it.seats;
+    } else unplaced.push(f);
+  }
+  return { placed, unplaced };
 }
 
 // ---------- Commands ----------
@@ -258,8 +327,8 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       const r = state.recipes.find((x) => x.id === cmd.recipeId);
       if (!r) return fail(input, 'Unknown dish.');
       const count = state.recipes.filter((x) => x.onMenu).length;
-      if (cmd.on && !r.onMenu && count >= 16) return fail(input, 'The menu holds at most 16 items.');
-      if (!cmd.on && r.onMenu && count <= 4) return fail(input, 'Keep at least 4 items on the menu.');
+      if (cmd.on && !r.onMenu && count >= T.build.menuMaxItems) return fail(input, `The menu holds at most ${T.build.menuMaxItems} items.`);
+      if (!cmd.on && r.onMenu && count <= T.build.menuMinItems) return fail(input, `Keep at least ${T.build.menuMinItems} items on the menu.`);
       r.onMenu = cmd.on;
       break;
     }
@@ -293,20 +362,26 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       for (let dx = 0; dx < item.w; dx++) for (let dy = 0; dy < item.h; dy++) {
         if (occ.has(`${cmd.x + dx},${cmd.y + dy}`)) return fail(input, 'Something is already there.');
       }
+      if (!existing && item.kind === 'table') {
+        const seats = state.furniture.reduce((a, f) => a + (FURNITURE[f.itemId]?.seats ?? 0), 0);
+        const limit = seatLimit(state.premisesId);
+        if (seats + item.seats > limit) return fail(input, `Fire safety: at most ${limit} seats in this room.`);
+      }
       if (existing) {
         existing.x = cmd.x;
         existing.y = cmd.y;
       } else {
-        if (state.cash < item.price) return fail(input, 'Not enough cash.');
-        state.cash -= item.price;
-        state.furniture.push({ uid: state.nextUid++, itemId, x: cmd.x, y: cmd.y });
+        const cost = buyPrice(state, item.price);
+        if (state.cash < cost) return fail(input, 'Not enough cash.');
+        state.cash -= cost;
+        state.furniture.push({ uid: state.nextUid++, itemId, x: cmd.x, y: cmd.y, paid: cost });
       }
       break;
     }
     case 'removeFurniture': {
       const f = state.furniture.find((x) => x.uid === cmd.uid);
       if (!f) return fail(input, 'Nothing there.');
-      state.cash += (FURNITURE[f.itemId]?.price ?? 0) * T.kitchen.resale;
+      state.cash += sellPrice(state, FURNITURE[f.itemId]?.price ?? 0, f.paid);
       state.furniture = state.furniture.filter((x) => x.uid !== cmd.uid);
       break;
     }
@@ -314,7 +389,8 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       const item = EQUIPMENT[cmd.itemId];
       if (!item) return fail(input, 'Unknown equipment.');
       if (!isUnlocked(state, item.unlock)) return fail(input, `Locked: ${unlockText(item.unlock)}.`);
-      if (state.cash < item.price) return fail(input, `You need ${Math.ceil(item.price - state.cash).toLocaleString('en-US')} more.`);
+      const cost = buyPrice(state, item.price);
+      if (state.cash < cost) return fail(input, `You need ${Math.ceil(cost - state.cash).toLocaleString('en-US')} more.`);
       const dims = kitchenDims(state.premisesId);
       const uid = state.nextUid;
       const placed =
@@ -325,8 +401,8 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       const problem = layoutProblem([...state.equipment, placed], dims);
       if (problem) return fail(input, problem);
       state.nextUid += 1;
-      state.cash -= item.price;
-      state.equipment.push(placed);
+      state.cash -= cost;
+      state.equipment.push({ ...placed, paid: cost });
       break;
     }
     case 'moveEquipment': {
@@ -345,10 +421,38 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       state.equipment = placed;
       break;
     }
+    case 'movePremises': {
+      // fresh-start.md 3: overnight move; deposit refunded, new deposit paid, everything re-laid out.
+      if (cmd.districtId === state.districtId && cmd.premisesId === state.premisesId) return fail(input, 'You already rent this place.');
+      const venueId = venueFor(cmd.districtId, cmd.premisesId);
+      const newDeposit = depositFor(cmd.districtId, cmd.premisesId, venueId);
+      if (!newDeposit) return fail(input, 'Unknown premises.');
+      if (state.cash + state.deposit < newDeposit) return fail(input, `You need ${Math.ceil(newDeposit - state.deposit - state.cash).toLocaleString('en-US')} more for the deposit.`);
+      state.cash += state.deposit - newDeposit;
+      state.deposit = newDeposit;
+      state.districtId = cmd.districtId;
+      state.premisesId = cmd.premisesId;
+      state.venueId = venueId;
+      const notes: string[] = [];
+      const kitchen = autoLayout(state.equipment, cmd.premisesId);
+      state.equipment = kitchen.placed;
+      for (const u of kitchen.unplaced) {
+        state.cash += sellPrice(state, EQUIPMENT[u.itemId]?.price ?? 0, u.paid);
+        notes.push(`${EQUIPMENT[u.itemId]?.name} did not fit and was sold`);
+      }
+      const room = relayoutDining(state.furniture, cmd.premisesId);
+      state.furniture = room.placed;
+      for (const f of room.unplaced) {
+        state.cash += sellPrice(state, FURNITURE[f.itemId]?.price ?? 0, f.paid);
+        notes.push(`${FURNITURE[f.itemId]?.name} did not fit and was sold`);
+      }
+      events.push({ kind: 'info', text: `Moved to the ${PREMISES[cmd.premisesId]?.name} in ${DISTRICTS[cmd.districtId]?.name}.${notes.length ? ` ${notes.join('; ')}.` : ''}` });
+      break;
+    }
     case 'sellEquipment': {
       const e = state.equipment.find((x) => x.uid === cmd.uid);
       if (!e) return fail(input, 'Not found.');
-      state.cash += (EQUIPMENT[e.itemId]?.price ?? 0) * T.kitchen.resale;
+      state.cash += sellPrice(state, EQUIPMENT[e.itemId]?.price ?? 0, e.paid);
       state.equipment = state.equipment.filter((x) => x.uid !== cmd.uid);
       break;
     }
@@ -397,9 +501,12 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
     case 'setUnlockAll':
       state.unlockAll = cmd.on;
       break;
+    case 'setEconomy':
+      state.economy = clampEconomy({ ...economyOf(state), ...cmd.economy });
+      break;
     case 'freshStart': {
       if (state.cash > T.finance.freshStartThreshold) return fail(input, 'A fresh start is offered when cash falls below -$20,000.');
-      const fresh = newGame(state.seed + 1, state.districtId, state.premisesId, state.venueId);
+      const fresh = newGame(state.seed + 1, state.districtId, state.premisesId, state.economy, state.venueId);
       fresh.rank = state.rank;
       fresh.totalServed = state.totalServed;
       fresh.recipes = state.recipes.map((r) => ({ ...r }));
@@ -432,50 +539,58 @@ export interface MoveQuote {
   total: number;
 }
 
-function moveFurniture(state: GameState, W: number, H: number): { kept: GameState['furniture']; sold: GameState['furniture'] } {
-  const kept: GameState['furniture'] = [];
-  const sold: GameState['furniture'] = [];
-  for (const f of state.furniture) {
+/** Keep the player's own dining layout when it fits the new room; otherwise lay it out again. */
+function moveDining(state: GameState, premisesId: string): { placed: GameState['furniture']; unplaced: GameState['furniture'] } {
+  const p = PREMISES[premisesId];
+  const seats = state.furniture.reduce((a, f) => a + (FURNITURE[f.itemId]?.seats ?? 0), 0);
+  const fits = !!p && seats <= seatLimit(premisesId) && state.furniture.every((f) => {
     const it = FURNITURE[f.itemId];
-    if (it && f.x + it.w <= W && f.y + it.h <= H) kept.push(f);
-    else sold.push(f);
-  }
-  return { kept, sold };
+    return !!it && f.x + it.w <= p.diningWidth && f.y + it.h <= p.diningHeight;
+  });
+  return fits ? { placed: state.furniture, unplaced: [] } : relayoutDining(state.furniture, premisesId);
 }
 
 /** Keep the player's own kitchen layout when it still fits; otherwise tidy it into the new kitchen. */
-function moveKitchen(state: GameState, premisesId: string): { placed: OwnedEquipment[]; unplaced: { uid: number; itemId: string }[] } {
+function moveKitchen(state: GameState, premisesId: string): { placed: GameState['equipment']; unplaced: GameState['equipment'] } {
   const dims = kitchenDims(premisesId);
   const fits = state.equipment.every((e) => {
     const r = rectOf(e);
     return r.x + r.w <= dims.W && r.y + r.h <= dims.H;
   });
   if (fits && !layoutProblem(state.equipment, dims)) return { placed: state.equipment, unplaced: [] };
-  return autoLayout(state.equipment, premisesId);
+  const { placed, unplaced } = autoLayout(state.equipment, premisesId);
+  const byUid = new Map(state.equipment.map((e) => [e.uid, e]));
+  return {
+    // Auto layout drops the price paid; carry it over so later refunds stay honest.
+    placed: placed.map((e) => {
+      const paid = byUid.get(e.uid)?.paid;
+      return paid === undefined ? e : { ...e, paid };
+    }),
+    unplaced: unplaced.map((u) => byUid.get(u.uid) ?? { ...u, x: 0, y: 0, rot: 0 as const }),
+  };
 }
 
 /** Everything the confirm sheet shows; rentVenue charges exactly this. */
 export function moveQuote(state: GameState, venueId: string): MoveQuote | null {
   const venue = VENUES[venueId];
-  const premises = venue ? PREMISES[venue.premisesId] : undefined;
-  if (!venue || !premises) return null;
-  const weeks = T.finance.leaseDepositWeeks;
-  const refund = stateLocation(state).weeklyRent * weeks;
-  const newDeposit = locationFacts(venue.districtId, venue.premisesId, venueId).weeklyRent * weeks;
-  const { sold } = moveFurniture(state, premises.diningWidth, premises.diningHeight);
-  const { unplaced } = moveKitchen(state, venue.premisesId);
+  if (!venue || !PREMISES[venue.premisesId]) return null;
+  const refund = state.deposit;
+  const newDeposit = venueDeposit(venueId);
+  const dining = moveDining(state, venue.premisesId);
+  const kitchen = moveKitchen(state, venue.premisesId);
   const resale =
-    (sold.reduce((a, f) => a + (FURNITURE[f.itemId]?.price ?? 0), 0) +
-      unplaced.reduce((a, e) => a + (EQUIPMENT[e.itemId]?.price ?? 0), 0)) * T.kitchen.resale;
+    dining.unplaced.reduce((a, f) => a + sellPrice(state, FURNITURE[f.itemId]?.price ?? 0, f.paid), 0) +
+    kitchen.unplaced.reduce((a, e) => a + sellPrice(state, EQUIPMENT[e.itemId]?.price ?? 0, e.paid), 0);
   const sameDistrict = venue.districtId === state.districtId;
   const keep = sameDistrict ? T.city.repKeepSameDistrict : T.city.repKeepOtherDistrict;
   const repAfter = state.rep * keep + T.reputation.start * (1 - keep);
+  const net = newDeposit - refund + T.city.movingFee;
   return {
-    newDeposit, refund, movingFee: T.city.movingFee, net: newDeposit - refund + T.city.movingFee, repAfter, sameDistrict,
-    soldFurniture: sold.map((f) => FURNITURE[f.itemId]?.name ?? f.itemId),
-    soldEquipment: unplaced.map((e) => EQUIPMENT[e.itemId]?.name ?? e.itemId),
+    newDeposit, refund, movingFee: T.city.movingFee, net, repAfter, sameDistrict,
+    soldFurniture: dining.unplaced.map((f) => FURNITURE[f.itemId]?.name ?? f.itemId),
+    soldEquipment: kitchen.unplaced.map((e) => EQUIPMENT[e.itemId]?.name ?? e.itemId),
     resale,
-    total: newDeposit - refund + T.city.movingFee - resale,
+    total: net - resale,
   };
 }
 
@@ -486,10 +601,10 @@ function rentVenue(input: GameState, venueId: string): Result {
   if (input.venueId === venueId) return fail(input, 'You already rent this venue.');
   if (quote.total > 0 && input.cash < quote.total) return fail(input, `Moving costs $${Math.ceil(quote.total).toLocaleString('en-US')}; you need $${Math.ceil(quote.total - input.cash).toLocaleString('en-US')} more.`);
   const state = structuredClone(input);
-  const premises = PREMISES[venue.premisesId] as NonNullable<(typeof PREMISES)[string]>;
-  state.furniture = moveFurniture(state, premises.diningWidth, premises.diningHeight).kept;
+  state.furniture = moveDining(state, venue.premisesId).placed;
   state.equipment = moveKitchen(state, venue.premisesId).placed;
   state.cash -= quote.total;
+  state.deposit = quote.newDeposit;
   state.rep = quote.repAfter;
   state.districtId = venue.districtId;
   state.premisesId = venue.premisesId;

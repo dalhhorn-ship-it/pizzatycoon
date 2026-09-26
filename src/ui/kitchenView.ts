@@ -7,6 +7,7 @@ import { T } from '../data/tunables';
 import { analyse } from '../sim/analysis';
 import { distance, kitchenDims, layoutProblem, passRect, type Rect, rectOf } from '../sim/kitchen';
 import type { GameState, OwnedEquipment } from '../sim/state';
+import { drawEquipment, drawFloorTile, drawStaff, drawWall } from './sprites';
 
 export type KitchenSelection = { kind: 'none' } | { kind: 'tile'; x: number; y: number } | { kind: 'station'; uid: number };
 
@@ -45,7 +46,12 @@ export class KitchenView {
   onSelect: (sel: KitchenSelection) => void = () => {};
   onMove: (uid: number, x: number, y: number, rot: 0 | 1) => void = () => {};
   /** Optional sprite hook: return true when it drew the item itself. */
-  drawSprite: ((g: CanvasRenderingContext2D, itemId: string, x: number, y: number, w: number, h: number, tile: number, active: boolean) => boolean) | null = null;
+  drawSprite: ((g: CanvasRenderingContext2D, itemId: string, x: number, y: number, w: number, h: number, tile: number, active: boolean) => boolean) | null =
+    (g, itemId, x, y, w, h, tile, active) => {
+      const alias: Record<string, string> = { usedDeckOven: 'deckOven', oldWorkbench: 'prepCounter', doughFridge: 'fridge' };
+      drawEquipment(g, alias[itemId] ?? itemId, x, y, w, h, tile, active, performance.now() / 1000);
+      return true;
+    };
 
   constructor() {
     this.canvas.style.touchAction = 'none';
@@ -177,22 +183,14 @@ export class KitchenView {
     g.textBaseline = 'middle';
     g.fillText('Dining room', X(-wall) + 8, Y(-wall - dining / 2));
 
-    // Walls.
-    g.fillStyle = '#b9a58c';
-    g.fillRect(X(-wall), Y(-wall), (d.W + wall * 2) * t, wall * t);
-    g.fillRect(X(-wall), Y(d.H), (d.W + wall * 2) * t, wall * t);
-    g.fillRect(X(-wall), Y(0), wall * t, d.H * t);
-    g.fillRect(X(d.W), Y(0), wall * t, d.H * t);
-    g.fillStyle = 'rgba(0,0,0,0.12)';
-    for (let i = 0; i < (d.W + wall * 2) * 2; i++) g.fillRect(X(-wall) + i * t * 0.5, Y(-wall) + wall * t * 0.5, 1, wall * t * 0.5);
+    // Walls: brick towards the dining room, white tile around the kitchen.
+    drawWall(g, X(-wall), Y(-wall), (d.W + wall * 2) * t, wall * t, 'brick');
+    drawWall(g, X(-wall), Y(d.H), (d.W + wall * 2) * t, wall * t, 'tile');
+    drawWall(g, X(-wall), Y(0), wall * t, d.H * t, 'tile');
+    drawWall(g, X(d.W), Y(0), wall * t, d.H * t, 'tile');
 
     // Floor tiles.
-    for (let y = 0; y < d.H; y++) for (let x = 0; x < d.W; x++) {
-      g.fillStyle = (x + y) % 2 ? '#d8cfc3' : '#cfc4b6';
-      g.fillRect(X(x), Y(y), t, t);
-      g.strokeStyle = 'rgba(255,255,255,0.35)';
-      g.strokeRect(X(x) + 0.5, Y(y) + 0.5, t - 1, t - 1);
-    }
+    for (let y = 0; y < d.H; y++) for (let x = 0; x < d.W; x++) drawFloorTile(g, X(x), Y(y), t, 'kitchen', x, y);
 
     // Pass hatch: an opening in the wall with a wooden shelf and a bell.
     const pr = passRect(d);
@@ -268,25 +266,18 @@ export class KitchenView {
       g.fillText('+', X(x + 0.5), Y(y + 0.52));
     }
 
-    // Cooks at the busiest stations during service.
-    if (serving) {
+    // Cooks at their stations (they bob while service runs); the dishwasher by the sink.
+    {
       const cooks = s.staff.filter((x) => x.role === 'cook' || x.role === 'chef');
       const stations = s.equipment.filter((e) => (a.kitchen.stationPrep[e.uid] ?? 0) > 0);
       cooks.forEach((c, i) => {
         const st = stations[i % Math.max(1, stations.length)];
         if (!st) return;
         const r = rectOf(st);
-        const bob = Math.sin(now * 4 + i) * t * 0.04;
+        const bob = serving ? Math.sin(now * 4 + i) * t * 0.04 : 0;
         const cx = X(r.x + r.w / 2) + (i - 0.5) * t * 0.25;
         const cy = r.y + r.h < d.H ? Y(r.y + r.h) + t * 0.3 : Y(r.y) - t * 0.3;
-        g.fillStyle = '#ffffff';
-        g.beginPath();
-        g.arc(cx, cy + bob, t * 0.2, 0, Math.PI * 2);
-        g.fill();
-        g.fillStyle = c.role === 'chef' ? '#c8553d' : '#e3a36b';
-        g.beginPath();
-        g.arc(cx, cy + bob - t * 0.02, t * 0.13, 0, Math.PI * 2);
-        g.fill();
+        drawStaff(g, c.role === 'chef' ? 'chef' : 'cook', cx, cy + bob, t * 0.8, now, { variant: i });
       });
     }
   }

@@ -1,6 +1,6 @@
 import type { DishKind, RankId, Role, SegmentId, Service, TierId, TraitId } from '../data/types';
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export interface RecipeLine {
   ingredientId: string;
@@ -24,6 +24,8 @@ export interface PlacedFurniture {
   itemId: string;
   x: number;
   y: number;
+  /** Price actually paid; refunds are 80% of this. */
+  paid?: number;
 }
 
 export interface OwnedEquipment {
@@ -33,6 +35,8 @@ export interface OwnedEquipment {
   x: number;
   y: number;
   rot: 0 | 1;
+  /** Price actually paid; refunds are 80% of this. */
+  paid?: number;
 }
 
 export interface Staff {
@@ -129,6 +133,8 @@ export interface GameState {
   /** The rented venue on the city map (city-map.md 4); null means the plain district (balance harness). */
   venueId: string | null;
   cash: number;
+  /** Lease deposit held by the landlord; refunded on a move (fresh-start.md 3). */
+  deposit: number;
   loan: Loan;
   rep: number;
   totalServed: number;
@@ -142,4 +148,6 @@ export interface GameState {
   daysBelowZero: number;
   history: DayReport[];
   unlockAll: boolean;
+  /** Difficulty multipliers from the settings menu; missing means Normal. */
+  economy?: import('./economy').Economy;
 }

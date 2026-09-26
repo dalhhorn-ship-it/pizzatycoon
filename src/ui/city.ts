@@ -5,7 +5,7 @@ import { SEGMENTS, SEGMENT_IDS } from '../data/segments';
 import type { SegmentId, Venue } from '../data/types';
 import { T } from '../data/tunables';
 import { VENUES } from '../data/venues';
-import { moveQuote, newGameAt } from '../sim/game';
+import { moveQuote, seatLimit, venueDeposit } from '../sim/game';
 import { bestFor, type LocationFacts, locationFacts, stateLocation } from '../sim/location';
 import type { GameState } from '../sim/state';
 import { h, money, signed } from './dom';
@@ -14,6 +14,9 @@ export interface CityCtx {
   /** 'new' picks the first venue of a new game; 'move' rents another venue for the running game. */
   mode: 'new' | 'move';
   state: GameState | null;
+  /** New game only: cash before the deposit and the difficulty name. */
+  startCash?: number;
+  difficulty?: string;
   /** Null when there is nothing to go back to (first launch). */
   onBack: (() => void) | null;
   onRent: (venueId: string) => void;
@@ -41,7 +44,11 @@ function svg(tag: string, attrs: Record<string, string | number> = {}, ...childr
   return el;
 }
 
-const pinRadius = (premisesId: string): number => (premisesId === 'cosy' ? 1.7 : premisesId === 'medium' || premisesId === 'corner' ? 2.1 : 2.5);
+/** fresh-start.md: the cheapest working pizzeria costs about this to fit out. */
+const FIT_OUT_MIN = 2920;
+
+const pinRadius = (premisesId: string): number =>
+  premisesId === 'hole' ? 1.3 : premisesId === 'cosy' ? 1.7 : premisesId === 'medium' || premisesId === 'corner' ? 2.1 : 2.5;
 const level = (v: number, lo: number, hi: number, words: [string, string, string]): string => (v < lo ? words[0] : v < hi ? words[1] : words[2]);
 const pct = (v: number): string => `${Math.round(v * 100)}%`;
 const sqm = (v: number): string => `${Math.round(v)} m²`;
@@ -60,7 +67,7 @@ export class CityView {
 
   open(ctx: CityCtx, focusDistrict: string | null = null): void {
     this.ctx = ctx;
-    this.selected = focusDistrict ? null : (ctx.state?.venueId ?? 'lockKeeper');
+    this.selected = focusDistrict ? null : (ctx.state?.venueId ?? 'towpathKiosk');
     this.district = focusDistrict;
     this.filter = 'all';
     this.render();
@@ -77,7 +84,7 @@ export class CityView {
       h('div', { class: 'city-title' },
         h('h2', null, ctx.mode === 'new' ? 'Welcome to Porto Verde' : 'City map'),
         h('span', { class: 'muted small' }, ctx.mode === 'new'
-          ? 'Pick a place to rent for your first pizzeria. You start with $40,000, a small team, a deck oven and a classic menu. There is no game over: take your time.'
+          ? `You have ${money(ctx.startCash ?? T.finance.startingCash)} and a dream. Rent an empty place on the map, then set it up yourself. A hole in the wall is the cosy way to start; bigger venues are for later. There is no game over.`
           : 'Compare neighbourhoods and venues. Moving takes your team, menu and equipment with you.')),
       ctx.onLinkDevice ? h('button', { class: 'ghost small', onclick: () => ctx.onLinkDevice?.() }, 'Continue a game from another device') : null);
     const detail = h('div', { class: 'city-detail' }, this.detail());
@@ -134,7 +141,7 @@ export class CityView {
 
   private legend(): HTMLElement {
     const item = (cls: string, text: string): HTMLElement => h('span', { class: 'row small muted' }, h('i', { class: `lg ${cls}` }), text);
-    return h('div', { class: 'city-legend' }, item('s', 'Small (cosy)'), item('m', 'Medium'), item('l', 'Large'), item('here', 'Your pizzeria'));
+    return h('div', { class: 'city-legend' }, item('xs', 'Hole in the wall'), item('s', 'Small (cosy)'), item('m', 'Medium'), item('l', 'Large'), item('here', 'Your pizzeria'));
   }
 
   // ---------- Venue list ----------
@@ -241,13 +248,21 @@ export class CityView {
   private rentBox(v: Venue, f: LocationFacts, here: boolean): HTMLElement {
     const ctx = this.ctx as CityCtx;
     if (ctx.mode === 'new' || !ctx.state) {
-      const start = newGameAt(1, v.id).cash;
+      const deposit = venueDeposit(v.id);
+      const left = (ctx.startCash ?? T.finance.startingCash) - deposit;
       return h('div', { class: 'card rentbox' },
         h('div', { class: 'kv' },
           h('span', null, 'Rent'), h('b', null, `${money(f.weeklyRent)}/week`),
-          h('span', null, `Deposit (${T.finance.leaseDepositWeeks} weeks)`), h('b', null, money(f.weeklyRent * T.finance.leaseDepositWeeks)),
-          h('span', null, 'Cash after deposit and fit out'), h('b', { class: start < 10000 ? 'warn' : '' }, money(start))),
-        h('button', { class: 'primary', onclick: () => ctx.onRent(v.id) }, 'Open my pizzeria here'));
+          h('span', null, 'Seats allowed'), h('b', null, String(seatLimit(v.premisesId))),
+          h('span', null, `Deposit (${T.finance.leaseDepositWeeks} weeks rent)`), h('b', null, money(deposit)),
+          h('span', null, 'Left to set up with'), h('b', { class: left < 0 ? 'bad' : left < FIT_OUT_MIN ? 'warn' : 'good' }, money(left))),
+        left < 0
+          ? h('div', { class: 'small bad' }, `You need ${money(-left)} more. Start in a hole in the wall and move here later.`)
+          : left < FIT_OUT_MIN
+            ? h('div', { class: 'small warn' }, `The cheapest working pizzeria costs about ${money(FIT_OUT_MIN)} to fit out. You could borrow, but a smaller place is the cosy way to start.`)
+            : null,
+        ctx.difficulty ? h('div', { class: 'small muted' }, `Difficulty: ${ctx.difficulty}. Change it any time under ⚙ Settings.`) : null,
+        h('button', { class: 'primary', disabled: left < 0, onclick: () => ctx.onRent(v.id) }, 'Sign the lease here'));
     }
     if (here) return h('div', { class: 'card rentbox' }, h('div', { class: 'small muted' }, 'This is where your pizzeria is today.'),
       ctx.onBack ? h('button', { class: 'primary', onclick: () => ctx.onBack?.() }, `Back to ${v.name}`) : null);

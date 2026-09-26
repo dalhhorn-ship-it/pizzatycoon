@@ -54,10 +54,10 @@ export const VENUES: Record<string, Venue> = Object.fromEntries([
   }),
   // Market Square
   v({
-    id: 'marketHall', name: 'Market Hall Stall', address: 'Market Hall, unit 4', districtId: 'market', premisesId: 'cosy',
+    id: 'marketHall', name: 'Market Hall Stall', address: 'Market Hall, unit 4', districtId: 'market', premisesId: 'hole',
     rentPerTile: 12, trafficMult: 1.3, competitionDelta: 0.2, lunchShareDelta: 0.1, x: 16, y: 38,
-    pros: ['Busiest pitch in the city', 'Everyone walks past', 'Strong lunch trade'],
-    cons: ['Food stalls compete on every side', 'Small space for the crowd'],
+    pros: ['Busiest pitch in the city', 'Everyone walks past', 'Cheap first step'],
+    cons: ['Food stalls compete on every side', 'Tiny: a handful of seats for a big crowd'],
   }),
   v({
     id: 'spiceRow', name: 'Spice Row', address: '8 Spice Row', districtId: 'market', premisesId: 'medium',
@@ -98,7 +98,7 @@ export const VENUES: Record<string, Venue> = Object.fromEntries([
     cons: ['Expensive rent', 'Tourist traps on every corner'],
   }),
   v({
-    id: 'cobblersAlley', name: "Cobbler's Alley", address: '11 Cobbler\'s Alley', districtId: 'oldtown', premisesId: 'cosy',
+    id: 'cobblersAlley', name: "Cobbler's Alley", address: '11 Cobbler\'s Alley', districtId: 'oldtown', premisesId: 'hole',
     rentPerTile: 12, trafficMult: 0.7, competitionDelta: -0.15, wealthMult: 1.1, tilt: { foodies: 1.5 }, x: 36, y: 64,
     pros: ['Hidden gem that foodies hunt for', 'Few rivals down the alley', 'Affordable for Old Town'],
     cons: ['Hard to find, fewer passersby', 'Needs great food to get noticed'],
@@ -127,6 +127,37 @@ export const VENUES: Record<string, Venue> = Object.fromEntries([
     rentPerTile: 13, trafficMult: 1.1, lunchShareDelta: 0.1, tilt: { tourists: 1.3 }, x: 80, y: 62,
     pros: ['Huge hall by the harbour', 'Busy with tourists at lunch', 'Lower rent than the quay'],
     cons: ['High total rent', 'Tourists do not come back'],
+  }),
+  // Hole in the wall starters: cheap deposits for a first pizzeria (fresh-start.md 2).
+  v({
+    id: 'studentHatch', name: 'Student Hatch', address: '9 Chalk Lane', districtId: 'university', premisesId: 'hole',
+    rentPerTile: 8, trafficMult: 1.1, tilt: { students: 1.2 }, x: 11, y: 10,
+    pros: ['Cheapest way into the student crowd', 'Slices to go at lunch', 'Tiny deposit'],
+    cons: ['Only a handful of seats', 'Students count every coin'],
+  }),
+  v({
+    id: 'plazaHatch', name: 'Plaza Pizza Hatch', address: '4 Tower Plaza, arcade side', districtId: 'business', premisesId: 'hole',
+    rentPerTile: 15, trafficMult: 1.0, lunchShareDelta: 0.15, x: 42, y: 17,
+    pros: ['Office lunch crowd on the doorstep', 'Guests who pay for speed', 'Small and easy to run'],
+    cons: ['Quiet evenings', 'Pricey for its size'],
+  }),
+  v({
+    id: 'bandstandHatch', name: 'Bandstand Kiosk', address: 'Linden Park, bandstand', districtId: 'linden', premisesId: 'hole',
+    rentPerTile: 6, trafficMult: 0.9, tilt: { families: 1.2 }, x: 72, y: 14,
+    pros: ['Cheapest rent in the city', 'Families after the playground', 'No rivals nearby'],
+    cons: ['Few passersby', 'Tiny kitchen'],
+  }),
+  v({
+    id: 'towpathKiosk', name: 'Towpath Kiosk', address: 'Canal towpath, lock 3', districtId: 'canal', premisesId: 'hole',
+    rentPerTile: 10, trafficMult: 0.95, x: 36, y: 41,
+    pros: ['Gentle, mixed crowd to learn on', 'Low deposit', 'Canal side charm'],
+    cons: ['A few seats only', 'Off the main bridge'],
+  }),
+  v({
+    id: 'netLoft', name: 'Net Loft Hatch', address: '2 Rope Walk', districtId: 'harbour', premisesId: 'hole',
+    rentPerTile: 16, trafficMult: 0.9, tilt: { foodies: 1.2 }, x: 72, y: 58,
+    pros: ['A harbour address on a small budget', 'Food lovers with deep pockets', 'Small and cosy'],
+    cons: ['Few seats for a wealthy crowd', 'Rent is high for the size'],
   }),
 ].map((x) => [x.id, x]));
 

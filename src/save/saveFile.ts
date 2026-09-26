@@ -1,7 +1,7 @@
 // Versioned save format with migrations (solution-design.md 8).
 
 import { SCHEMA_VERSION, type GameState } from '../sim/state';
-import { DISTRICTS } from '../data/districts';
+import { DISTRICTS, PREMISES } from '../data/districts';
 import { EQUIPMENT } from '../data/equipment';
 import { VENUES, venueFor } from '../data/venues';
 import { autoLayout } from '../sim/kitchen';
@@ -33,8 +33,16 @@ const MIGRATIONS: Record<number, (state: Record<string, unknown>) => Record<stri
     for (const u of unplaced) s.cash += EQUIPMENT[u.itemId]?.price ?? 0;
     return s;
   },
-  // v2 to v3: venues on the city map (city-map.md 6). Land on the venue with the same district and premises.
+  // v2 to v3: deposits are tracked so moving premises can refund them (fresh-start.md 3). Old games paid 8 weeks.
   2: (state) => {
+    const s = state as { deposit?: number; districtId: string; premisesId: string };
+    const d = DISTRICTS[s.districtId];
+    const p = PREMISES[s.premisesId];
+    s.deposit = d && p ? (p.diningWidth * p.diningHeight + p.kitchenTiles) * d.rentPerTile * 8 : 0;
+    return s;
+  },
+  // v3 to v4: venues on the city map (city-map.md 6). Land on the venue with the same district and premises.
+  3: (state) => {
     const s = state as { districtId: string; premisesId: string; venueId?: string | null };
     s.venueId = venueFor(s.districtId, s.premisesId);
     return s;

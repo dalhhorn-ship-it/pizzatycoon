@@ -11,7 +11,7 @@
 
 Founder request: "create map of city view to select venues to rent as restaurant each which is own pros and cons, show demographic cards, foot traffic, rent, square meters per area. We should be able to rent and choose from 15+ locations. Create logical link back to the city view."
 
-Today the player picks one of three districts and one of three premises from two lists on the welcome screen, and that choice is final. The City Map turns the choice into a place: a top down illustrated map of the city with seven neighbourhoods and nineteen rentable venues. Every venue is a real trade off (busy but pricey, cheap but quiet, big but on a back street), shown with demographic cards, foot traffic, weekly rent and floor area in square metres.
+Today the player picks one of three districts and one of three premises from two lists on the welcome screen, and that choice is final. The City Map turns the choice into a place: a top down illustrated map of the city with seven neighbourhoods and twenty four rentable venues. Every venue is a real trade off (busy but pricey, cheap but quiet, big but on a back street), shown with demographic cards, foot traffic, weekly rent and floor area in square metres.
 
 * **Loops served:** start of game (where do I open?) and the long loop (outgrow the first site, move to a better one). It adds a strategic decision that matches the three strategies: a luxury pizzeria wants foodies and tourists, a volume pizzeria wants students and lunch trade, the middle road wants a mixed crowd.
 * **Design intent:** no venue is a trap. Every venue can run a profitable middle road pizzeria with sensible prices; the best venue for a strategy earns clearly more. Moving is a considered, reversible decision with a visible price, never a way to fail.
@@ -27,7 +27,7 @@ Today the player picks one of three districts and one of three premises from two
 | Rent this venue | Confirm sheet listing deposit, refund, moving fee, reputation carried over, items that will not fit; then the game moves and returns to the pizzeria |
 | Back to my pizzeria (button, Escape, or the breadcrumb) | Returns to the tab the player left, nothing changed |
 
-The link is two way and always visible: the HUD shows `City map › Neighbourhood › Venue` as a breadcrumb; the city view shows "Back to <venue name>" at the top left. At the start of a new game the city view is the welcome screen and the button reads "Open my pizzeria here".
+The link is two way and always visible: the HUD shows `City map › Neighbourhood › Venue` as a breadcrumb; the city view shows "Back to <venue name>" at the top left. At the start of a new game the city view is the welcome screen: each venue card shows the deposit, what is left to fit out, and the button reads "Sign the lease here" (disabled when the deposit is more than the starting cash).
 
 ## 3. The city
 
@@ -75,7 +75,9 @@ Effective location (the one the day model uses):
 
 One grid tile is **1.5 m²** (`T.city.sqmPerTile`). Floor area is shown split into dining room and kitchen, plus the total. A cosy corner shop is 80 dining tiles (120 m²) plus 30 kitchen tiles (45 m²) = 165 m².
 
-### 4.3 New premises shapes
+### 4.3 Premises shapes
+
+The hole in the wall (6 x 5 dining, 8 x 3 kitchen, 81 m²) comes from `fresh-start.md` and is the affordable way to start. Two shapes are new:
 
 | Premises | Dining (w x h) | Kitchen (w x h) | Total m² |
 |---|---|---|---|
@@ -84,7 +86,7 @@ One grid tile is **1.5 m²** (`T.city.sqmPerTile`). Floor area is shown split in
 
 Both keep the starter furniture and starter kitchen layouts valid (dining at least 10 x 8, kitchen at least 10 x 3).
 
-### 4.4 The nineteen venues
+### 4.4 The twenty four venues
 
 | # | Venue | Neighbourhood | Premises | Rent/tile | Traffic | Notes |
 |---|---|---|---|---|---|---|
@@ -95,20 +97,25 @@ Both keep the starter furniture and starter kitchen layouts valid (dining at lea
 | 5 | Exchange Arcade | Business | Trattoria | 15 | 0.9 | Evening crowd, wealth 1.1 |
 | 6 | Parkside Pavilion | Linden Park | Big hall | 6 | 0.9 | Families 1.3, dinner heavy |
 | 7 | Village High Street | Linden Park | Cosy | 8 | 1.2 | No rivals (−0.1) |
-| 8 | Market Hall Stall | Market Square | Cosy | 12 | 1.3 | Rivals (+0.2), very busy |
+| 8 | Market Hall Stall | Market Square | Hole in the wall | 12 | 1.3 | Rivals (+0.2), very busy |
 | 9 | Spice Row | Market Square | Trattoria | 13 | 1.0 | Foodies 1.5 |
 | 10 | Tannery Yard | Market Square | Loft | 9 | 0.8 | Huge and cheap, quiet |
 | 11 | Lock Keeper's Cottage | Canal | Cosy | 11 | 1.0 | Neutral reference venue |
 | 12 | Bridge Street Trattoria | Canal | Trattoria | 11 | 1.05 | Balanced |
 | 13 | Old Warehouse Loft | Canal | Loft | 10 | 0.9 | Space to grow |
 | 14 | Cathedral Square | Old Town | Trattoria | 20 | 1.3 | Tourists 1.3, rivals (+0.2) |
-| 15 | Cobbler's Alley | Old Town | Cosy | 12 | 0.7 | Foodies 1.5, hidden gem |
+| 15 | Cobbler's Alley | Old Town | Hole in the wall | 12 | 0.7 | Foodies 1.5, hidden gem |
 | 16 | Guildhall Cellar | Old Town | Corner | 14 | 0.9 | Seniors 1.3, wealth 1.1 |
 | 17 | Quayside Nook | Old Harbour | Cosy | 19 | 1.0 | Neutral harbour reference |
 | 18 | Lighthouse View | Old Harbour | Trattoria | 23 | 0.85 | Foodies 1.3, wealth 1.15 |
 | 19 | Fish Market Hall | Old Harbour | Big hall | 13 | 1.1 | Tourists 1.3, lunch +10% |
+| 20 | Student Hatch | University | Hole in the wall | 8 | 1.1 | Students 1.2 |
+| 21 | Plaza Pizza Hatch | Business | Hole in the wall | 15 | 1.0 | Lunch +15% |
+| 22 | Bandstand Kiosk | Linden Park | Hole in the wall | 6 | 0.9 | Families 1.2 |
+| 23 | Towpath Kiosk | Canal | Hole in the wall | 10 | 0.95 | Default pick for a new game |
+| 24 | Net Loft Hatch | Old Harbour | Hole in the wall | 16 | 0.9 | Foodies 1.2 |
 
-All venues are available from day 1 (unlock gating is out of scope, section 10). Exact values live in `src/data/venues.ts`.
+Every neighbourhood has one hole in the wall, so a new player with $7,000 (`fresh-start.md`) can start anywhere. All venues are available from day 1 (unlock gating is out of scope, section 10). Exact values live in `src/data/venues.ts`.
 
 ## 5. Demographic cards
 
@@ -128,16 +135,16 @@ Command `rentVenue { venueId }`. Allowed any morning (not during a service).
 
 | Step | Rule |
 |---|---|
-| Deposit | New deposit = 8 weeks of the new rent (`T.finance.leaseDepositWeeks`) |
-| Refund | Old deposit comes back in full |
+| Deposit | New deposit = 4 weeks of the new venue's rent (`T.finance.leaseDepositWeeks`) |
+| Refund | The deposit held (`state.deposit`, `fresh-start.md` 3) comes back in full |
 | Moving fee | `T.city.movingFee` = $1,500 |
 | Net cost | new deposit − old deposit + moving fee; must be affordable (cash ≥ net cost when positive) |
-| Dining room | Furniture that fits inside the new room keeps its spot; the rest is sold at the 80% resale rate |
-| Kitchen | Equipment is laid out again with the existing auto layout; anything that does not fit is sold at 80% |
+| Dining room | If every piece fits and the seat limit holds, the layout is kept; otherwise it is laid out again and what does not fit is sold at 80% of the price paid |
+| Kitchen | If the layout still fits and is valid it is kept; otherwise auto layout, and what does not fit is sold at 80% of the price paid |
 | Reputation | Same neighbourhood: keep 90%. Another neighbourhood: keep 60%, the rest moves toward the starting value (30). Word of mouth is local |
 | Staff, menu, recipes, loan, rank, guests served | Unchanged |
 
-The confirm sheet lists every line above with real numbers before the player commits. Old saves (schema 2) migrate to the venue matching their neighbourhood and premises.
+The confirm sheet lists every line above with real numbers before the player commits. Old saves (schema 3) migrate to the venue matching their neighbourhood and premises. The existing `movePremises` command (the "Buy another restaurant" market of `fresh-start.md`) also lands on the matching venue; the "Buy another restaurant" buttons now open the city map.
 
 ## 7. UI
 
@@ -152,21 +159,21 @@ The confirm sheet lists every line above with real numbers before the player com
 | ID | Feature |
 |---|---|
 | F-118 | City map view with seven neighbourhoods |
-| F-119 | Nineteen venues with their own modifiers, pros and cons |
+| F-119 | Twenty four venues with their own modifiers, pros and cons |
 | F-120 | Demographic cards for neighbourhoods and venues |
 | F-121 | Floor area in m² (dining, kitchen, total) |
 | F-122 | Venue list with sort and filter |
 | F-123 | Relocation command with deposit, fee, resale and reputation rules |
 | F-124 | Two way link: HUD button and breadcrumb to the city, "Back to" button from the city |
 | F-125 | New game starts on the city map |
-| F-126 | Save migration schema 2 to 3 (`venueId`) |
+| F-126 | Save migration schema 3 to 4 (`venueId`) |
 
 ## 9. Acceptance criteria
 
 | ID | Criterion |
 |---|---|
 | AC-175 | At least 15 venues exist, each with a valid premises and neighbourhood, at least two pros and two cons |
-| AC-176 | Every venue's premises fits the starter furniture and starter kitchen layout |
+| AC-176 | At least 5 venues in 5 neighbourhoods leave $2,920 to fit out after the deposit; the reference starter kit fits every venue that is not a hole in the wall |
 | AC-177 | Effective shares of every venue sum to 1 (within 0.001) |
 | AC-178 | A new game at a venue uses that venue's rent, foot traffic and premises |
 | AC-179 | `rentVenue` charges new deposit − old deposit + moving fee and fails when cash is short |
@@ -175,7 +182,7 @@ The confirm sheet lists every line above with real numbers before the player com
 | AC-182 | After a move, reputation follows the same or other neighbourhood carry rule |
 | AC-183 | After a move, staff, recipes, loan, rank and guests served are unchanged |
 | AC-184 | Commands never mutate their input (existing rule holds for `rentVenue`) |
-| AC-185 | Schema 2 saves load, get a matching `venueId`, and keep playing |
+| AC-185 | Schema 2 and 3 saves load, get a deposit and a matching `venueId`, and keep playing |
 | AC-186 | Balance harness numbers for the three original districts do not change |
 | AC-187 | The city view opens from the HUD button and from the neighbourhood name |
 | AC-188 | The city view always offers a way back (button, Escape) that returns to the previous tab unchanged |
