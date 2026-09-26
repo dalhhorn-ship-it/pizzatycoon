@@ -205,10 +205,10 @@ Moving and rotating are free. The Kitchen tab is build mode: time is paused and 
 * **AC-146** Given the starter / When one counter is replaced by a Prep Fridge / Then that station's prep is x1.15 and pizza Q rises by 0.5; with a sheeter attached it is x1.35, not x1.55.
 * **AC-147** Given a sheeter touching no prep station / When computed / Then it adds nothing and shows "Not attached".
 * **AC-148** Given any older save / When loaded / Then every item has a valid position, a Fridge and Sink exist, unplaceable items are refunded at full price, and the result is identical on every load.
-* **AC-149** Given the three reference builds with auto layout / When the balance calculator runs / Then flow penalty is zero, each profit is within 2% of the pre M0.2 value and all `balance.md` 3.5 checks pass. (A zero penalty layout was hand checked for each build; the auto layout must find one.)
-* **AC-150** Given the starter build / When the pipeline is computed / Then prep 47.5, oven 19.4, pass and serve 16.2 lunch and 15.1 dinner, and pass and serve is the bottleneck, matching the sim's "seats".
+* **AC-149** Given the three reference builds with auto layout / When the balance calculator runs / Then flow penalty is zero, each profit is within 2% of the same build with no flow rules (so the layout itself is neutral) and all `balance.md` 3.5 checks pass. (A zero penalty layout was hand checked for each build; the auto layout must find one.)
+* **AC-150** Given the starter build / When the pipeline is computed / Then prep 47.5, oven 19.4, pass and serve about 16.2 lunch and 14.2 dinner (after the `fresh-start.md` meal length retune), and pass and serve is the bottleneck, matching the sim's "seats".
 * **AC-151 to AC-158:** demand marker, fit filtered catalogue, impact preview, iPad layout, flow lines, Tidy up, phone, bounded flow effects (see the full table).
 
 ## 13. M0.2 definition of done
 
-All AC-134 to AC-158 pass; `npm run balance` shows no change beyond 2% for the reference builds; an older save loads into a valid kitchen; the founder can open the Kitchen tab on an iPad, buy a Pizza Prep Fridge with Marble Top by tapping an empty tile, drag it next to the oven and watch the pipeline respond.
+All AC-134 to AC-158 pass; `npm run balance` shows the flow rules move no reference build by more than 2%; an older save loads into a valid kitchen; the founder can open the Kitchen tab on an iPad, buy a Pizza Prep Fridge with Marble Top by tapping an empty tile, drag it next to the oven and watch the pipeline respond.
