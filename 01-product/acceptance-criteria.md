@@ -4,7 +4,7 @@
 * Format: Given [context] / When [action] / Then [outcome].
 * **Test type:** **Auto** = automated test against the simulation or data (no UI); **UI** = manual or UI automation; **PT** = playtest measure.
 * Numbers come from prd.md section 5 and `balance.md`. When design retunes a constant, the expected values here are updated in the same change. "About" means within 2% unless stated.
-* Milestones: M0, M0.2 (Kitchen Builder, see `kitchen-builder.md`), v0.1, v1.0, v2.0 (see `versions.md`).
+* Milestones: M0, M0.2 (Kitchen Builder and Fresh Start, see `kitchen-builder.md` and `fresh-start.md`), v0.1, v1.0, v2.0 (see `versions.md`).
 
 ---
 
@@ -248,6 +248,27 @@
 | AC-157 | F-109 | M0.2 | UI | A phone in portrait | The Kitchen tab is opened | The plan scrolls horizontally at 44 pt tiles, the catalogue opens as a bottom sheet, and the pipeline shows four chips with the bottleneck in amber |
 | AC-158 | F-102 | M0.2 | Auto | Randomly generated valid layouts in all premises with any v0.1 equipment | Kitchen stats are computed | Prep capacity is at least 80% and at most 105% of the same equipment with every reach_mult 1.0 and no cold bonus; all flow constants are read from the data file (changing one changes results with no code change) |
 
+## P. Fresh Start economy
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-159 | F-110, F-113 | M0.2 | Auto | Any district and premises | A new game starts | There are 0 tables, 0 decor items, 0 equipment items, 0 staff and 0 menu items; the recipe book holds all preset recipes; cash equals $7,000 minus 4 weeks of rent (Canal Quarter hole in the wall: $4,624) |
+| AC-160 | F-110 | M0.2 | Auto | A new game missing exactly one opening requirement (each of pizza, table, oven, prep station, cold store, Sink, cook, server in turn) | A day is simulated | The restaurant stays closed with the reason for that requirement; rent and any wages still accrue; taking a pizza off the menu is allowed down to 0 items |
+| AC-161 | F-110, F-112 | M0.2 | Auto | A new game in Canal Quarter, hole in the wall | The fresh-start.md 7 kit is bought (Second hand Deck Oven, Old Workbench, Dough Fridge, Sink, 6 Folding Tables) | Total spend including deposit is $5,296, cash is $1,704, and the opening checklist is complete once a cook and a server are hired |
+| AC-162 | F-117, F-112 | M0.2 | Auto | The fresh-start.md 7 opening (cook and server skill 3, morale 50, 4 classic pizzas averaging $12.50, soft drink $4) at Rep 30 on a Thursday | The day is simulated with noise off | Covers are 33.6 plus or minus 5% (lunch about 13.9, dinner about 19.7), seats are the bottleneck and profit is $134 plus or minus 10%; over days 1 to 7 cash never falls below $0 and week 1 profit is positive (reference $941) |
+| AC-163 | F-117 | M0.2 | Auto | The same opening priced at fair price, at Rep 30 | Daily profit is computed in each v0.1 district | Profit is at least $0 in Canal Quarter and University Quarter; with only 4 Folding Tables it is at least -$25 in Canal Quarter (the floor, not a dead end) |
+| AC-164 | F-112 | M0.2 | Auto | The equipment and furniture data | It is loaded | Second hand Deck Oven: $900, 3 slots, bake x1.0, quality -2, $30 per week, 2x2, start; Old Workbench: $300, prep x0.9, quality 0, $5 per week, 2x1, start; Folding Table: $120, 1x1, 2 seats, comfort -1, start; all resell at 80% |
+| AC-165 | F-113 | M0.2 | Auto | A new game | The player takes the full starter loan | $5,000 is added; weekly payment is $98.62 for 52 weeks at 5% per year; a second starter loan cannot be taken |
+| AC-166 | F-114 | M0.2 | Auto | 100 new games with different seeds | The day 1 hiring board is generated | Every board has at least 2 cooks, 2 servers and 1 dishwasher with skill 2 to 4 |
+| AC-167 | F-115 | M0.2 | Auto | A hole in the wall in Canal Quarter with 8 Folding Tables, the fresh-start.md 7 kitchen, 2 staff and Rep 42 | The player moves to the Cosy corner shop in Canal Quarter | Next morning the old $2,376 deposit is refunded and $4,840 is paid; all items are placed validly (misfits sold at 80% with a note); staff, recipes, prices and Rep 42 are unchanged; the same inputs always give the same result |
+| AC-168 | F-116 | M0.2 | Auto | A room at its seat limit (hole in the wall 16, cosy 44, trattoria 55, big hall 121) | The player places one more table | The placement fails with "Fire safety: at most N seats in this room"; the reference builds (40, 56 and 120 seats) are all within their premises limits |
+| AC-169 | F-117, F-81 | M0.2 | Auto | The three reference builds of balance.md 3.1 after the retune, at steady state Rep, Thursday, reference prices | Covers per service are computed | Luxury in Old Harbour serves 40 to 60 dinner covers (reference about 53) and about 26 at lunch; volume in University Quarter serves at most 180 dinner covers (reference about 169); middle in Canal Quarter about 55 lunch and 88 dinner; each within 10% of the fresh-start.md 6 table |
+| AC-170 | F-116, F-117 | M0.2 | Auto | Each premises at its seat limit, demand far above capacity, all Students, volume reference service speed (17.3 min service time), Thursday | Dinner capacity is computed | Hole in the wall at most 40, cosy at most 100, trattoria at most 125 (all at most 180), big hall at most 265 dinner covers |
+| AC-171 | F-117, F-81 | M0.2 | Auto | The retuned reference builds, luxury band $20 to $40 | `npm run balance` runs | All balance.md 3.5 checks pass (AC-10, AC-11 rerun); luxury in Old Harbour and volume in University Quarter are within 10% of each other (hand estimate $2,045 vs $1,984) |
+| AC-172 | F-110 to F-117 | M0.2 | PT | 10 playtesters new to the game, no sandbox | They play from a fresh start | Median time to move out of the hole in the wall is 45 to 120 minutes; nobody reaches $1,800 profit per day in under 5 hours; at least 80% say the first week felt "tight but fair" |
+| AC-173 | F-110 | M0.2 | UI | A new game on an iPad | The player looks at the HUD before the first service | The opening checklist lists each missing requirement with its cheapest item and price; tapping a line opens the right builder with that item highlighted; the card disappears after the first service |
+| AC-174 | F-112 | M0.2 | UI | A kitchen with a Second hand Deck Oven and $2,400 cash | The player previews replacing it with a Deck Oven | The preview shows oven capacity +33%, pizza Q +2, maintenance +$10 per week, and a net cost of $1,680 after the $720 resale |
+
 ## Coverage check
 
-All Must and Should features have criteria: F-01 to F-07, F-09 to F-27, F-29 to F-36, F-38 to F-50, F-52 to F-59, F-62 to F-74, F-75 to F-88, F-90 to F-92, F-95 to F-98. Nice features not covered: F-08, F-28, F-37, F-51, F-60, F-61, F-89, F-93, F-94, F-99.
+All Must and Should features have criteria: F-01 to F-07, F-09 to F-27, F-29 to F-36, F-38 to F-50, F-52 to F-59, F-62 to F-74, F-75 to F-88, F-90 to F-92, F-95 to F-98, F-100 to F-117 (M0.2). Nice features not covered: F-08, F-28, F-37, F-51, F-60, F-61, F-89, F-93, F-94, F-99.
