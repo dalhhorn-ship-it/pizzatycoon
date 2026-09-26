@@ -1,11 +1,18 @@
-# PRD: Cosy Pizza Tycoon for iPad (working title "Slice & Simmer")
+# PRD: Pizza D
 
 * Status: Draft 1, ready for solution architecture handoff
 * Owner: Game Product Management
 * Date: 2026-09-26
 * Companion files: `features.md`, `versions.md`, `acceptance-criteria.md`, `balance.md`
 
-The working title is a placeholder. "Pizza Tycoon" (MicroProse, 1994, sold as "Pizza Connection" in Europe) is someone else's IP; see Open Questions Q1.
+"Pizza D" is an original title inspired by Pizza Tycoon (MicroProse, 1994, sold as "Pizza Connection" in Europe), which is someone else's IP.
+
+### Founder decisions (2026-09-26, supersede anything below that conflicts)
+
+* **Name:** Pizza D (Q1 closed).
+* **Business model:** free to play in full. No price, no in-app purchases, no ads, no premium currency (Q2 and Q3 closed; 10.1 updated).
+* **Platform:** browser only. Played in Safari or Chrome on iPad and in any modern desktop browser, installable to the home screen as a web app. **No native app and no App Store build.** App Store, TestFlight and Apple Pencil hover items become "where the browser supports it" or are dropped.
+* **Saves:** cloud saves from v0.1, so a game started on iPad continues in a desktop browser and back. The game stays fully playable offline and syncs when online (Q4 closed; A3 and A4 updated).
 
 ---
 
@@ -534,7 +541,7 @@ Late game changes the kind of decision: from "where does this table go" to "whic
 
 ### 10.1 Business model (assumption)
 
-Premium one time purchase, assumed 9.99 USD, no ads, no energy, no premium currency, no paid speed ups, no loot boxes. A paid expansion later is not assumed (Q3). Apple Arcade as an alternative channel is Q2.
+Free. The whole game is free to play in the browser with no ads, no energy, no premium currency, no paid speed ups, no loot boxes and no in-app purchases (founder decision).
 
 ### 10.2 In scope (all versions)
 
@@ -597,11 +604,11 @@ Telemetry is opt-in and anonymous; playtest metrics need at least 30 target play
 
 ## 12. Assumptions
 
-* **A1 Platform:** iPad first, landscape only, current and previous iPadOS major versions; minimum device set by the architect against M13.
+* **A1 Platform:** browser game, iPad Safari and Chrome first in landscape, plus desktop browsers; installable as a web app; no native app; minimum device set by the architect against M13.
 * **A2 Input:** everything playable with one finger; minimum touch target 44 pt; Apple Pencil adds precise placement and hover preview on hover capable models; keyboard and trackpad where practical.
-* **A3 Connectivity:** fully offline single player; no account.
-* **A4 Saves:** on device only; autosave at end of each day and when backgrounded; 3 manual slots; exact resume. Cloud sync is Q4.
-* **A5 Business model:** premium 9.99 USD, see 10.1.
+* **A3 Connectivity:** single player, fully playable offline; a light account (anonymous first, optional email link) enables cloud saves.
+* **A4 Saves:** local first with cloud sync across devices; autosave at end of each day and when the tab is hidden; 3 manual slots; exact resume.
+* **A5 Business model:** free, see 10.1.
 * **A6 Age rating:** 4+ or 9+.
 * **A7 Language:** English at v0.1; French, German, Italian, Spanish, Japanese at v1.0.
 * **A8 Setting:** fictional European-inspired city; neutral localisable currency.
@@ -615,7 +622,7 @@ Telemetry is opt-in and anonymous; playtest metrics need at least 30 target play
 * **D1** Art direction and UX designs for the vertical slice (build mode, recipe designer with tiers, kitchen panel, inspect panels, P&L).
 * **D2** Simulation tuning spreadsheet owned by game design, mirroring `balance.md`.
 * **D3** Composer and ambient sound library (including per equipment kitchen sounds).
-* **D4** Apple developer account, App Store listing, age rating questionnaire, privacy labels.
+* **D4** Web hosting, domain, privacy policy for the cloud save account.
 * **D5** Legal clearance of title and any resemblance to the original.
 * **D6** Playtest recruitment (at least 30 target players per milestone).
 * **D7** Localisation vendor (v1.0).
@@ -637,10 +644,10 @@ Telemetry is opt-in and anonymous; playtest metrics need at least 30 target play
 
 | # | Question | Who can answer |
 |---|---|---|
-| Q1 | License the "Pizza Tycoon" or "Pizza Connection" name, or ship with an original title? | Founder with legal counsel |
-| Q2 | Price 9.99 vs 14.99 USD, launch discount, or Apple Arcade instead of premium? | Founder with publishing lead |
+| Q1 | Closed: original title "Pizza D". | Founder |
+| Q2 | Closed: free, browser only. | Founder |
 | Q3 | A paid expansion later (new city or cuisine): acceptable under "no predatory IAP"? | Founder |
-| Q4 | Cross-device save sync at v1.0 or later? | Solution architect with founder |
+| Q4 | Closed: cloud saves from v0.1, browser on iPad and desktop. | Founder |
 | Q5 | Is a Mac or iPhone version planned, which affects UI density now? | Founder with solution architect |
 | Q6 | Minimum supported iPad model given M13? | Solution architect after the M0 performance spike |
 | Q7 | Pasta and salads as mains at v1.0, or pizza focus plus simple sides? | Game design lead with founder |

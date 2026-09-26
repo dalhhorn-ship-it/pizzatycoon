@@ -1,4 +1,4 @@
-# Versions and milestones: Cosy Pizza Tycoon for iPad
+# Versions and milestones: Pizza D
 
 Feature IDs refer to `features.md`; acceptance criteria to `acceptance-criteria.md`; numbers to `balance.md`. Durations are planning assumptions for a team of about 6 to 10 people (prd.md A12) and are for the delivery lead to confirm.
 

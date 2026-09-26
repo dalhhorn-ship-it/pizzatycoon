@@ -1,4 +1,4 @@
-# Acceptance criteria: Cosy Pizza Tycoon for iPad
+# Acceptance criteria: Pizza D
 
 * Every Must Have and Should Have feature in `features.md` has at least one criterion. Nice to Have features are not covered.
 * Format: Given [context] / When [action] / Then [outcome].

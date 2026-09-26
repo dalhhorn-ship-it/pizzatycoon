@@ -1,4 +1,4 @@
-# Features: Cosy Pizza Tycoon for iPad
+# Features: Pizza D
 
 * Companion to `prd.md` (system specs), `versions.md` (milestones), `acceptance-criteria.md` (tests), `balance.md` (numbers).
 * Priority: **Must** = required for the launch product (v1.0) or for the milestone listed; **Should** = strongly wanted, cut only under schedule pressure (see prd.md 10.4); **Nice** = only if capacity allows.

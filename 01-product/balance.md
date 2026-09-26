@@ -1,4 +1,4 @@
-# Balance: Cosy Pizza Tycoon for iPad
+# Balance: Pizza D
 
 * Companion to `prd.md` (sections 5 and 6 define the formulas).
 * **Every value here is a starting tuning assumption.** All of them live in data files (F-01) and are tuned from playtests, never in code.
