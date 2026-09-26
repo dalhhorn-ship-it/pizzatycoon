@@ -5,7 +5,7 @@ import { DISTRICTS, PREMISES } from '../data/districts';
 import { EQUIPMENT } from '../data/equipment';
 import { T } from '../data/tunables';
 import { VENUES, venueFor } from '../data/venues';
-import { withRecipeBook } from '../sim/game';
+import { ensureEveryRole, withRecipeBook } from '../sim/game';
 import { autoLayout, kitchenDims, layoutProblem } from '../sim/kitchen';
 
 export interface SaveSummary {
@@ -93,6 +93,7 @@ export function deserialise(text: string): SaveFile {
   if (typeof s.day !== 'number' || typeof s.cash !== 'number' || !Array.isArray(s.recipes)) throw new Error('Save file is damaged.');
   s.schemaVersion = SCHEMA_VERSION;
   withRecipeBook(s);
+  if (Array.isArray(s.candidates)) ensureEveryRole(s);
   // Saves from before the local following (balance.md 4.3) are established restaurants.
   if (typeof s.following !== 'number') s.following = T.following.established;
   // Saves from before fire safety: treat every day played as a day open.

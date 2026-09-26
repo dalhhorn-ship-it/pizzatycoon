@@ -24,10 +24,9 @@ function established(): GameState {
 const other = 'campusGate';
 
 describe('restaurant manager', () => {
-  test('a manager applies on the hiring board from the second week', () => {
-    const s = newGameAt(5, 'towpathKiosk');
-    expect(s.candidates.some((c) => c.role === 'manager')).toBe(false);
-    let t = s;
+  test('a manager is always on the hiring board, from day 1', () => {
+    let t = newGameAt(5, 'towpathKiosk');
+    expect(t.candidates.some((c) => c.role === 'manager')).toBe(true);
     for (let i = 0; i < 7; i++) t = apply(t, { type: 'runDay' }).state;
     const m = t.candidates.find((c) => c.role === 'manager');
     expect(m).toBeDefined();

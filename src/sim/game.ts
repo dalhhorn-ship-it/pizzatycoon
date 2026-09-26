@@ -157,6 +157,35 @@ function makeStaff(id: number, name: string, role: Role, skill: number, potentia
   };
 }
 
+/** Every role the player can hire; the hiring board always has at least one candidate for each. */
+export const HIREABLE_ROLES: readonly Role[] = ['chef', 'cook', 'server', 'host', 'dishwasher', 'manager'];
+
+/** One candidate of a given role. Managers have their own skill range and traits (prd.md 5.9). */
+function makeCandidate(rng: Rng, id: number, role: Role, fixedSkill?: number): Staff {
+  if (role === 'manager') {
+    const [lo, hi] = T.manager.candidateSkill;
+    const skill = rng.int(lo, hi);
+    const trait = rng.pick(['steady', 'frugal', 'charmer', 'mentor'] as TraitId[]);
+    return makeStaff(id, `${rng.pick(FIRST_NAMES)} ${rng.pick(LAST_NAMES)}`, 'manager', skill, Math.min(10, skill + rng.int(0, 2)), 0, [trait]);
+  }
+  const traitIds = Object.keys(TRAITS) as TraitId[];
+  const skill = fixedSkill ?? rng.int(role === 'chef' ? 5 : 2, role === 'chef' ? 9 : 7);
+  const potential = Math.min(10, skill + rng.int(0, 3));
+  const t1 = rng.pick(traitIds);
+  let t2 = rng.pick(traitIds);
+  if (t2 === t1) t2 = rng.pick(traitIds);
+  const traits = t1 === t2 ? [t1] : [t1, t2];
+  return makeStaff(id, `${rng.pick(FIRST_NAMES)} ${rng.pick(LAST_NAMES)}`, role, skill, potential, 0, traits);
+}
+
+/** Adds a candidate for every role missing from the board (after a hire, or for a save from before this rule). */
+export function ensureEveryRole(state: GameState): void {
+  for (const role of HIREABLE_ROLES) {
+    if (state.candidates.some((x) => x.role === role)) continue;
+    state.candidates.push(makeCandidate(Rng.stream(state.seed, state.day, `refill-${state.nextUid}`), state.nextUid++, role));
+  }
+}
+
 function generateCandidates(state: GameState): Staff[] {
   const rng = Rng.stream(state.seed, state.day, 'hiring');
   const roles: Role[] = ['cook', 'cook', 'server', 'server', 'chef', 'host', 'dishwasher'];
@@ -182,13 +211,11 @@ function generateCandidates(state: GameState): Staff[] {
     const name = `${rng.pick(FIRST_NAMES)} ${rng.pick(LAST_NAMES)}`;
     out.push(makeStaff(state.nextUid + i, name, role, skill, potential, fame, traits));
   }
-  // From the second week on, one restaurant manager applies every week (prd.md 5.9). Own stream: the rest of the board is unchanged.
-  if (state.day > 1) {
-    const mr = Rng.stream(state.seed, state.day, 'manager');
-    const [lo, hi] = T.manager.candidateSkill;
-    const skill = mr.int(lo, hi);
-    const trait = mr.pick(['steady', 'frugal', 'charmer', 'mentor'] as TraitId[]);
-    out.push(makeStaff(state.nextUid + out.length, `${mr.pick(FIRST_NAMES)} ${mr.pick(LAST_NAMES)}`, 'manager', skill, Math.min(10, skill + mr.int(0, 2)), 0, [trait]));
+  // Every role is always on the board (founder request): fill in any role the draw missed, managers included.
+  // Own stream, so the random part of the board is unchanged.
+  const fill = Rng.stream(state.seed, state.day, 'fill');
+  for (const role of HIREABLE_ROLES) {
+    if (!out.some((c) => c.role === role)) out.push(makeCandidate(fill, state.nextUid + out.length, role));
   }
   return out;
 }
@@ -586,6 +613,8 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       state.candidates = state.candidates.filter((x) => x.id !== cmd.candidateId);
       state.staff.push(c);
       events.push({ kind: 'info', text: `${c.name} joins the team.` });
+      // Hired the last one of that role: someone new applies straight away, so every role stays hireable.
+      ensureEveryRole(state);
       break;
     }
     case 'fire': {

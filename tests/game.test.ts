@@ -141,3 +141,39 @@ describe('fast forward a week', () => {
     expect(ev?.stoppedBecause).toMatch(/notice/);
   });
 });
+
+describe('hiring board', () => {
+  const ROLES = ['chef', 'cook', 'server', 'host', 'dishwasher', 'manager'];
+
+  test('every weekly board offers every role', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      let s = newGame(seed, 'canal', 'hole');
+      for (let week = 0; week < 4; week++) {
+        for (const role of ROLES) expect(s.candidates.some((c) => c.role === role), `seed ${seed} week ${week} ${role}`).toBe(true);
+        for (let d = 0; d < 7; d++) s = apply(s, { type: 'runDay' }).state;
+      }
+    }
+  });
+
+  test('hiring the last candidate of a role brings a new one straight away', () => {
+    let s = newGame(3, 'canal', 'hole');
+    s.cash = 100000;
+    for (const role of ROLES) {
+      for (let i = 0; i < 4; i++) {
+        const c = s.candidates.find((x) => x.role === role)!;
+        s = apply(s, { type: 'hire', candidateId: c.id }).state;
+        expect(s.candidates.some((x) => x.role === role)).toBe(true);
+      }
+    }
+    const ids = [...s.candidates, ...s.staff].map((x) => x.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+test('a save from before the rule gets every role on its board when it loads', async () => {
+  const { deserialise, serialise } = await import('../src/save/saveFile');
+  const s = newGame(3, 'canal', 'hole');
+  s.candidates = s.candidates.filter((c) => c.role === 'cook');
+  const loaded = deserialise(serialise(s, 0)).state;
+  for (const role of ['chef', 'cook', 'server', 'host', 'dishwasher', 'manager']) expect(loaded.candidates.some((c) => c.role === role)).toBe(true);
+});
