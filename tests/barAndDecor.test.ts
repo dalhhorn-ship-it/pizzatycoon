@@ -132,3 +132,13 @@ describe('a larger wine list', () => {
     expect(wineListScore(wines.slice(0, 1), analyse(s))).toBe(0);
   });
 });
+
+test('the wine cellar holds 17 wines, all sold by a supplier', async () => {
+  const { WINE_IDS } = await import('../src/data/recipes');
+  const { tiersFor } = await import('../src/sim/game');
+  expect(WINE_IDS.size).toBe(17);
+  const s = base();
+  for (const r of s.recipes.filter((x) => WINE_IDS.has(x.id))) for (const l of r.lines) expect(tiersFor(l.ingredientId).length).toBeGreaterThan(0);
+  const all = withMenu(s, [...WINE_IDS]);
+  expect(day(all).dishSales.sassicaia ?? 0).toBeGreaterThan(0);
+});

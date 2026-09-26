@@ -74,6 +74,16 @@ export const RECIPE_BOOK: readonly RecipeTemplate[] = [
   { id: 'chianti', name: 'Chianti Classico', kind: 'drink', ingredients: ['chianti'], price: 8, onMenu: false, wine: true },
   { id: 'barolo', name: 'Barolo', kind: 'drink', ingredients: ['barolo'], price: 14, onMenu: false, wine: true },
   { id: 'brunello', name: 'Brunello di Montalcino', kind: 'drink', ingredients: ['brunello'], price: 15, onMenu: false, wine: true },
+  { id: 'lambrusco', name: 'Lambrusco', kind: 'drink', ingredients: ['lambrusco'], price: 6, onMenu: false, wine: true },
+  { id: 'neroDavola', name: "Nero d'Avola", kind: 'drink', ingredients: ['neroDavola'], price: 6.5, onMenu: false, wine: true },
+  { id: 'soave', name: 'Soave Classico', kind: 'drink', ingredients: ['soave'], price: 7, onMenu: false, wine: true },
+  { id: 'vermentino', name: 'Vermentino di Sardegna', kind: 'drink', ingredients: ['vermentino'], price: 7.5, onMenu: false, wine: true },
+  { id: 'primitivo', name: 'Primitivo di Manduria', kind: 'drink', ingredients: ['primitivo'], price: 8, onMenu: false, wine: true },
+  { id: 'franciacorta', name: 'Franciacorta', kind: 'drink', ingredients: ['franciacorta'], price: 11, onMenu: false, wine: true },
+  { id: 'barbaresco', name: 'Barbaresco', kind: 'drink', ingredients: ['barbaresco'], price: 13, onMenu: false, wine: true },
+  { id: 'amarone', name: 'Amarone della Valpolicella', kind: 'drink', ingredients: ['amarone'], price: 15, onMenu: false, wine: true },
+  { id: 'tignanello', name: 'Tignanello', kind: 'drink', ingredients: ['tignanello'], price: 19, onMenu: false, wine: true },
+  { id: 'sassicaia', name: 'Sassicaia', kind: 'drink', ingredients: ['sassicaia'], price: 26, onMenu: false, wine: true },
 
   // Aperitivi: before dinner. Guests linger a little longer.
   { id: 'spritz', name: 'Aperol Spritz', kind: 'aperitivo', ingredients: ['aperol'], price: 8, onMenu: false },
