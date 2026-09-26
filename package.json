@@ -7,18 +7,24 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p worker",
     "lint": "eslint .",
     "test": "vitest run",
-    "balance": "vitest run tests/balance --reporter=verbose"
+    "balance": "vitest run tests/balance --reporter=verbose",
+    "worker:dev": "wrangler dev",
+    "db:migrate:local": "wrangler d1 migrations apply pizza-d-saves --local",
+    "db:migrate:remote": "wrangler d1 migrations apply pizza-d-saves --remote",
+    "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260926.1",
     "@eslint/js": "^10.0.1",
     "eslint": "^10.11.0",
     "globals": "^17.12.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.1",
     "vite": "^8.3.1",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "wrangler": "^4.141.0"
   }
 }

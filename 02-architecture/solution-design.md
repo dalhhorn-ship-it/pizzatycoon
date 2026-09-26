@@ -36,7 +36,7 @@ flowchart LR
     Local["Local adapter\nIndexedDB / localStorage"]
     SW["Service worker\noffline cache"]
   end
-  Cloud["Cloud save adapter\nSupabase (Postgres + auth + RLS)"]
+  Cloud["Cloudflare Worker /api\nD1 (SQLite) saves"]
   UI --> Store
   Floor --> Store
   Store --> Sim
@@ -153,9 +153,9 @@ erDiagram
 * Save = `{ schemaVersion, gameVersion, savedAt, revision, deviceId, checksum, state }` as JSON.
 * **Local first:** autosave after every `runDay` and on `visibilitychange` to hidden (iPad Safari may kill a background tab without warning). M0 uses `localStorage`; v0.1 moves to IndexedDB for size.
 * **Migrations:** an ordered list `migrations[n]: (stateVn) => stateVn+1`, tested with a fixture save for every past version.
-* **Cloud (v0.1):** Supabase with anonymous sign in (upgradable to an email magic link to use a second device). One table `saves(user_id, slot, revision, updated_at, blob)` protected by row level security. Sync on load, after autosave when online, and on focus.
+* **Cloud:** the same Cloudflare Worker that serves the game exposes `/api/*` backed by D1. Anonymous player id plus secret token; a 6 character link code adds a second device. One table `saves(player_id, slot, revision, updated_at, blob)`. Sync on load, after autosave when online, and on focus (ADR-005, ADR-007).
 * **Conflicts:** each save carries a `revision` and the `baseRevision` it was derived from. If the cloud revision moved on since the local base, the game shows both saves (day, cash, stars, device, time) and lets the player pick. No silent overwrites of progress.
-* Supabase is open source and self hostable, so the exit path is the same schema on our own Postgres (ADR-005).
+* D1 is SQLite and the API is four plain HTTP routes, so the exit path is the same schema on any server (ADR-005).
 
 ## 9. Non functional targets
 
@@ -175,7 +175,7 @@ erDiagram
 |---|---|---|---|
 | Browser storage | Safari evicts site data after weeks without use (ITP) or in low storage | Local save lost | Cloud save; ask for persistent storage (`navigator.storage.persist`); installed home screen apps are exempt from the 7 day rule |
 | Tab lifecycle | iPad kills a hidden tab | Lost progress since last save | Autosave on `visibilitychange`; days are atomic |
-| Cloud backend | Down or offline | No sync | Game keeps working locally, sync retries with backoff, badge shows "not synced" |
+| Cloud Worker or D1 | Down or offline | No sync | Game keeps working locally, sync retries with backoff, badge shows "not synced" |
 | Sync | Two devices played offline | Diverging saves | Revision check and explicit player choice |
 | Service worker | Stale cached build | Old code with new save | Versioned cache, update prompt at day end, saves carry `schemaVersion` and refuse to load in older code |
 | Save migration | Bug in a migration | Corrupt game | Fixture tests per version; keep previous save slot; checksum |
@@ -204,6 +204,7 @@ erDiagram
 6. Commands and state: new game, menu, tiers, prices, equipment, furniture, staff, loans, run day, weekly settlement, safety net.
 7. Save layer: serialize, version, local adapter, autosave.
 8. Greybox UI: HUD, menu and recipe card with tier selectors, kitchen catalogue, dining room grid with build mode, staff board, day report with P&L and reviews, floor playback.
-9. Deploy to static hosting; performance check on an iPad.
+9. Cloudflare Worker with static assets and the D1 save API; cloud sync and device linking in the client.
+10. Deploy; performance check on an iPad.
 
-v0.1 then adds: purchasing, storage and spoilage; cloud save adapter; PixiJS floor if needed; art, audio, tutorial.
+v0.1 then adds: purchasing, storage and spoilage; IndexedDB; PixiJS floor if needed; art, audio, tutorial.

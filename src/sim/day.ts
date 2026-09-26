@@ -87,12 +87,27 @@ export function closedReason(state: GameState, a: Analysis): string | null {
   return null;
 }
 
-const REVIEW_TEXT: Record<string, { high: string; low: string }> = {
-  food: { high: 'The pizza was wonderful.', low: 'The pizza was a bit disappointing.' },
-  service: { high: 'Friendly, attentive staff.', low: 'Service felt stretched.' },
-  ambience: { high: 'Such a lovely, cosy room.', low: 'The room felt a bit bare.' },
-  value: { high: 'Great value for money.', low: 'Pricey for what it is.' },
-  wait: { high: 'Barely had to wait.', low: 'We waited ages for our table.' },
+const REVIEW_TEXT: Record<string, { high: readonly string[]; low: readonly string[] }> = {
+  food: {
+    high: ['The pizza was wonderful.', 'Best crust I have had in ages.', 'You can taste the good ingredients.', 'Perfectly blistered, perfectly topped.'],
+    low: ['The pizza was a bit disappointing.', 'The toppings tasted a little tired.', 'Nothing special on the plate.', 'The base was on the bland side.'],
+  },
+  service: {
+    high: ['Friendly, attentive staff.', 'Our server was a delight.', 'Warm welcome from start to finish.'],
+    low: ['Service felt stretched.', 'We had to wave for the bill.', 'The staff looked rushed off their feet.'],
+  },
+  ambience: {
+    high: ['Such a lovely, cosy room.', 'Gorgeous little dining room.', 'The lighting makes it feel like home.'],
+    low: ['The room felt a bit bare.', 'Could do with some warmth on the walls.', 'A little cramped and plain.'],
+  },
+  value: {
+    high: ['Great value for money.', 'Honest prices for proper pizza.', 'Worth every penny.'],
+    low: ['Pricey for what it is.', 'The bill made us wince.', 'A bit steep for a weeknight.'],
+  },
+  wait: {
+    high: ['Barely had to wait.', 'Seated straight away.', 'Food arrived quickly.'],
+    low: ['We waited ages for our table.', 'The queue at the door was long.', 'The food took its time.'],
+  },
 };
 
 export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): DayReport {
@@ -291,7 +306,9 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
       const entries = Object.entries(sr.scores);
       const hi = entries.reduce((x, y) => (y[1] > x[1] ? y : x));
       const lo = entries.reduce((x, y) => (y[1] < x[1] ? y : x));
-      const text = `${REVIEW_TEXT[hi[0]]?.high ?? ''} ${REVIEW_TEXT[lo[0]]?.low ?? ''}`.trim();
+      const good = REVIEW_TEXT[hi[0]]?.high ?? [''];
+      const bad = REVIEW_TEXT[lo[0]]?.low ?? [''];
+      const text = s >= 85 ? `${rng.pick(good)} ${rng.pick(REVIEW_TEXT.food?.high ?? good)}` : s < 40 ? `${rng.pick(bad)}` : `${rng.pick(good)} ${rng.pick(bad)}`;
       reviews.push({ segment: sr.segment, stars: clamp(Math.round(1 + (4 * s) / 100), 1, 5), text });
     }
   }
