@@ -384,6 +384,8 @@ export function kitchenPanel(ctx: PanelCtx, view: KitchenView): HTMLElement {
         h('span', null, 'Bake and walk'), h('b', null, `${k.cookTime.toFixed(1)} min`),
         h('span', null, 'Kitchen skill'), h('b', null, `${k.kitchenSkillK.toFixed(0)} (cooks ${k.avgSkill.toFixed(1)})`),
         h('span', null, 'Equipment quality'), h('b', null, signed(k.equipmentE, 1)),
+        h('span', { title: 'Add-on quality counts up to a cap that rises with reputation: +3 at 50, +4 at 65, +5 at 80.' }, 'Add-on quality'),
+        h('b', { class: k.addonRaw > k.addonCap ? 'warn' : '' }, `+${k.addonE.toFixed(1)} of +${k.addonCap}${k.addonRaw > k.addonCap + 0.05 ? ` (${k.addonRaw.toFixed(1)} installed; more reputation lifts the cap)` : ''}`),
         h('span', null, 'Kitchen flow'), h('b', { class: penalties ? 'warn' : 'good' }, penalties ? `${penalties} slow spot${penalties > 1 ? 's' : ''}` : 'Smooth')),
       h('div', { class: 'small muted' }, bottlenecks.length ? `Last service limits: ${bottlenecks.join(', ')}` : 'No bottleneck at the last service.')),
     guestsNotice(state, k.equipmentE),

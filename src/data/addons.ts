@@ -24,6 +24,7 @@ const PREP = ['oldWorkbench', 'prepCounter', 'marbleBench', 'prepFridge'] as con
 const DECKS = ['usedDeckOven', 'deckOven', 'doubleDeckOven'] as const;
 const COLD = ['doughFridge', 'prepFridge'] as const;
 const WASH = ['sink', 'dishMachine'] as const;
+const OVENS = ['usedDeckOven', 'deckOven', 'doubleDeckOven', 'conveyorOven', 'stoneHearthOven', 'woodFiredOven'] as const;
 
 export const ADDONS: Record<string, AddonItem> = Object.fromEntries(
   (
@@ -45,6 +46,18 @@ export const ADDONS: Record<string, AddonItem> = Object.fromEntries(
       { id: 'preRinseSpray', name: 'Pre rinse Spray', fits: WASH, price: 350, maintenance: 3, unlock: { kind: 'day', day: 8 }, washMult: 1.12, blurb: 'Blast it clean before it goes in.' },
       { id: 'ticketRail', name: 'Ticket Rail', fits: ['heatLampPass'], price: 150, maintenance: 0, unlock: { kind: 'day', day: 5 }, serveMult: 0.9, blurb: 'Orders in a neat row, oldest first.' },
       { id: 'heatShelf', name: 'Heat Shelf', fits: ['heatLampPass'], price: 400, maintenance: 3, unlock: { kind: 'day', day: 8 }, qualityAdd: 1, blurb: 'Plates wait hot, not warm.' },
+      // More craft (balance.md 4.11): quality add-ons for every station. The quality cap rises with reputation.
+      { id: 'irThermometer', name: 'Infrared Thermometer', fits: OVENS, price: 180, maintenance: 0, unlock: { kind: 'day', day: 5 }, qualityAdd: 1, blurb: 'Read the oven floor, not the dial.' },
+      { id: 'steelPeels', name: 'Steel Pizza Peels', fits: OVENS, price: 220, maintenance: 1, unlock: { kind: 'served', guests: 200 }, qualityAdd: 1, blurb: 'Thin steel slides under the base without tearing it.' },
+      { id: 'refractoryFloor', name: 'Refractory Floor Tiles', fits: ['stoneHearthOven'], price: 1400, maintenance: 8, unlock: { kind: 'rep', rep: 45 }, qualityAdd: 2, blurb: 'Italian biscotto tiles: a leopard spotted base.' },
+      { id: 'copperDoor', name: 'Copper Dome Door', fits: ['woodFiredOven'], price: 1200, maintenance: 6, unlock: { kind: 'rep', rep: 60 }, qualityAdd: 1, bakeMult: 0.95, blurb: 'Keeps the dome roaring between pizzas.' },
+      { id: 'herbPlanter', name: 'Herb Planter Box', fits: PREP, price: 250, maintenance: 2, unlock: { kind: 'day', day: 8 }, qualityAdd: 1, blurb: 'Basil and oregano cut to order.' },
+      { id: 'tomatoMill', name: 'Hand Tomato Mill', fits: PREP, price: 300, maintenance: 0, unlock: { kind: 'rep', rep: 40 }, qualityAdd: 1, blurb: 'San Marzano tomatoes crushed by hand every morning.' },
+      { id: 'pastaStation', name: 'Fresh Pasta Station', fits: PREP, price: 800, maintenance: 5, unlock: { kind: 'rep', rep: 45 }, qualityAdd: 1, prepMult: 1.05, blurb: 'A pot always on the boil and a drying rack for fresh pasta.' },
+      { id: 'coldFerment', name: 'Cold Ferment Trays', fits: COLD, price: 600, maintenance: 0, unlock: { kind: 'rep', rep: 45 }, qualityAdd: 2, blurb: 'Dough rested 48 hours in the cold: light, airy and full of flavour.' },
+      { id: 'sourdoughStarter', name: 'Sourdough Starter', fits: ['provingCabinet'], price: 500, maintenance: 4, unlock: { kind: 'rep', rep: 55 }, qualityAdd: 2, blurb: 'A lievito madre fed every day. Tangy, blistered crusts.' },
+      { id: 'plateWarmer', name: 'Plate Warmer', fits: ['heatLampPass'], price: 600, maintenance: 4, unlock: { kind: 'rep', rep: 45 }, qualityAdd: 1, blurb: 'Every plate leaves the pass warm.' },
+      { id: 'semolinaDuster', name: 'Semolina Duster', fits: ['doughSheeter'], price: 150, maintenance: 1, unlock: { kind: 'served', guests: 500 }, qualityAdd: 1, blurb: 'A fine dusting of semolina for a crisp, never sticky base.' },
       { id: 'humidityControl', name: 'Humidity Control', fits: ['provingCabinet'], price: 900, maintenance: 5, unlock: { kind: 'rep', rep: 40 }, qualityAdd: 1, blurb: 'Dough that proves the same in August and January.' },
     ] satisfies AddonItem[]
   ).map((a) => [a.id, a]),

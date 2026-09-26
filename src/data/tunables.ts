@@ -181,7 +181,9 @@ export const T = {
   /** kitchen-upgrades.md 7. */
   addons: {
     maxPerStation: 2,
+    /** Total add-on quality allowed; it rises with reputation (balance.md 4.11): [reputation, extra points]. */
     qualityCap: 2,
+    qualityCapSteps: [[50, 1], [65, 1], [80, 1]] as readonly (readonly [number, number])[],
     coldReachTiles: 2,
   },
   /** Fire safety upgrades (src/data/fireSafety.ts) unlock once the restaurant has been open this many days. */

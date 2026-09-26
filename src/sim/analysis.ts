@@ -59,6 +59,9 @@ export interface KitchenStats {
   stationPrep: Record<number, number>;
   /** Quality from add-ons after the cap (kitchen-upgrades.md 3). */
   addonE: number;
+  /** Add-on quality installed before the cap, and the cap at the current reputation (balance.md 4.11). */
+  addonRaw: number;
+  addonCap: number;
   /** Best waste multiplier from cold store add-ons. */
   wasteMult: number;
   /** Output per oven by uid, for the kitchen view. */
@@ -146,6 +149,11 @@ export function harmonyOf(ingredientIds: string[], maxExtras: number = T.quality
 export function repPriceMult(rep: number): number {
   const p = T.pricing;
   return 1 + p.repPremium * clamp((rep - p.repPremiumFrom) / (100 - p.repPremiumFrom), 0, 1);
+}
+
+/** Total add-on quality allowed at this reputation (balance.md 4.11). */
+export function addonQualityCap(rep: number): number {
+  return T.addons.qualityCap + T.addons.qualityCapSteps.reduce((a, [r, extra]) => a + (rep >= r ? extra : 0), 0);
 }
 
 export function dishStats(recipe: Recipe, K: number, E: number, frugal: boolean, costMult = 1, priceMult = 1): DishStats {
@@ -284,11 +292,14 @@ export function kitchenStats(state: GameState, service: Service = 'dinner'): Kit
   counterQ = staffedCounters ? counterQ / staffedCounters : 0;
   counterAddonQ = staffedCounters ? counterAddonQ / staffedCounters : 0;
   const passE = owned.find((e) => EQUIPMENT[e.itemId]?.role === 'pass');
+  // Cold stations: the best one counts (cold fermented dough).
+  const coldAddonQ = Math.max(0, ...owned.filter((e) => EQUIPMENT[e.itemId]?.cold && EQUIPMENT[e.itemId]?.role === 'cold').map((e) => addonSum(e, 'qualityAdd')));
   const provingE = owned.find((e) => EQUIPMENT[e.itemId]?.role === 'proving');
-  // kitchen-upgrades.md 3: add-on quality is capped in total.
+  // kitchen-upgrades.md 3: add-on quality is capped in total; the cap rises with reputation (balance.md 4.11).
+  const addonRaw = ovenAddonQ + counterAddonQ + (passE ? addonSum(passE, 'qualityAdd') : 0) + (provingE ? addonSum(provingE, 'qualityAdd') : 0) + coldAddonQ;
   const addonE = Math.min(
-    T.addons.qualityCap,
-    ovenAddonQ + counterAddonQ + (passE ? addonSum(passE, 'qualityAdd') : 0) + (provingE ? addonSum(provingE, 'qualityAdd') : 0),
+    addonQualityCap(state.rep),
+    addonRaw,
   );
   const colds = owned.filter((e) => EQUIPMENT[e.itemId]?.cold);
   const wasteMult = Math.min(1, ...colds.map((e) => addonProduct(e, 'wasteMult')));
@@ -315,6 +326,8 @@ export function kitchenStats(state: GameState, service: Service = 'dinner'): Kit
     maintenancePerWeek:
       items.reduce((a, i) => a + i.maintenance, 0) + owned.reduce((a, e) => a + (e.addons ?? []).reduce((b, x) => b + (ADDONS[x.id]?.maintenance ?? 0), 0), 0),
     addonE,
+    addonRaw,
+    addonCap: addonQualityCap(state.rep),
     wasteMult,
     hasPass,
     hasDishMachine,

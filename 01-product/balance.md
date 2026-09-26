@@ -718,3 +718,15 @@ Measured on the cosy starter at full following, best pizza price (x the starter 
 **Hiring board (2026-09-26).** Every board offers every role: chef, cook, server, host, dishwasher and restaurant manager (from day 1). The random candidates are drawn as before; any role the draw missed is filled from its own random stream. Hiring the last candidate of a role brings a new one for that role straight away, and saves from before this rule get the missing roles when they load.
 
 **Menu limits (2026-09-26).** The single 36 item limit is split into 24 food items (antipasti, mains, desserts) and 32 bar items (drinks, wines, aperitivi, digestivi), so a full wine list never blocks a pizza. The menu header shows both counts, and a full section's button says so instead of failing silently.
+
+### 4.11 More kitchen add-ons for quality (2026-09-26)
+
+Founder request: more kitchen add-ons that raise quality.
+
+Eleven new add-ons in `src/data/addons.ts`: Infrared Thermometer (+1, any oven, $180), Steel Pizza Peels (+1, any oven, $220), Refractory Floor Tiles (+2, Stone Hearth, $1,400, Rep 45), Copper Dome Door (+1 and 5% faster bake, Wood Fired, $1,200, Rep 60), Herb Planter Box (+1, prep, $250), Hand Tomato Mill (+1, prep, $300, Rep 40), Fresh Pasta Station (+1 and 5% faster prep, prep, $800, Rep 45), Cold Ferment Trays (+2, fridges, $600, Rep 45; the best dough fridge counts), Sourdough Starter (+2, proving cabinet, $500, Rep 55), Plate Warmer (+1, heat lamp pass, $600, Rep 45), Semolina Duster (+1, dough sheeter, $150). Still at most two add-ons per station.
+
+**The add-on quality cap now rises with reputation** (`T.addons.qualityCapSteps`): +2 as before, +3 from Rep 50, +4 from Rep 65, +5 from Rep 80. The total equipment bonus E stays capped at 15. The Kitchen tab shows "Add-on quality +x of +cap" and what is installed beyond the cap.
+
+Measured on the cosy starter at Rep 70: pizza stone and thermometer on the oven, herbs and tomato mill on both benches, cold ferment trays: add-on quality +4 of +4 (7 installed), margherita quality 59.5 to 63.5, satisfaction 65.1 to 67.7. The same kitchen counts +2 at Rep 40 and +5 at Rep 85.
+
+Guardrail (kitchen-upgrades.md 7): the fully upgraded middle build now tries a speed first and a quality first add-on set and keeps the better. Quality first earns it less in University Quarter ($1,710 against $1,808) because its busy kitchen needs oven speed. It still trails volume by 18% and luxury by 43%.

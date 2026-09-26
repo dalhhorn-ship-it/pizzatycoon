@@ -43,14 +43,19 @@ describe('add-ons', () => {
     expect(apply(s, { type: 'installAddon', uid: uidOf(s, 'sink'), addonId: 'pizzaStone' }).error).toMatch(/fit/);
   });
 
-  test('quality from add-ons is capped (qualityCap)', () => {
+  test('quality from add-ons is capped; the cap rises with reputation (balance.md 4.11)', () => {
     let s = starter();
     s = apply(s, { type: 'installAddon', uid: uidOf(s, 'deckOven'), addonId: 'pizzaStone' }).state;
     for (const c of s.equipment.filter((e) => e.itemId === 'prepCounter')) {
       s = apply(s, { type: 'installAddon', uid: c.uid, addonId: 'marbleInsert' }).state;
       s = apply(s, { type: 'installAddon', uid: c.uid, addonId: 'portionScale' }).state;
     }
-    expect(analyse(s).kitchen.addonE).toBe(2);
+    const at = (rep: number): number => analyse({ ...s, rep }).kitchen.addonE;
+    expect(analyse(s).kitchen.addonRaw).toBe(4);
+    expect(at(30)).toBe(2);
+    expect(at(50)).toBe(3);
+    expect(at(65)).toBe(4);
+    expect(at(90)).toBe(4);
   });
 
   test('remove refunds 80%; selling a station refunds its add-ons too', () => {
@@ -114,18 +119,27 @@ describe('add-ons', () => {
 
 describe('balance with add-ons (kitchen-upgrades.md 7)', () => {
   test('a fully upgraded middle build still trails each specialist at home by 15% or more', () => {
-    const upgrade = (s: GameState): GameState => {
-      const plan: Record<string, string[]> = {
+    // The two strongest add-on sets per station: speed first (M0.3) and quality first (balance.md 4.11). The best one counts.
+    const PLANS: Record<string, string[]>[] = [
+      {
         stoneHearthOven: ['thermostatTune'],
         prepCounter: ['marbleInsert', 'portionScale'],
         doughFridge: ['tempLogger', 'drawerUnit'],
         sink: ['preRinseSpray', 'dryingRacks'],
-      };
+      },
+      {
+        stoneHearthOven: ['refractoryFloor', 'irThermometer'],
+        prepCounter: ['marbleInsert', 'tomatoMill'],
+        doughFridge: ['coldFerment', 'tempLogger'],
+        sink: ['preRinseSpray', 'dryingRacks'],
+      },
+    ];
+    const upgrade = (s: GameState, plan: Record<string, string[]>): GameState => {
       s.equipment = s.equipment.map((e) => ({ ...e, addons: (plan[e.itemId] ?? []).map((id) => ({ id, paid: ADDONS[id]!.price })) }));
       return s;
     };
     const best = (d: string, prices: number[]): number =>
-      Math.max(...prices.map((p) => steadyState(upgrade(buildState('middle', d, p))).report.pnl.profit));
+      Math.max(...PLANS.flatMap((plan) => prices.map((p) => steadyState(upgrade(buildState('middle', d, p), plan)).report.pnl.profit)));
     // Each specialist's best home profit (kitchen-upgrades.md 7), searched over its price band like the middle build.
     const specialist = (b: 'volume' | 'luxury', d: string, prices: number[]): number =>
       Math.max(...prices.map((p) => steadyState(buildState(b, d, p)).report.pnl.profit));
