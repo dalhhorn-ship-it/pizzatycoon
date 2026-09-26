@@ -32,3 +32,8 @@
 .checklist .tick { width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--line); display: grid; place-items: center; font-weight: 800; color: #fff; font-size: 12px; }
 .checklist .check.done .tick { background: var(--good); border-color: var(--good); }
 .checklist .check.done { color: var(--muted); }
+
+/* Settings: economy sliders */
+.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 18px; }
+.slider { display: grid; gap: 4px; font-size: 14px; }
+.slider input[type='range'] { width: 100%; min-height: 32px; accent-color: var(--accent); }

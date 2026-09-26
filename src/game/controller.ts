@@ -1,5 +1,6 @@
 // Holds the current game, applies commands, autosaves and syncs (solution-design.md 4).
 
+import type { Economy } from '../sim/economy';
 import { apply, type Command, type GameEvent, newGame } from '../sim/game';
 import type { GameState } from '../sim/state';
 import { SaveManager } from '../save/sync';
@@ -36,8 +37,8 @@ export class Controller {
     window.addEventListener('online', () => this.state && void this.saves.push(this.state));
   }
 
-  start(seed: number, districtId: string, premisesId: string): void {
-    this.state = newGame(seed, districtId, premisesId);
+  start(seed: number, districtId: string, premisesId: string, economy?: Economy): void {
+    this.state = newGame(seed, districtId, premisesId, economy);
     this.saveNow(true);
     this.publish([{ kind: 'info', text: 'Welcome to your first pizzeria!' }]);
   }

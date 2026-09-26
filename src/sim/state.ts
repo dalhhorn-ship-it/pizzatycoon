@@ -24,6 +24,8 @@ export interface PlacedFurniture {
   itemId: string;
   x: number;
   y: number;
+  /** Price actually paid; refunds are 80% of this. */
+  paid?: number;
 }
 
 export interface OwnedEquipment {
@@ -33,6 +35,8 @@ export interface OwnedEquipment {
   x: number;
   y: number;
   rot: 0 | 1;
+  /** Price actually paid; refunds are 80% of this. */
+  paid?: number;
 }
 
 export interface Staff {
@@ -142,4 +146,6 @@ export interface GameState {
   daysBelowZero: number;
   history: DayReport[];
   unlockAll: boolean;
+  /** Difficulty multipliers from the settings menu; missing means Normal. */
+  economy?: import('./economy').Economy;
 }

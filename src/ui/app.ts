@@ -7,6 +7,8 @@ import type { Controller } from '../game/controller';
 import { fromSaveCode, toSaveCode } from '../save/saveFile';
 import { analyse } from '../sim/analysis';
 import { depositFor, type GameEvent, RANK_NAMES, seatLimit } from '../sim/game';
+import { ECONOMY_LABELS, ECONOMY_RANGE, type Economy, type EconomyKey, economyOf, PRESETS, presetName } from '../sim/economy';
+import { outlook } from './impact';
 import type { DayReport, GameState } from '../sim/state';
 import { h, modal, money, signed, stars, toast } from './dom';
 import { Floor } from './floor';
@@ -18,6 +20,17 @@ import { kitchenPanel, menuPanel, moneyPanel, type PanelCtx, roomPanel, staffPan
 type Tab = 'menu' | 'kitchen' | 'room' | 'staff' | 'money';
 const TABS: [Tab, string][] = [['menu', 'Menu'], ['kitchen', 'Kitchen'], ['room', 'Room'], ['staff', 'Staff'], ['money', 'Money']];
 const TAB_KEY = 'pizzad:ui:tab';
+const ECONOMY_KEY = 'pizzad:economy';
+
+/** Difficulty last chosen on this device; used for new games. */
+function savedEconomy(): Economy | undefined {
+  try {
+    const raw = localStorage.getItem(ECONOMY_KEY);
+    return raw ? (JSON.parse(raw) as Economy) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 const clockText = (m: number): string => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
 
@@ -185,7 +198,7 @@ export class App {
       h('div', { class: 'stat' }, h('span', null, 'Rank'), h('b', null, RANK_NAMES[s.rank])),
       h('div', { class: 'grow' }),
       h('button', { class: 'small', onclick: () => this.showMarket() }, '🏠 Buy another restaurant'),
-      h('button', { class: 'small ghost', onclick: () => this.confirmRestart() }, '↺ Restart'),
+      h('button', { class: 'small', onclick: () => this.showSettings() }, '⚙ Settings'),
       h('span', { class: `cloud ${status}` }, cloudText[status]),
     );
   }
@@ -231,7 +244,7 @@ export class App {
       case 'kitchen': content = kitchenPanel(ctx, this.kitchen); break;
       case 'room': content = roomPanel(ctx); break;
       case 'staff': content = staffPanel(ctx); break;
-      case 'money': content = moneyPanel(ctx, this.settingsCard()); break;
+      case 'money': content = moneyPanel(ctx, h('button', { class: 'small', onclick: () => this.showSettings() }, '⚙ Settings, saves and difficulty')); break;
     }
     this.panel.replaceChildren(content);
     this.panel.scrollTop = scroll;
@@ -325,16 +338,18 @@ export class App {
     const body = h('div', { class: 'stack' });
     const render = (): void => {
       const deposit = depositFor(district, premises);
-      const left = T.finance.startingCash - deposit;
+      const startCash = Math.round(T.finance.startingCash * (savedEconomy()?.startingCash ?? 1));
+      const left = startCash - deposit;
       body.replaceChildren(
         h('h2', null, hasGame ? 'Start a new pizzeria' : 'Welcome to Pizza D'),
-        h('div', { class: 'muted' }, `You have ${money(T.finance.startingCash)} and a dream. Rent an empty place, then set it up yourself: a second hand oven, a workbench, a fridge, a sink, a few folding tables, a cook and a server. Start small, earn, and grow. There is no game over.`),
+        h('div', { class: 'muted' }, `You have ${money(startCash)} and a dream. Rent an empty place, then set it up yourself: a second hand oven, a workbench, a fridge, a sink, a few folding tables, a cook and a server. Start small, earn, and grow. There is no game over.`),
         h('h3', null, 'Neighbourhood'),
         h('div', { class: 'districts' }, ...Object.values(DISTRICTS).map((x) => h('button', { class: district === x.id ? 'on' : '', onclick: () => { district = x.id; render(); } },
           h('b', null, x.name), h('span', { class: 'small' }, x.blurb),
           h('span', { class: 'small muted' }, `${x.footTraffic.toLocaleString()} passers-by a day · rent $${x.rentPerTile}/tile/week`)))),
         h('h3', null, 'Premises'),
-        this.premisesCards(district, premises, (id) => { premises = id; render(); }, T.finance.startingCash),
+        this.premisesCards(district, premises, (id) => { premises = id; render(); }, startCash),
+        h('div', { class: 'small muted' }, `Difficulty: ${presetName(economyOf({ economy: savedEconomy() }))}. Change it any time under ⚙ Settings.`),
         h('div', { class: 'card' }, h('div', { class: 'kv' },
           h('span', null, 'Deposit (4 weeks rent)'), h('b', null, money(deposit)),
           h('span', null, 'Left to set up with'), h('b', { class: left < 2920 ? 'warn' : 'good' }, money(left))),
@@ -345,7 +360,7 @@ export class App {
             : h('button', { class: 'ghost', onclick: () => { close(); this.showLinkDevice(true); } }, 'Continue a game from another device'),
           h('button', { class: 'primary', disabled: left < 0, onclick: () => {
             close();
-            this.game.start(Math.floor(Math.random() * 2 ** 31), district, premises);
+            this.game.start(Math.floor(Math.random() * 2 ** 31), district, premises, savedEconomy());
             this.shown = this.game.state;
             this.setViews(this.game.state as GameState);
             this.renderAll();
@@ -452,65 +467,126 @@ export class App {
     close = modal(content);
   }
 
-  private settingsCard(): HTMLElement {
-    const status = this.game.saves.status;
-    const codeBox = h('div', { class: 'small' });
-    return h('div', { class: 'card' },
-      h('h3', null, 'Saves and settings'),
-      h('div', { class: 'small muted' }, status === 'offline'
-        ? 'Your game is saved on this device. Cloud saves start when the game is online.'
-        : 'Your game is saved on this device and in the cloud. Link another device (iPad, laptop) to continue there.'),
-      h('div', { class: 'row' },
-        h('button', { class: 'small', disabled: status === 'offline', onclick: async () => {
-          try {
-            this.game.saveNow(true);
-            const { code, expiresAt } = await this.game.saves.linkCode();
-            codeBox.replaceChildren(h('div', { class: 'big', style: 'letter-spacing:4px' }, code), `Enter this on your other device within ${Math.round((expiresAt - Date.now()) / 60000)} minutes.`);
-          } catch (err) {
-            toast((err as Error).message, 'warn');
-          }
-        } }, 'Link a device'),
-        h('button', { class: 'small', onclick: () => this.showLinkDevice() }, 'I have a code'),
-        h('button', { class: 'small', onclick: async () => {
-          const code = toSaveCode(this.game.state as GameState, Date.now());
-          try {
-            await navigator.clipboard.writeText(code);
-            toast('Save code copied. Paste it anywhere safe.', 'good');
-          } catch {
-            prompt('Copy your save code:', code);
-          }
-        } }, 'Copy save code'),
-        h('button', { class: 'small', onclick: () => {
-          const code = prompt('Paste a save code:');
-          if (!code) return;
-          try {
-            this.game.load(fromSaveCode(code).state);
-            this.start();
-            toast('Save loaded.', 'good');
-          } catch (err) {
-            toast((err as Error).message, 'warn');
-          }
-        } }, 'Load save code')),
-      codeBox,
-      h('label', { class: 'row small' },
-        h('input', { type: 'checkbox', checked: this.game.state?.unlockAll, onchange: (e: Event) => this.game.dispatch({ type: 'setUnlockAll', on: (e.target as HTMLInputElement).checked }) }),
-        'Sandbox: unlock all equipment (for playtesting)'),
-      h('div', { class: 'row' },
-        h('button', { class: 'small', onclick: () => {
-          const root = document.documentElement;
-          const next = root.dataset.theme === 'dark' ? 'light' : root.dataset.theme === 'light' ? '' : 'dark';
-          if (next) root.dataset.theme = next;
-          else delete root.dataset.theme;
-          try {
-            localStorage.setItem('pizzad:ui:theme', next);
-          } catch {
-            // ignore
-          }
-          this.floor.invalidate();
-        } }, 'Theme: light / dark / auto'),
-        (this.game.state?.cash ?? 0) <= T.finance.freshStartThreshold
-          ? h('button', { class: 'small', onclick: () => this.game.dispatch({ type: 'freshStart' }) }, 'Fresh start (keep recipes and unlocks)')
-          : null,
-        h('button', { class: 'small ghost', onclick: () => this.confirmRestart() }, 'Restart game')));
+  /** One place for game, difficulty, saves and display settings. */
+  private showSettings(): void {
+    let close = (): void => {};
+    const body = h('div', { class: 'stack' });
+    const render = (): void => {
+      const st = this.game.state;
+      if (!st) return;
+      const eco = economyOf(st);
+      const preset = presetName(eco);
+      const o = outlook(st);
+      const status = this.game.saves.status;
+      const codeBox = h('div', { class: 'small' });
+      const setEco = (e: Partial<Economy>): void => {
+        const err = this.game.dispatch({ type: 'setEconomy', economy: e });
+        if (err) toast(err, 'warn');
+        try {
+          localStorage.setItem(ECONOMY_KEY, JSON.stringify(economyOf(this.game.state as GameState)));
+        } catch {
+          // ignore
+        }
+        render();
+      };
+      const slider = (k: EconomyKey): HTMLElement => {
+        const label = ECONOMY_LABELS[k];
+        const v = eco[k];
+        const pct = Math.round(v * 100);
+        const easier = label.easier === 'up' ? v > 1 : v < 1;
+        return h('label', { class: 'slider' },
+          h('span', { class: 'spread' }, h('span', null, label.name), h('b', { class: v === 1 ? '' : easier ? 'good' : 'warn' }, `${pct}%`)),
+          h('input', {
+            type: 'range', min: ECONOMY_RANGE.min, max: ECONOMY_RANGE.max, step: ECONOMY_RANGE.step, value: v,
+            'aria-label': label.name,
+            onchange: (e: Event) => setEco({ [k]: Number((e.target as HTMLInputElement).value) }),
+          }));
+      };
+      body.replaceChildren(
+        h('div', { class: 'spread' }, h('h2', null, 'Settings'), h('button', { class: 'small', onclick: () => close() }, 'Close')),
+
+        h('div', { class: 'card' },
+          h('h3', null, 'Game'),
+          h('div', { class: 'row' },
+            h('button', { onclick: () => { close(); this.showMarket(); } }, '🏠 Buy another restaurant'),
+            h('button', { onclick: () => { close(); this.confirmRestart(); } }, '↺ Restart game'),
+            st.cash <= T.finance.freshStartThreshold
+              ? h('button', { onclick: () => { close(); this.game.dispatch({ type: 'freshStart' }); } }, 'Fresh start (keep recipes and unlocks)')
+              : null)),
+
+        h('div', { class: 'card' },
+          h('h3', null, 'Economy and difficulty'),
+          h('div', { class: 'small muted' }, 'Make the game easier or harder at any time. Changes apply from the next service. Selling equipment never pays more than the normal 80%, whatever the price slider says.'),
+          h('div', { class: 'seg' }, ...(['easy', 'normal', 'hard'] as const).map((p) =>
+            h('button', { class: preset === p ? 'on' : '', onclick: () => setEco(PRESETS[p]) }, p[0]?.toUpperCase() + p.slice(1))),
+            h('button', { class: preset === 'custom' ? 'on' : '', disabled: true }, 'Custom')),
+          h('div', { class: 'sliders' }, ...(Object.keys(ECONOMY_LABELS) as EconomyKey[]).map(slider)),
+          o.covers > 0
+            ? h('div', { class: 'impact' }, 'With these settings an average day earns about ', h('b', { class: o.profit >= 0 ? 'good' : 'bad' }, money(o.profit)), ` from ${o.covers.toFixed(0)} guests (at your current reputation).`)
+            : h('div', { class: 'impact' }, 'Set up and open your pizzeria to see what these settings do to a day\'s profit.')),
+
+        h('div', { class: 'card' },
+          h('h3', null, 'Saves and devices'),
+          h('div', { class: 'small muted' }, status === 'offline'
+            ? 'Your game is saved on this device. Cloud saves start when the game is online.'
+            : 'Your game is saved on this device and in the cloud. Link another device (iPad, laptop) to continue there.'),
+          h('div', { class: 'row' },
+            h('button', { class: 'small', disabled: status === 'offline', onclick: async () => {
+              try {
+                this.game.saveNow(true);
+                const { code, expiresAt } = await this.game.saves.linkCode();
+                codeBox.replaceChildren(h('div', { class: 'big', style: 'letter-spacing:4px' }, code), `Enter this on your other device within ${Math.round((expiresAt - Date.now()) / 60000)} minutes.`);
+              } catch (err) {
+                toast((err as Error).message, 'warn');
+              }
+            } }, 'Link a device'),
+            h('button', { class: 'small', onclick: () => { close(); this.showLinkDevice(); } }, 'I have a code'),
+            h('button', { class: 'small', onclick: async () => {
+              const code = toSaveCode(this.game.state as GameState, Date.now());
+              try {
+                await navigator.clipboard.writeText(code);
+                toast('Save code copied. Paste it anywhere safe.', 'good');
+              } catch {
+                prompt('Copy your save code:', code);
+              }
+            } }, 'Copy save code'),
+            h('button', { class: 'small', onclick: () => {
+              const code = prompt('Paste a save code:');
+              if (!code) return;
+              try {
+                this.game.load(fromSaveCode(code).state);
+                close();
+                this.start();
+                toast('Save loaded.', 'good');
+              } catch (err) {
+                toast((err as Error).message, 'warn');
+              }
+            } }, 'Load save code')),
+          codeBox),
+
+        h('div', { class: 'card' },
+          h('h3', null, 'Display and playtesting'),
+          h('div', { class: 'row' },
+            h('button', { class: 'small', onclick: () => {
+              const root = document.documentElement;
+              const next = root.dataset.theme === 'dark' ? 'light' : root.dataset.theme === 'light' ? '' : 'dark';
+              if (next) root.dataset.theme = next;
+              else delete root.dataset.theme;
+              try {
+                localStorage.setItem('pizzad:ui:theme', next);
+              } catch {
+                // ignore
+              }
+              this.floor.invalidate();
+              this.kitchen.invalidate();
+            } }, 'Theme: light / dark / auto')),
+          h('label', { class: 'row small' },
+            h('input', { type: 'checkbox', checked: st.unlockAll, onchange: (e: Event) => { this.game.dispatch({ type: 'setUnlockAll', on: (e.target as HTMLInputElement).checked }); render(); } }),
+            'Sandbox: unlock all equipment')),
+      );
+    };
+    render();
+    close = modal(body, { wide: true });
   }
+
 }

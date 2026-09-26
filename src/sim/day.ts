@@ -6,6 +6,7 @@ import { SEGMENTS, SEGMENT_IDS } from '../data/segments';
 import type { DishKind, SegmentId, Service } from '../data/types';
 import { T } from '../data/tunables';
 import { type Analysis, type DishStats, clamp, kitchenStats, tasteMatch } from './analysis';
+import { economyOf } from './economy';
 import { Rng } from './rng';
 import type { DayReport, GameState, PnL, Recipe, Review, SegmentReport, ServiceReport } from './state';
 
@@ -184,7 +185,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const noise = opts.noise ? clamp(1 + 0.06 * rng.normal(), 0.8, 1.2) : 1;
     const base =
       district.footTraffic * district.shares[id] * T.demand.captureBase * repMult * weekdayMult *
-      fit * priceMult * budgetMult * qualityMult * fameMult * (1 - T.demand.competitionFactor * cEff) * noise;
+      fit * priceMult * budgetMult * qualityMult * fameMult * (1 - T.demand.competitionFactor * cEff) * noise * economyOf(state).demand;
     const sides: Record<string, Choice | null> = {};
     let check = choice.avgPrice;
     let cost = choice.avgCost;
@@ -322,7 +323,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   let rep = state.rep;
   if (parties * T.satisfaction.reviewProbability >= 0.5) {
     const reviewScore = reviewScoreWeighted / parties;
-    rep += T.reputation.learningRate * (reviewScore - rep);
+    rep += Math.min(1, T.reputation.learningRate * economyOf(state).reputation) * (reviewScore - rep);
   }
   // Only guests who gave up waiting hurt reputation; a full house turning people away at the door does not.
   const arrivals = covers + impatient;

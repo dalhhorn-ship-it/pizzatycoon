@@ -10,6 +10,7 @@ import type { EquipmentItem, RankId, Role, TierId, TraitId, Unlock } from '../da
 import { T } from '../data/tunables';
 import { analyse, occupiedTiles, salaryFor } from './analysis';
 import { type DayOptions, simulateDay } from './day';
+import { buyPrice, clampEconomy, type Economy, economyOf, sellPrice } from './economy';
 import { autoLayout, bestSpot, kitchenDims, layoutProblem } from './kitchen';
 import { Rng } from './rng';
 import { type DayReport, type GameState, type Recipe, type RecipeLine, SCHEMA_VERSION, type Staff } from './state';
@@ -35,6 +36,7 @@ export type Command =
   | { type: 'takeLoan'; amount: number }
   | { type: 'repayLoan'; amount: number }
   | { type: 'setUnlockAll'; on: boolean }
+  | { type: 'setEconomy'; economy: Partial<Economy> }
   | { type: 'freshStart' }
   | { type: 'runDay' };
 
@@ -177,7 +179,7 @@ export function seatLimit(premisesId: string): number {
 }
 
 /** fresh-start.md 2: a new restaurant is empty. Only the deposit is paid. */
-export function newGame(seed: number, districtId: string, premisesId = 'hole'): GameState {
+export function newGame(seed: number, districtId: string, premisesId = 'hole', economy?: Economy): GameState {
   const district = DISTRICTS[districtId];
   const premises = PREMISES[premisesId];
   if (!district || !premises) throw new Error('Unknown district or premises');
@@ -188,11 +190,12 @@ export function newGame(seed: number, districtId: string, premisesId = 'hole'): 
   const deposit = depositFor(districtId, premisesId);
   const state: GameState = {
     schemaVersion: SCHEMA_VERSION, seed, day: 1, districtId, premisesId,
-    cash: T.finance.startingCash - deposit, deposit,
+    cash: Math.round(T.finance.startingCash * (economy?.startingCash ?? 1)) - deposit, deposit,
     loan: { balance: 0, annualRate: T.finance.starterLoanRate, weeksLeft: 0, pausedWeeks: 0 },
     rep: T.reputation.start, totalServed: 0, rank: 'cook', recipes, furniture: [], equipment: [], staff: [], candidates: [],
     nextUid: 1, daysBelowZero: 0, history: [], unlockAll: false,
   };
+  if (economy) state.economy = clampEconomy(economy);
   state.candidates = generateCandidates(state);
   state.nextUid += T.staff.candidatesPerWeek;
   return state;
@@ -353,16 +356,17 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
         existing.x = cmd.x;
         existing.y = cmd.y;
       } else {
-        if (state.cash < item.price) return fail(input, 'Not enough cash.');
-        state.cash -= item.price;
-        state.furniture.push({ uid: state.nextUid++, itemId, x: cmd.x, y: cmd.y });
+        const cost = buyPrice(state, item.price);
+        if (state.cash < cost) return fail(input, 'Not enough cash.');
+        state.cash -= cost;
+        state.furniture.push({ uid: state.nextUid++, itemId, x: cmd.x, y: cmd.y, paid: cost });
       }
       break;
     }
     case 'removeFurniture': {
       const f = state.furniture.find((x) => x.uid === cmd.uid);
       if (!f) return fail(input, 'Nothing there.');
-      state.cash += (FURNITURE[f.itemId]?.price ?? 0) * T.kitchen.resale;
+      state.cash += sellPrice(state, FURNITURE[f.itemId]?.price ?? 0, f.paid);
       state.furniture = state.furniture.filter((x) => x.uid !== cmd.uid);
       break;
     }
@@ -370,7 +374,8 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       const item = EQUIPMENT[cmd.itemId];
       if (!item) return fail(input, 'Unknown equipment.');
       if (!isUnlocked(state, item.unlock)) return fail(input, `Locked: ${unlockText(item.unlock)}.`);
-      if (state.cash < item.price) return fail(input, `You need ${Math.ceil(item.price - state.cash).toLocaleString('en-US')} more.`);
+      const cost = buyPrice(state, item.price);
+      if (state.cash < cost) return fail(input, `You need ${Math.ceil(cost - state.cash).toLocaleString('en-US')} more.`);
       const dims = kitchenDims(state.premisesId);
       const uid = state.nextUid;
       const placed =
@@ -381,8 +386,8 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       const problem = layoutProblem([...state.equipment, placed], dims);
       if (problem) return fail(input, problem);
       state.nextUid += 1;
-      state.cash -= item.price;
-      state.equipment.push(placed);
+      state.cash -= cost;
+      state.equipment.push({ ...placed, paid: cost });
       break;
     }
     case 'moveEquipment': {
@@ -415,14 +420,13 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       const kitchen = autoLayout(state.equipment, cmd.premisesId);
       state.equipment = kitchen.placed;
       for (const u of kitchen.unplaced) {
-        const price = (EQUIPMENT[u.itemId]?.price ?? 0) * T.kitchen.resale;
-        state.cash += price;
+        state.cash += sellPrice(state, EQUIPMENT[u.itemId]?.price ?? 0, u.paid);
         notes.push(`${EQUIPMENT[u.itemId]?.name} did not fit and was sold`);
       }
       const room = relayoutDining(state.furniture, cmd.premisesId);
       state.furniture = room.placed;
       for (const f of room.unplaced) {
-        state.cash += (FURNITURE[f.itemId]?.price ?? 0) * T.kitchen.resale;
+        state.cash += sellPrice(state, FURNITURE[f.itemId]?.price ?? 0, f.paid);
         notes.push(`${FURNITURE[f.itemId]?.name} did not fit and was sold`);
       }
       events.push({ kind: 'info', text: `Moved to the ${PREMISES[cmd.premisesId]?.name} in ${DISTRICTS[cmd.districtId]?.name}.${notes.length ? ` ${notes.join('; ')}.` : ''}` });
@@ -431,7 +435,7 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
     case 'sellEquipment': {
       const e = state.equipment.find((x) => x.uid === cmd.uid);
       if (!e) return fail(input, 'Not found.');
-      state.cash += (EQUIPMENT[e.itemId]?.price ?? 0) * T.kitchen.resale;
+      state.cash += sellPrice(state, EQUIPMENT[e.itemId]?.price ?? 0, e.paid);
       state.equipment = state.equipment.filter((x) => x.uid !== cmd.uid);
       break;
     }
@@ -479,6 +483,9 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
     }
     case 'setUnlockAll':
       state.unlockAll = cmd.on;
+      break;
+    case 'setEconomy':
+      state.economy = clampEconomy({ ...economyOf(state), ...cmd.economy });
       break;
     case 'freshStart': {
       if (state.cash > T.finance.freshStartThreshold) return fail(input, 'A fresh start is offered when cash falls below -$20,000.');

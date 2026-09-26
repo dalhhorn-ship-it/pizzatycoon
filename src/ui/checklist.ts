@@ -2,6 +2,7 @@
 
 import { EQUIPMENT } from '../data/equipment';
 import { FURNITURE } from '../data/furniture';
+import { buyPrice } from '../sim/economy';
 import type { GameState } from '../sim/state';
 import { h, money } from './dom';
 
@@ -20,7 +21,7 @@ export function openingItems(s: GameState): Item[] {
   const cold = s.equipment.some((e) => EQUIPMENT[e.itemId]?.cold);
   const tables = s.furniture.filter((f) => FURNITURE[f.itemId]?.kind === 'table').length;
   const cheapest = (role: string): number =>
-    Math.min(...Object.values(EQUIPMENT).filter((e) => e.role === role && e.unlock.kind === 'start').map((e) => e.price));
+    Math.min(...Object.values(EQUIPMENT).filter((e) => e.role === role && e.unlock.kind === 'start').map((e) => buyPrice(s, e.price)));
   const cook = s.candidates.filter((c) => c.role === 'cook').sort((a, b) => a.salary - b.salary)[0];
   const server = s.candidates.filter((c) => c.role === 'server').sort((a, b) => a.salary - b.salary)[0];
   return [
@@ -29,7 +30,7 @@ export function openingItems(s: GameState): Item[] {
     { label: 'A prep station', done: roles.has('counter'), hint: `Old Workbench ${money(cheapest('counter'))}`, cost: cheapest('counter'), tab: 'kitchen' },
     { label: 'A fridge', done: cold, hint: `Dough Fridge ${money(cheapest('cold'))}`, cost: cheapest('cold'), tab: 'kitchen' },
     { label: 'A sink', done: roles.has('sink'), hint: `Sink ${money(cheapest('sink'))}`, cost: cheapest('sink'), tab: 'kitchen' },
-    { label: 'Tables', done: tables > 0, hint: `Folding tables ${money(FURNITURE.foldingTable?.price ?? 120)} each (6 is a good start)`, cost: (FURNITURE.foldingTable?.price ?? 120) * 6, tab: 'room' },
+    { label: 'Tables', done: tables > 0, hint: `Folding tables ${money(buyPrice(s, FURNITURE.foldingTable?.price ?? 120))} each (6 is a good start)`, cost: buyPrice(s, FURNITURE.foldingTable?.price ?? 120) * 6, tab: 'room' },
     { label: 'A cook', done: s.staff.some((x) => x.role === 'cook' || x.role === 'chef'), hint: cook ? `${cook.name}, ${money(cook.salary)}/week` : 'Check the hiring board', cost: 0, tab: 'staff' },
     { label: 'A server', done: s.staff.some((x) => x.role === 'server'), hint: server ? `${server.name}, ${money(server.salary)}/week` : 'Check the hiring board', cost: 0, tab: 'staff' },
   ];
