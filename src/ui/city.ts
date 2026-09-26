@@ -278,7 +278,7 @@ export class CityView {
         h('span', null, 'Moving van and fit out'), h('b', null, money(-q.movingFee)),
         q.resale > 0 ? h('span', null, 'Items that do not fit, sold at 80%') : null, q.resale > 0 ? h('b', null, money(q.resale)) : null,
         h('span', { class: 'total' }, q.total >= 0 ? 'You pay' : 'You get back'), h('b', { class: `total ${short ? 'bad' : ''}` }, money(Math.abs(q.total)))),
-      h('div', { class: 'small muted' }, `Reputation ${ctx.state.rep.toFixed(0)} → ${q.repAfter.toFixed(0)}: ${q.sameDistrict ? 'same neighbourhood, most regulars follow you' : 'a new neighbourhood has to get to know you'}. Local following ${Math.round(ctx.state.following * 100)}% → ${Math.round(q.followingAfter * 100)}%. Team, menu, loan and rank come with you.`),
+      h('div', { class: 'small muted' }, `Reputation ${ctx.state.rep.toFixed(0)} → ${q.repAfter.toFixed(0)}: ${q.sameDistrict ? 'same neighbourhood, most regulars follow you' : 'a new neighbourhood has to get to know you'}. Local following ${Math.round(ctx.state.following * 100)}% → ${Math.round(q.followingAfter * 100)}%. Team, menu, loan and rank come with you${ctx.state.fireSafety.length ? '; fire safety upgrades stay in the old building' : ''}.`),
       sold.length ? h('div', { class: 'small warn' }, `Will not fit and gets sold: ${sold.join(', ')}.`) : null,
       short ? h('div', { class: 'small bad' }, `You need ${money(q.total - ctx.state.cash)} more cash.`) : null,
       h('button', { class: 'primary', disabled: short, onclick: () => ctx.onRent(v.id) }, 'Rent this venue'));

@@ -604,3 +604,26 @@ The first three weeks lose money; cash bottoms out around $500 without the loan.
 Tests updated: the golden starter day (section 2) now runs at an established following with the cosy shop's 0.75 visibility: 52.6 guests at Rep 30 with no bottleneck (was 67.5 with seats full). AC-162 now checks that the first two weeks lose money, week 8 makes at least 80% of the old $134 a day, and cash stays above zero.
 
 **Fast forward.** "Run a week" runs up to 7 days without the service animation and shows a week summary. It stops early when the restaurant cannot open, someone hands in notice or leaves, or the bank restructures the loan.
+
+### 4.4 Fire safety upgrades, and a kitchen guests can feel (2026-09-26)
+
+Founder requests: buy fire safety equipment to raise the room's capacity, only once the restaurant has been open for two months; and when kitchen equipment improves, guest satisfaction should visibly go up.
+
+**Fire safety** (`src/data/fireSafety.ts`, `T.fireSafety`). Four one time upgrades, bought in order from the Room tab. Each raises the fire safety seat limit (0.55 seats per dining tile) by a share of the base:
+
+| Upgrade | Price | Seats | Inspections per week |
+|---|---|---|---|
+| Extinguishers and exit signs | $900 | +5% | $5 |
+| Fire alarm system | $2,800 | +10% | $15 |
+| Second emergency exit | $6,500 | +10% | $0 |
+| Sprinkler system | $12,000 | +15% | $40 |
+
+All four together allow 40% more seats. They unlock after 60 days open (`GameState.daysOpen` counts only days the restaurant opened). They belong to the building: moving leaves them behind and restarts the 60 days. Saves from before this change count every day played as a day open.
+
+**Craft on the plate.** Food score + `satisfaction.equipmentFood` (0.01) x E x (0.5 + segment quality appeal), where E is the equipment quality bonus when positive. Foodies (appeal 1.0) feel it three times as much as students (0). Speed focused volume gear with a negative E costs nothing extra here; it already lowers dish quality.
+
+**Ticket time.** Minutes from order to plate = cook time + 0.5 x the kitchen queue (the same queue formula as the door, on served guests per hour against kitchen capacity per hour). It counts for 40% of the wait score: full marks up to 12 minutes, zero at 32. More or faster stations bring food out sooner when the kitchen is busy.
+
+Measured on the cosy starter: deck oven 67.2 satisfaction; Stone Hearth 70.4 (was +1.7, now +3.2); plus a Proving Cabinet 72.2. In University Quarter the plain middle build's lunch tickets take about 24 minutes; a second oven brings them down.
+
+**Retune.** The add-on guardrail (kitchen-upgrades.md 7) had only $7 a day of headroom before this change, and a fully upgraded middle build gained about $30. Following the order in kitchen-upgrades.md 7 and 3.7 (qualityCap was already 2): Students budget B 11 to 11.5. Volume at home $1,922 to $2,113 a day; middle in University Quarter $1,615 to $1,689; luxury and the other districts within a few dollars. The add-on test now takes each specialist's best price in its band, as the spec says, instead of a fixed $8. The upgraded middle build trails volume by 17% and luxury by 42%.

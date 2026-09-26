@@ -1,6 +1,7 @@
 // The aggregate day model (ADR-002). This is the only authority on guests, money and reputation.
 // Formulas: 01-product/prd.md 5.7, 5.10, 5.11 and balance.md 1.4, 1.8, 1.12.
 
+import { FIRE_SAFETY } from '../data/fireSafety';
 import { isMain } from '../data/recipes';
 import { SEGMENTS, SEGMENT_IDS } from '../data/segments';
 import type { DishKind, SegmentId, Service } from '../data/types';
@@ -220,6 +221,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   const services: ServiceReport[] = [];
   const served: Record<SegmentId, Record<Service, number>> = {} as never;
   const perceivedWait: Record<Service, number> = { lunch: 0, dinner: 0 };
+  const ticket: Record<Service, number> = { lunch: 0, dinner: 0 };
   const queueBy: Record<Service, number> = { lunch: 0, dinner: 0 };
   let totalWalk = 0;
   let impatient = 0;
@@ -267,10 +269,14 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
       (served[s.id] ??= { lunch: 0, dinner: 0 })[sv] = stays;
     }
     perceivedWait[sv] = a.service.orderTime[sv] + a.service.serveTime[sv] + q * share;
+    // A kitchen running near capacity queues tickets: more or faster stations mean hotter food, sooner.
+    const servedPerHour = servedTotal / (hours * T.service.utilisation[sv]);
+    const kitchenRho = kitchenPerHour > 0 ? servedPerHour / kitchenPerHour : 1;
+    ticket[sv] = k.cookTime + T.satisfaction.ticketQueueShare * queueDelay(Math.min(kitchenRho, T.service.queueRhoCap));
     totalWalk += walk;
     const servedAfter = segs.reduce((x, s) => x + (served[s.id]?.[sv] ?? 0), 0);
     services.push({
-      service: sv, demand, served: servedAfter, walkAways: walk, capacity, rho, queueDelay: q, bottleneck, tableCycle: cycle,
+      service: sv, demand, served: servedAfter, walkAways: walk, capacity, rho, queueDelay: q, bottleneck, tableCycle: cycle, ticketTime: ticket[sv],
       // Plates are expressed per effective service hour so every stage compares on the same basis as seats and ovens.
       stages: { prep: prepPerHour, oven: Number.isFinite(ovenCoversPerHour) ? ovenCoversPerHour : k.ovenPerHour, seats: seatPerHour, plates: plateCap / (hours * T.service.utilisation[sv]) },
       demandPerHour: demand / (hours * T.service.utilisation[sv]),
@@ -288,12 +294,20 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   for (const s of segs) {
     const seg = SEGMENTS[s.id];
     const n = (served[s.id]?.lunch ?? 0) + (served[s.id]?.dinner ?? 0);
-    const food = T.satisfaction.foodQualityShare * (s.choice.avgQuality / 100) + (1 - T.satisfaction.foodQualityShare) * s.choice.avgTaste;
+    const food = clamp(
+      T.satisfaction.foodQualityShare * (s.choice.avgQuality / 100) + (1 - T.satisfaction.foodQualityShare) * s.choice.avgTaste +
+        // Guests who care about quality taste a better kitchen most: foodies more than students.
+        T.satisfaction.equipmentFood * Math.max(0, a.kitchen.equipmentE) * (T.satisfaction.equipmentFoodBase + seg.qualityAppeal),
+      0,
+      1,
+    );
     const value = valueScore(s.r, seg.elasticity);
     let wait = 0;
     for (const sv of SERVICES) {
       const tol = seg.waitTolerance[sv];
-      const ws = clamp(1 - Math.max(0, perceivedWait[sv] - tol) / tol, 0, 1);
+      const table = clamp(1 - Math.max(0, perceivedWait[sv] - tol) / tol, 0, 1);
+      const kitchen = clamp(1 - Math.max(0, ticket[sv] - T.satisfaction.ticketFree) / T.satisfaction.ticketSpan, 0, 1);
+      const ws = (1 - T.satisfaction.ticketShare) * table + T.satisfaction.ticketShare * kitchen;
       wait += n > 0 ? ((served[s.id]?.[sv] ?? 0) / n) * ws : ws / 2;
     }
     const scores = { food, service: a.service.serviceScore, ambience: ambience / 100, value, wait };
@@ -390,7 +404,8 @@ function fixedCosts(state: GameState, a: Analysis, covers: number): PnL {
   const staff = a.weeklySalaries / 7;
   const rent = a.weeklyRent / 7;
   const utilities = T.finance.utilitiesBase + T.finance.utilitiesPerCover * covers;
-  const upkeep = T.finance.upkeepBase + a.kitchen.maintenancePerWeek / 7;
+  const fireUpkeep = (state.fireSafety ?? []).reduce((x, id) => x + (FIRE_SAFETY[id]?.upkeep ?? 0), 0);
+  const upkeep = T.finance.upkeepBase + (a.kitchen.maintenancePerWeek + fireUpkeep) / 7;
   const interest = (state.loan.balance * state.loan.annualRate) / 52 / 7;
   const profit = -(staff + rent + utilities + upkeep + interest);
   return { sales: 0, ingredients: 0, waste: 0, staff, rent, utilities, upkeep, interest, profit };

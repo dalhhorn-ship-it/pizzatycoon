@@ -3,6 +3,7 @@
 import { DISTRICTS, PREMISES } from '../data/districts';
 import { ADDONS, type AddonItem, UPGRADE_PATHS } from '../data/addons';
 import { EQUIPMENT } from '../data/equipment';
+import { FIRE_SAFETY } from '../data/fireSafety';
 import { FURNITURE } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
 import { PIZZA_BASE, PRIMO_BASES, RECIPE_BOOK } from '../data/recipes';
@@ -47,6 +48,7 @@ export type Command =
   | { type: 'setEconomy'; economy: Partial<Economy> }
   | { type: 'freshStart' }
   | { type: 'rentVenue'; venueId: string }
+  | { type: 'buyFireSafety'; id: string }
   | { type: 'runDay' }
   /** Fast forward: up to 7 days, stopping early when something needs the player (see WEEK_STOPS). */
   | { type: 'runWeek' };
@@ -203,9 +205,10 @@ export function venueDeposit(venueId: string): number {
   return v ? depositFor(v.districtId, v.premisesId, v.id) : 0;
 }
 
-export function seatLimit(premisesId: string): number {
+export function seatLimit(premisesId: string, fireSafety: readonly string[] = []): number {
   const p = PREMISES[premisesId];
-  return p ? Math.floor(T.build.maxSeatsPerDiningTile * p.diningWidth * p.diningHeight) : 0;
+  const bonus = fireSafety.reduce((a, id) => a + (FIRE_SAFETY[id]?.seatBonus ?? 0), 0);
+  return p ? Math.floor(T.build.maxSeatsPerDiningTile * p.diningWidth * p.diningHeight * (1 + bonus)) : 0;
 }
 
 /** fresh-start.md 2: a new restaurant is empty. Only the deposit is paid. */
@@ -230,7 +233,7 @@ export function newGame(seed: number, districtId: string, premisesId = 'hole', e
     cash: Math.round(T.finance.startingCash * (economy?.startingCash ?? 1)) - deposit, deposit,
     loan: { balance: 0, annualRate: T.finance.starterLoanRate, weeksLeft: 0, pausedWeeks: 0 },
     rep: T.reputation.start, following: T.following.start, totalServed: 0, rank: 'cook', recipes, furniture: [], equipment: [], staff: [], candidates: [],
-    nextUid: 1, daysBelowZero: 0, history: [], unlockAll: false,
+    nextUid: 1, daysBelowZero: 0, daysOpen: 0, fireSafety: [], history: [], unlockAll: false,
   };
   if (economy) state.economy = clampEconomy(economy);
   state.candidates = generateCandidates(state);
@@ -414,7 +417,7 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       }
       if (!existing && item.kind === 'table') {
         const seats = state.furniture.reduce((a, f) => a + (FURNITURE[f.itemId]?.seats ?? 0), 0);
-        const limit = seatLimit(state.premisesId);
+        const limit = seatLimit(state.premisesId, state.fireSafety);
         if (seats + item.seats > limit) return fail(input, `Fire safety: at most ${limit} seats in this room.`);
       }
       if (existing) {
@@ -485,6 +488,8 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       state.premisesId = cmd.premisesId;
       state.venueId = venueId;
       state.following = followingAfterMove(state.following, sameDistrictMove);
+      state.fireSafety = [];
+      state.daysOpen = 0;
       const notes: string[] = [];
       const kitchen = autoLayout(state.equipment, cmd.premisesId);
       state.equipment = kitchen.placed;
@@ -617,6 +622,19 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
     }
     case 'rentVenue':
       return rentVenue(input, cmd.venueId);
+    case 'buyFireSafety': {
+      const item = FIRE_SAFETY[cmd.id];
+      if (!item) return fail(input, 'Unknown upgrade.');
+      if (state.fireSafety.includes(item.id)) return fail(input, 'Already installed.');
+      if (!fireSafetyUnlocked(state)) return fail(input, `Fire safety upgrades unlock after ${T.fireSafety.unlockDaysOpen} days open.`);
+      if (item.requires && !state.fireSafety.includes(item.requires)) return fail(input, `Install the ${FIRE_SAFETY[item.requires]?.name.toLowerCase()} first.`);
+      const cost = buyPrice(state, item.price);
+      if (state.cash < cost) return fail(input, 'Not enough cash.');
+      state.cash -= cost;
+      state.fireSafety.push(item.id);
+      events.push({ kind: 'info', text: `${item.name} installed. The room now allows ${seatLimit(state.premisesId, state.fireSafety)} seats.` });
+      break;
+    }
     case 'runDay':
       return runDay(state, opts);
     case 'runWeek':
@@ -717,6 +735,9 @@ function rentVenue(input: GameState, venueId: string): Result {
   state.deposit = quote.newDeposit;
   state.rep = quote.repAfter;
   state.following = quote.followingAfter;
+  // A new building: fire safety stays behind and the clock for unlocking it starts again.
+  state.fireSafety = [];
+  state.daysOpen = 0;
   state.districtId = venue.districtId;
   state.premisesId = venue.premisesId;
   state.venueId = venue.id;
@@ -724,6 +745,12 @@ function rentVenue(input: GameState, venueId: string): Result {
   const sold = [...quote.soldFurniture, ...quote.soldEquipment];
   if (sold.length) events.push({ kind: 'info', text: `Sold what did not fit (${sold.join(', ')}) for $${Math.round(quote.resale).toLocaleString('en-US')}.` });
   return { state, events };
+}
+
+// ---------- Fire safety ----------
+
+export function fireSafetyUnlocked(state: GameState): boolean {
+  return state.unlockAll || state.daysOpen >= T.fireSafety.unlockDaysOpen;
 }
 
 // ---------- Fast forward ----------
@@ -786,6 +813,7 @@ function runDay(state: GameState, opts: DayOptions): Result {
   state.rep = report.repAfter;
   state.following = report.followingAfter;
   state.totalServed += report.covers;
+  if (report.open) state.daysOpen += 1;
 
   // Staff: morale drift, growth, notices (prd.md 5.8).
   const understaffed = a.service.loadMult < 1;

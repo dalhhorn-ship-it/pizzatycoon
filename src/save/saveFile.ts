@@ -95,6 +95,9 @@ export function deserialise(text: string): SaveFile {
   withRecipeBook(s);
   // Saves from before the local following (balance.md 4.3) are established restaurants.
   if (typeof s.following !== 'number') s.following = T.following.established;
+  // Saves from before fire safety: treat every day played as a day open.
+  if (!Array.isArray(s.fireSafety)) s.fireSafety = [];
+  if (typeof s.daysOpen !== 'number') s.daysOpen = Math.max(0, s.day - 1);
   return { ...raw, schemaVersion: SCHEMA_VERSION, state: s };
 }
 

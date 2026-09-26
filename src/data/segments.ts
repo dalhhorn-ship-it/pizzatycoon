@@ -2,7 +2,7 @@ import type { Segment, SegmentId } from './types';
 
 export const SEGMENTS: Record<SegmentId, Segment> = {
   students: {
-    id: 'students', name: 'Students', elasticity: 2.0, budget: 11, qualityAppeal: 0.0, qualityWeight: 0.3,
+    id: 'students', name: 'Students', elasticity: 2.0, budget: 11.5, qualityAppeal: 0.0, qualityWeight: 0.3,
     waitTolerance: { lunch: 10, dinner: 10 }, mealLength: { lunch: 25, dinner: 45 }, partySize: 3.0,
     likedTags: ['cheesy', 'spicy', 'meaty'], speedAppealAtLunch: true,
   },

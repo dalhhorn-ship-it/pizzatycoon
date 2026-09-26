@@ -84,6 +84,8 @@ export interface ServiceReport {
   queueDelay: number;
   bottleneck: 'seats' | 'oven' | 'prep' | 'plates' | 'none';
   tableCycle: number;
+  /** Minutes from order to plate: cook time plus queueing when the kitchen runs near capacity. */
+  ticketTime: number;
   /** Service pipeline in covers per hour (kitchen-builder.md 6). */
   stages: { prep: number; oven: number; seats: number; plates: number };
   /** Demand per hour of effective service time. */
@@ -159,6 +161,10 @@ export interface GameState {
   candidates: Staff[];
   nextUid: number;
   daysBelowZero: number;
+  /** Days the restaurant actually opened, in this building. */
+  daysOpen: number;
+  /** Fire safety upgrades installed in this building (src/data/fireSafety.ts). */
+  fireSafety: string[];
   history: DayReport[];
   unlockAll: boolean;
   /** Difficulty multipliers from the settings menu; missing means Normal. */

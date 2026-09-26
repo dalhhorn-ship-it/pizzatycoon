@@ -401,6 +401,7 @@ export class App {
         h('div', { class: 'kv' }, ...(['food', 'service', 'ambience', 'value', 'wait'] as const).flatMap((k) => [
           h('span', null, k[0]?.toUpperCase() + k.slice(1)), h('b', { class: sat[k] < 0.45 ? 'bad' : sat[k] > 0.75 ? 'good' : '' }, `${Math.round(sat[k] * 100)}`),
         ])),
+        h('div', { class: 'small muted' }, `Food arrived in ${r.services.map((sv) => `${Math.round(sv.ticketTime ?? 0)} min at ${sv.service}`).join(', ')}.`),
         h('div', { class: 'small muted' }, `Busiest: ${r.segments.filter((s) => s.served > 0.5).sort((a, b) => b.served - a.served).slice(0, 3).map((s) => `${SEGMENTS[s.segment].name} ${Math.round(s.served)}`).join(', ')}`)) : null,
       r.tips.length ? h('div', { class: 'card' }, h('h3', null, 'Your advisor'), ...r.tips.map((t) => h('div', { class: 'small' }, t))) : null,
       r.reviews.length ? h('div', { class: 'stack' }, h('h3', null, 'Reviews'),

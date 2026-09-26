@@ -126,8 +126,11 @@ describe('balance with add-ons (kitchen-upgrades.md 7)', () => {
     };
     const best = (d: string, prices: number[]): number =>
       Math.max(...prices.map((p) => steadyState(upgrade(buildState('middle', d, p))).report.pnl.profit));
-    const volume = steadyState(buildState('volume', 'university', 8)).report.pnl.profit;
-    const luxury = steadyState(buildState('luxury', 'harbour', 40)).report.pnl.profit;
+    // Each specialist's best home profit (kitchen-upgrades.md 7), searched over its price band like the middle build.
+    const specialist = (b: 'volume' | 'luxury', d: string, prices: number[]): number =>
+      Math.max(...prices.map((p) => steadyState(buildState(b, d, p)).report.pnl.profit));
+    const volume = specialist('volume', 'university', [8, 8.5, 9]);
+    const luxury = specialist('luxury', 'harbour', [36, 38, 40]);
     const midUni = best('university', [12, 13, 14]);
     const midHarbour = best('harbour', [14, 16, 18]);
     console.log(`upgraded middle: university $${Math.round(midUni)} vs volume $${Math.round(volume)}; harbour $${Math.round(midHarbour)} vs luxury $${Math.round(luxury)}`);

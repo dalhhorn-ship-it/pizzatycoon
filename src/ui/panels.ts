@@ -3,6 +3,7 @@
 import { DISTRICTS } from '../data/districts';
 import { VENUES } from '../data/venues';
 import { EQUIPMENT } from '../data/equipment';
+import { FIRE_SAFETY, FIRE_SAFETY_IDS, type FireSafetyItem } from '../data/fireSafety';
 import { FURNITURE } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
 import { isMain, PRIMO_BASES } from '../data/recipes';
@@ -11,13 +12,14 @@ import type { EquipmentItem, MainKind, Role } from '../data/types';
 import { ADDONS, addonEffectText, UPGRADE_PATHS } from '../data/addons';
 import { T } from '../data/tunables';
 import { analyse } from '../sim/analysis';
-import { addonProblem, type Command, isUnlocked, loanPayment, RANK_NAMES, suppliersFor, tiersFor, unlockText } from '../sim/game';
+import { addonProblem, type Command, fireSafetyUnlocked, isUnlocked, seatLimit, loanPayment, RANK_NAMES, suppliersFor, tiersFor, unlockText } from '../sim/game';
 import { buyPrice, sellPrice } from '../sim/economy';
 import { kitchenDims, layoutProblem } from '../sim/kitchen';
 import type { GameState, OwnedEquipment, Recipe } from '../sim/state';
 import { h, meter, money, signed, toast } from './dom';
 import type { Floor } from './floor';
 import { compare } from './impact';
+import { pipelineData } from './pipeline';
 import type { KitchenView } from './kitchenView';
 
 export interface PanelCtx {
@@ -172,6 +174,26 @@ export function menuPanel(ctx: PanelCtx): HTMLElement {
 
 // ---------- Kitchen (kitchen-builder.md 7) ----------
 
+/** What guests feel of the kitchen (balance.md 4.4): the equipment's craft on the plate and how fast food arrives. */
+function guestsNotice(state: GameState, E: number): HTMLElement {
+  const now = pipelineData(state).now;
+  const t = (sv: 'lunch' | 'dinner'): number | undefined => now.find((s) => s.service === sv)?.ticketTime;
+  const lunch = t('lunch');
+  const dinner = t('dinner');
+  const craft = (base: number): number => 100 * T.satisfaction.wFood * T.satisfaction.equipmentFood * Math.max(0, E) * base;
+  const s = T.satisfaction;
+  const speed = (m: number | undefined): string => (m === undefined ? '' : m <= s.ticketFree ? 'hot and quick' : m <= s.ticketFree + s.ticketSpan / 2 ? 'a little slow' : 'guests are waiting on the kitchen');
+  return h('div', { class: 'card' },
+    h('h3', null, 'What guests notice'),
+    h('div', { class: 'kv' },
+      h('span', null, 'Food arrives in'),
+      h('b', { class: dinner !== undefined && dinner > s.ticketFree + s.ticketSpan / 2 ? 'warn' : '' },
+        dinner === undefined ? 'not open yet' : `${lunch?.toFixed(0)} min lunch · ${dinner.toFixed(0)} min dinner (${speed(Math.max(lunch ?? 0, dinner))})`),
+      h('span', null, 'Craft on the plate'),
+      h('b', { class: E > 0 ? 'good' : '' }, E > 0 ? `+${craft(s.equipmentFoodBase).toFixed(1)} to +${craft(s.equipmentFoodBase + 1).toFixed(1)} satisfaction` : 'none yet')),
+    h('div', { class: 'small muted' }, 'Better ovens, benches and proving lift how guests rate the food; foodies notice most, students least. More or faster stations shorten the wait for food when the kitchen is busy.'));
+}
+
 const GROUPS: [string, (it: EquipmentItem) => boolean][] = [
   ['Ovens', (it) => it.role === 'oven'],
   ['Prep', (it) => it.role === 'counter' || it.role === 'sheeter' || it.role === 'proving'],
@@ -315,6 +337,7 @@ export function kitchenPanel(ctx: PanelCtx, view: KitchenView): HTMLElement {
         h('span', null, 'Equipment quality'), h('b', null, signed(k.equipmentE, 1)),
         h('span', null, 'Kitchen flow'), h('b', { class: penalties ? 'warn' : 'good' }, penalties ? `${penalties} slow spot${penalties > 1 ? 's' : ''}` : 'Smooth')),
       h('div', { class: 'small muted' }, bottlenecks.length ? `Last service limits: ${bottlenecks.join(', ')}` : 'No bottleneck at the last service.')),
+    guestsNotice(state, k.equipmentE),
     h('div', { class: 'row' },
       h('button', { onclick: () => act(ctx, { type: 'tidyKitchen' }, 'Kitchen tidied into a tight pizza line') }, 'Tidy up layout')),
     h('h3', null, 'Your equipment'),
@@ -410,12 +433,13 @@ export function roomPanel(ctx: PanelCtx): HTMLElement {
     h('h2', null, 'Dining room'),
     h('div', { class: 'card' },
       h('div', { class: 'kv' },
-        h('span', null, 'Seats'), h('b', null, `${r.seats} at ${r.tables} tables`),
+        h('span', null, 'Seats'), h('b', null, `${r.seats} at ${r.tables} tables (fire safety allows ${seatLimit(state.premisesId, state.fireSafety)})`),
         h('span', null, 'Ambience'), h('b', null, r.ambience.toFixed(0)),
         h('span', null, 'Decor points'), h('b', null, `${r.decorPoints} (lighting ${Math.min(10, r.lighting)}/10)`),
         h('span', null, 'Squeezed tables'), h('b', { class: r.crowdedTables ? 'warn' : '' }, String(r.crowdedTables))),
       meter(r.ambience, 100, r.ambience > 70 ? 'warm' : ''),
       h('div', { class: 'small muted' }, 'Ambience lifts satisfaction and how many guests add drinks, starters and desserts. Every table needs a free tile beside it.')),
+    fireSafetyCard(ctx),
     h('div', { class: 'row' },
       h('button', { class: tool.kind === 'none' ? 'active' : '', onclick: () => setTool({ kind: 'none' }) }, 'Select'),
       h('span', { class: 'small muted' }, tool.kind === 'place' ? 'Tap the floor to place. Tap Select when done.' : tool.kind === 'move' ? 'Tap where it should go.' : 'Tap an item on the floor to move or sell it.')),
@@ -434,6 +458,35 @@ export function roomPanel(ctx: PanelCtx): HTMLElement {
     h('b', null, h('span', { class: 'swatch', style: `background:${f.color}` }), f.name),
     h('span', { class: 'small muted' }, `${money(buyPrice(state, f.price))} · ${f.w}x${f.h}`),
     h('span', { class: 'small' }, f.kind === 'table' ? `${f.seats} seats` : `+${f.decorPoints} decor${f.lighting ? `, +${f.lighting} light` : ''}`)))));
+}
+
+function fireSafetyCard(ctx: PanelCtx): HTMLElement {
+  const { state } = ctx;
+  const unlocked = fireSafetyUnlocked(state);
+  const toGo = T.fireSafety.unlockDaysOpen - state.daysOpen;
+  return h('div', { class: 'card' },
+    h('h3', null, h('span', null, 'Fire safety'), h('span', { class: 'small muted' }, `${seatLimit(state.premisesId, state.fireSafety)} seats allowed`)),
+    h('div', { class: 'small muted' }, unlocked
+      ? 'Each upgrade lets the fire officer approve more seats. They are part of the building and stay behind if you move.'
+      : `The fire officer only looks at a proven restaurant: upgrades unlock after ${T.fireSafety.unlockDaysOpen} days open (${toGo} to go).`),
+    ...FIRE_SAFETY_IDS.map((id) => {
+      const it = FIRE_SAFETY[id] as FireSafetyItem;
+      const have = state.fireSafety.includes(id);
+      const needs = it.requires && !state.fireSafety.includes(it.requires) ? FIRE_SAFETY[it.requires] : undefined;
+      const cost = buyPrice(state, it.price);
+      const after = seatLimit(state.premisesId, [...state.fireSafety, id]) - seatLimit(state.premisesId, state.fireSafety);
+      return h('div', { class: 'line' },
+        h('div', null,
+          h('div', null, it.name),
+          h('div', { class: 'small muted' }, `${it.blurb} +${Math.round(it.seatBonus * 100)}% seats${it.upkeep ? ` · ${money(it.upkeep)}/week inspections` : ''}`)),
+        have
+          ? h('span', { class: 'small good' }, 'Installed')
+          : h('button', {
+            class: 'small', disabled: !unlocked || !!needs || state.cash < cost,
+            title: needs ? `Needs the ${needs.name.toLowerCase()} first` : '',
+            onclick: () => act(ctx, { type: 'buyFireSafety', id }),
+          }, `${money(cost)}${unlocked && !needs ? ` · +${after} seats` : ''}`));
+    }));
 }
 
 // ---------- Staff ----------

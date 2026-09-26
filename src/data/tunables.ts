@@ -134,6 +134,21 @@ export const T = {
     hostBonus: 0.1,
     charmerBonus: 0.05,
     reviewProbability: 0.2,
+    /**
+     * Guests taste a good kitchen (balance.md 4.4): food score + equipmentFood x E x (equipmentFoodBase + segment quality appeal),
+     * where E is the equipment quality bonus when positive.
+     */
+    equipmentFood: 0.01,
+    equipmentFoodBase: 0.5,
+    /**
+     * Ticket time (cook time plus queueing in a busy kitchen) counts for ticketShare of the wait score:
+     * full marks up to ticketFree minutes, zero at ticketFree + ticketSpan.
+     */
+    ticketShare: 0.4,
+    /** Share of the kitchen queue guests feel as waiting for food (the rest overlaps with drinks and starters). */
+    ticketQueueShare: 0.5,
+    ticketFree: 12,
+    ticketSpan: 20,
   },
   /** kitchen-upgrades.md 7. */
   addons: {
@@ -141,6 +156,8 @@ export const T = {
     qualityCap: 2,
     coldReachTiles: 2,
   },
+  /** Fire safety upgrades (src/data/fireSafety.ts) unlock once the restaurant has been open this many days. */
+  fireSafety: { unlockDaysOpen: 60 },
   build: {
     /** Fire safety: seats at most 0.55 per dining tile (fresh-start.md 3). */
     maxSeatsPerDiningTile: 0.55,
@@ -160,7 +177,9 @@ export const T = {
     perSkill: 1,
     penaltyPerPoint: 0.02,
     efficiencyFloor: 0.6,
-    ticketShare: 0.5,
+    ticketShare: 0.4,
+    /** Share of the kitchen queue guests feel as waiting for food (the rest overlaps with drinks and starters). */
+    ticketQueueShare: 0.5,
     /** Prep work per plate relative to a pizza. Primi go on the stove, secondi need the most hands. */
     work: { pizza: 1, primo: 1.25, secondo: 1.5 },
     /** Extras (non base ingredients) included in that work; each one above adds workPerExtra. */
