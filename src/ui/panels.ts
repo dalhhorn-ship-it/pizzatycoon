@@ -1,6 +1,7 @@
 // Side panels: menu, kitchen, room, staff, money. Each renders from state and dispatches commands.
 
 import { DISTRICTS } from '../data/districts';
+import { VENUES } from '../data/venues';
 import { EQUIPMENT } from '../data/equipment';
 import { FURNITURE } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
@@ -369,7 +370,7 @@ export function moneyPanel(ctx: PanelCtx, extra: HTMLElement): HTMLElement {
   const recent = state.history.slice(-14);
   const maxAbs = Math.max(1, ...recent.map((d) => Math.abs(d.pnl.profit)));
   const payment = loanPayment(state.loan);
-  const district = DISTRICTS[state.districtId];
+  const where = (state.venueId ? VENUES[state.venueId]?.name : null) ?? DISTRICTS[state.districtId]?.name;
   const p = T.progression;
   const nextRank = state.rank === 'cook'
     ? `Owner: serve ${p.ownerServed} guests and reach reputation ${p.ownerRep}`
@@ -388,7 +389,7 @@ export function moneyPanel(ctx: PanelCtx, extra: HTMLElement): HTMLElement {
     h('h2', null, 'Money'),
     h('div', { class: 'card' },
       h('div', { class: 'spread' }, h('span', null, 'Cash'), h('span', { class: `big ${state.cash < 0 ? 'bad' : ''}` }, money(state.cash))),
-      h('div', { class: 'small muted' }, `Weekly bills on Sunday night: wages ${money(a.weeklySalaries)}, rent ${money(a.weeklyRent)} (${district?.name}), loan ${money(payment)}. Upkeep ${money(a.kitchen.maintenancePerWeek)}/week is paid daily.`),
+      h('div', { class: 'small muted' }, `Weekly bills on Sunday night: wages ${money(a.weeklySalaries)}, rent ${money(a.weeklyRent)} (${where}), loan ${money(payment)}. Upkeep ${money(a.kitchen.maintenancePerWeek)}/week is paid daily.`),
       state.cash < 0 ? h('div', { class: 'warn small' }, 'Cash is below zero. Payments continue; after 7 days the bank advisor pauses your loan payments. Pizza D never ends your game.') : null),
     last ? h('div', { class: 'card' }, h('h3', null, `Day ${last.day}`), h('div', { class: 'pnl' }, ...pnlRows(last.pnl))) : null,
     recent.length ? h('div', { class: 'card' }, h('h3', null, 'Profit, last 14 days'),

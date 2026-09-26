@@ -1,0 +1,119 @@
+/* City map and venues (01-product/city-map.md 7) */
+:root {
+  --d-university: #e9dcc0; --d-business: #d9dde6; --d-linden: #d8e6cf; --d-market: #efd6c2;
+  --d-canal: #e6e0cf; --d-oldtown: #ecd3cc; --d-harbour: #d6e1e4;
+  --street: #f6efe3; --water: #9cc3d5; --tree: #8fb27f;
+  --seg-students: #d9822b; --seg-families: #4f7d4a; --seg-professionals: #4a6d9c;
+  --seg-foodies: #a8452f; --seg-seniors: #8a6fa8; --seg-tourists: #2f8f8a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --d-university: #4a4030; --d-business: #363c48; --d-linden: #34432f; --d-market: #4b3a2e;
+    --d-canal: #443f35; --d-oldtown: #4a3531; --d-harbour: #33434a;
+    --street: #2a221f; --water: #3f6778; --tree: #5d7f50;
+    --seg-students: #e8a060; --seg-families: #8fbf84; --seg-professionals: #8fb0dc;
+    --seg-foodies: #e48a73; --seg-seniors: #bca5d8; --seg-tourists: #6cc6c0;
+  }
+}
+:root[data-theme='dark'] {
+  --d-university: #4a4030; --d-business: #363c48; --d-linden: #34432f; --d-market: #4b3a2e;
+  --d-canal: #443f35; --d-oldtown: #4a3531; --d-harbour: #33434a;
+  --street: #2a221f; --water: #3f6778; --tree: #5d7f50;
+  --seg-students: #e8a060; --seg-families: #8fbf84; --seg-professionals: #8fb0dc;
+  --seg-foodies: #e48a73; --seg-seniors: #bca5d8; --seg-tourists: #6cc6c0;
+}
+
+.city { min-height: 0; overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 12px; align-content: start; -webkit-overflow-scrolling: touch; }
+.city[hidden], .main[hidden] { display: none; }
+.city-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.city-head .back { font-weight: 700; }
+.city-title { display: grid; gap: 2px; flex: 1; min-width: 220px; }
+.city-body { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr); gap: 14px; align-items: start; }
+.city-left { display: grid; gap: 10px; min-width: 0; }
+.city-detail { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; position: sticky; top: 0; scroll-margin-top: 8px; }
+
+.city-map { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px; }
+.city-map svg { width: 100%; height: auto; display: block; font-family: var(--sans); }
+.city-map .street { fill: var(--street); }
+.city-map .block rect { stroke: var(--line); stroke-width: 0.3; cursor: pointer; transition: filter 0.15s; }
+.city-map .block:hover rect, .city-map .block:focus rect { filter: brightness(0.96); }
+.city-map .block.focus rect { stroke: var(--accent); stroke-width: 0.6; }
+.city-map .block:focus { outline: none; }
+.city-map .dname { font-size: 2.4px; font-weight: 800; fill: var(--muted); letter-spacing: 0.1px; pointer-events: none; text-transform: uppercase; }
+.d-university rect { fill: var(--d-university); } .d-business rect { fill: var(--d-business); } .d-linden rect { fill: var(--d-linden); }
+.d-market rect { fill: var(--d-market); } .d-canal rect { fill: var(--d-canal); } .d-oldtown rect { fill: var(--d-oldtown); } .d-harbour rect { fill: var(--d-harbour); }
+.city-map .water { fill: var(--water); pointer-events: none; }
+.city-map .water.line { fill: none; stroke: var(--water); stroke-width: 2.2; stroke-linecap: round; }
+.city-map .sea { font-size: 2px; fill: var(--panel); font-style: italic; pointer-events: none; }
+.city-map .tree { fill: var(--tree); pointer-events: none; }
+.city-map .pin { cursor: pointer; }
+.city-map .pin:focus { outline: none; }
+.city-map .pin .hit { fill: transparent; }
+.city-map .pin .dot { fill: var(--ink); stroke: var(--panel); stroke-width: 0.6; transition: r 0.15s; }
+.city-map .pin:hover .dot, .city-map .pin:focus .dot { fill: var(--accent); }
+.city-map .pin.on .dot { fill: var(--accent); stroke-width: 0.8; }
+.city-map .pin.here .dot { fill: var(--gold); stroke: var(--ink); }
+.city-map .flag { font-size: 2.1px; font-weight: 800; fill: var(--ink); text-anchor: middle; paint-order: stroke; stroke: var(--panel); stroke-width: 0.7px; pointer-events: none; }
+
+.city-legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 0 4px; }
+.lg { display: inline-block; border-radius: 50%; background: var(--ink); }
+.lg.s { width: 8px; height: 8px; } .lg.m { width: 11px; height: 11px; } .lg.l { width: 14px; height: 14px; }
+.lg.here { width: 11px; height: 11px; background: var(--gold); border: 1px solid var(--ink); }
+
+.venue-list select { min-height: 34px; font-size: 13px; }
+.vrows { display: grid; gap: 6px; }
+.vrow { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 84px); gap: 8px; align-items: center; text-align: left; padding: 8px 10px; }
+.vrow.on { outline: 3px solid var(--accent); }
+.vname { display: grid; gap: 1px; min-width: 0; }
+.vname b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vnum { display: grid; text-align: right; font-variant-numeric: tabular-nums; }
+.chip.here { background: var(--gold); color: #3b2f2a; font-weight: 700; justify-self: start; }
+.chip.best { background: var(--ink); color: var(--bg); font-weight: 700; }
+.chip.up { background: #e5efdc; color: #3f6a35; }
+.chip.down { background: #f5e2cf; color: #8a4a1e; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .chip.up { background: #2f3d2b; color: #b4d4a4; }
+  :root:not([data-theme='light']) .chip.down { background: #4a3322; color: #f0c39a; }
+}
+:root[data-theme='dark'] .chip.up { background: #2f3d2b; color: #b4d4a4; }
+:root[data-theme='dark'] .chip.down { background: #4a3322; color: #f0c39a; }
+
+.figs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fig { display: grid; gap: 1px; padding: 8px 10px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
+.fig b { font-family: var(--serif); font-size: 22px; font-variant-numeric: tabular-nums; }
+.split { display: grid; gap: 3px; }
+.split-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--panel-2); }
+.split-bar .lunch { background: var(--gold); }
+.split-bar .dinner { flex: 1; background: var(--accent); opacity: 0.75; }
+.proscons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.proscons ul { margin: 4px 0 0; padding-left: 18px; font-size: 14px; display: grid; gap: 3px; }
+.pros li::marker { content: '✓  '; color: var(--good); }
+.cons li::marker { content: '!  '; color: var(--warn); font-weight: 800; }
+.demo { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.demo-card { display: grid; gap: 4px; padding: 8px 10px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); border-top: 4px solid var(--seg); }
+.demo-card.faint { opacity: 0.7; }
+.demo-card .spread { flex-wrap: wrap; gap: 0 6px; }
+.demo-card .share { font-family: var(--serif); font-weight: 800; font-size: 18px; color: var(--seg); }
+.demo-bar { height: 6px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
+.demo-bar div { height: 100%; background: var(--seg); }
+.seg-students { --seg: var(--seg-students); } .seg-families { --seg: var(--seg-families); } .seg-professionals { --seg: var(--seg-professionals); }
+.seg-foodies { --seg: var(--seg-foodies); } .seg-seniors { --seg: var(--seg-seniors); } .seg-tourists { --seg: var(--seg-tourists); }
+.rentbox { border-color: var(--accent); }
+
+/* HUD breadcrumb: the link between the pizzeria and the city */
+.crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px; }
+.crumbs button { min-height: 32px; padding: 4px 10px; font-size: 13px; }
+.crumbs .sep { color: var(--muted); }
+.crumbs .cur { font-weight: 700; }
+
+@media (max-width: 860px) {
+  .city { padding: 10px 12px 20px; }
+  .city-body { grid-template-columns: 1fr; }
+  .city-detail { position: static; }
+  .vrow { grid-template-columns: minmax(0, 1fr) repeat(3, 64px); gap: 4px; font-size: 13px; }
+}
+@media (max-width: 420px) {
+  .vrow { grid-template-columns: minmax(0, 1fr) 70px; }
+  .vrow .vnum:nth-child(2), .vrow .vnum:nth-child(4) { display: none; }
+  .proscons, .figs { grid-template-columns: 1fr; }
+}

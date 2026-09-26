@@ -33,6 +33,28 @@ export interface District {
   lunchShare: number;
 }
 
+/** One rentable shop front on the city map (01-product/city-map.md 4). */
+export interface Venue {
+  id: string;
+  name: string;
+  address: string;
+  districtId: string;
+  premisesId: string;
+  /** Replaces the district rent for this venue. */
+  rentPerTile: number;
+  trafficMult: number;
+  competitionDelta: number;
+  lunchShareDelta: number;
+  wealthMult: number;
+  /** Multiplies segment shares before they are renormalised. */
+  tilt: Partial<Record<SegmentId, number>>;
+  /** Pin position on the 100 x 70 city map. */
+  x: number;
+  y: number;
+  pros: readonly string[];
+  cons: readonly string[];
+}
+
 export interface Premises {
   id: string;
   name: string;

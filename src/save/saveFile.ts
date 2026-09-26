@@ -3,6 +3,7 @@
 import { SCHEMA_VERSION, type GameState } from '../sim/state';
 import { DISTRICTS } from '../data/districts';
 import { EQUIPMENT } from '../data/equipment';
+import { VENUES, venueFor } from '../data/venues';
 import { autoLayout } from '../sim/kitchen';
 
 export interface SaveSummary {
@@ -32,6 +33,12 @@ const MIGRATIONS: Record<number, (state: Record<string, unknown>) => Record<stri
     for (const u of unplaced) s.cash += EQUIPMENT[u.itemId]?.price ?? 0;
     return s;
   },
+  // v2 to v3: venues on the city map (city-map.md 6). Land on the venue with the same district and premises.
+  2: (state) => {
+    const s = state as { districtId: string; premisesId: string; venueId?: string | null };
+    s.venueId = venueFor(s.districtId, s.premisesId);
+    return s;
+  },
 };
 
 export function summarise(state: GameState, savedAt: number): SaveSummary {
@@ -39,7 +46,7 @@ export function summarise(state: GameState, savedAt: number): SaveSummary {
     day: state.day,
     cash: Math.round(state.cash),
     rep: Math.round(state.rep * 10) / 10,
-    district: DISTRICTS[state.districtId]?.name ?? state.districtId,
+    district: (state.venueId ? VENUES[state.venueId]?.name : null) ?? DISTRICTS[state.districtId]?.name ?? state.districtId,
     savedAt,
   };
 }

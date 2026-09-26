@@ -1,6 +1,6 @@
 import type { DishKind, RankId, Role, SegmentId, Service, TierId, TraitId } from '../data/types';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export interface RecipeLine {
   ingredientId: string;
@@ -126,6 +126,8 @@ export interface GameState {
   day: number;
   districtId: string;
   premisesId: string;
+  /** The rented venue on the city map (city-map.md 4); null means the plain district (balance harness). */
+  venueId: string | null;
   cash: number;
   loan: Loan;
   rep: number;

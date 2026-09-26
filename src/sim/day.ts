@@ -1,11 +1,11 @@
 // The aggregate day model (ADR-002). This is the only authority on guests, money and reputation.
 // Formulas: 01-product/prd.md 5.7, 5.10, 5.11 and balance.md 1.4, 1.8, 1.12.
 
-import { DISTRICTS } from '../data/districts';
 import { SEGMENTS, SEGMENT_IDS } from '../data/segments';
 import type { DishKind, SegmentId, Service } from '../data/types';
 import { T } from '../data/tunables';
 import { type Analysis, type DishStats, clamp, kitchenStats, tasteMatch } from './analysis';
+import { stateLocation } from './location';
 import { Rng } from './rng';
 import type { DayReport, GameState, PnL, Recipe, Review, SegmentReport, ServiceReport } from './state';
 
@@ -113,8 +113,7 @@ const REVIEW_TEXT: Record<string, { high: readonly string[]; low: readonly strin
 };
 
 export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): DayReport {
-  const district = DISTRICTS[state.districtId];
-  if (!district) throw new Error(`Unknown district ${state.districtId}`);
+  const district = stateLocation(state);
   const weekday = (state.day - 1) % 7;
   const reason = closedReason(state, a);
   const rng = Rng.stream(state.seed, state.day, 'day');

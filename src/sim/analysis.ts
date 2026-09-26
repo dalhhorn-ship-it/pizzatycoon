@@ -9,6 +9,7 @@ import { SEGMENTS } from '../data/segments';
 import type { EquipmentItem, SegmentId, Service, Tag } from '../data/types';
 import { T } from '../data/tunables';
 import { type Flow, kitchenFlow, plateWalk } from './kitchen';
+import { stateLocation } from './location';
 import type { GameState, PlacedFurniture, Recipe, Staff } from './state';
 
 export const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -372,10 +373,8 @@ export function serviceStats(state: GameState, kitchen: Record<Service, KitchenS
 }
 
 export function weeklyRent(state: GameState): number {
-  const premises = PREMISES[state.premisesId];
-  const district = DISTRICTS[state.districtId];
-  if (!premises || !district) return 0;
-  return (premises.diningWidth * premises.diningHeight + premises.kitchenTiles) * district.rentPerTile;
+  if (!PREMISES[state.premisesId] || !DISTRICTS[state.districtId]) return 0;
+  return stateLocation(state).weeklyRent;
 }
 
 export function analyse(state: GameState): Analysis {
