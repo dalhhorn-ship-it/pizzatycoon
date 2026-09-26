@@ -1,0 +1,447 @@
+# Balance: Cosy Pizza Tycoon for iPad
+
+* Companion to `prd.md` (sections 5 and 6 define the formulas).
+* **Every value here is a starting tuning assumption.** All of them live in data files (F-01) and are tuned from playtests, never in code.
+* Currency "$" is a placeholder for a neutral localisable currency.
+* The worked numbers in sections 2 and 3 were produced with a design reference calculator that implements the aggregate formulas of prd.md exactly (expected values, no randomness). The agent simulation must match them within 10% (AC-72). Rounding: values are shown to 2 decimals and totals were computed before rounding, so a line may differ by $0.01.
+
+---
+
+## 1. Tunable parameters
+
+### 1.1 Time and calendar
+
+| Name | Unit | Start | Safe range | Read by |
+|---|---|---|---|---|
+| real_seconds_per_game_minute | s | 0.5 | 0.3 to 1.0 | Time (F-02) |
+| speed_levels | multiplier | 1, 2, 4 | up to 8 | Time |
+| quiet_hours_speed | multiplier | 8 | 4 to 16 | Day structure (F-03) |
+| lunch_window | clock | 11:30 to 14:30 | 2.5 to 3.5 h | Demand, service |
+| dinner_window | clock | 18:00 to 22:30 | 4 to 5 h | Demand, service |
+| days_per_season | days | 28 | 21 to 35 | Seasons (F-96) |
+| weekday_mult | multiplier | Mon 0.80, Tue 0.85, Wed 0.90, Thu 1.00, Fri 1.25, Sat 1.35, Sun 1.10 | each 0.6 to 1.5 | Demand |
+
+### 1.2 Districts (v0.1)
+
+| Name | Unit | University Quarter | Canal Quarter | Old Harbour | Safe range | Read by |
+|---|---|---|---|---|---|---|
+| foot_traffic T | passers-by per day | 6,000 | 2,400 | 2,600 | 800 to 8,000 | Demand |
+| share Students | fraction | 0.60 | 0.15 | 0.03 | shares sum to 1 | Demand |
+| share Families | fraction | 0.15 | 0.25 | 0.07 | | Demand |
+| share Professionals | fraction | 0.15 | 0.25 | 0.20 | | Demand |
+| share Foodies | fraction | 0.02 | 0.10 | 0.30 | | Demand |
+| share Seniors | fraction | 0.04 | 0.15 | 0.10 | | Demand |
+| share Tourists | fraction | 0.04 | 0.10 | 0.30 | | Demand |
+| wealth W | multiplier on budgets | 0.8 | 1.0 | 1.3 | 0.6 to 1.6 | Demand (budget_mult) |
+| competition C | 0..1 | 0.40 | 0.30 | 0.25 | 0 to 0.8 | Demand |
+| rent | $ per tile per week | 8 | 11 | 19 | 5 to 30 | Finance |
+| lunch_share | fraction of daily guests | 0.50 | 0.40 | 0.30 | 0.2 to 0.7 | Demand, service |
+| season_mult | multiplier | 1.00 all seasons in v0.1 | same | same | 0.85 to 1.15 | Demand (v1.0) |
+
+### 1.3 Customer segments
+
+| Name | Unit | Students | Families | Professionals | Foodies | Seniors | Tourists | Safe range | Read by |
+|---|---|---|---|---|---|---|---|---|---|
+| elasticity e | exponent | 2.0 | 1.5 | 1.0 | 0.6 | 1.2 | 0.8 | 0.3 to 3.0 | price_mult, value_score |
+| budget B | $ per main | 10 | 12 | 16 | 24 | 15 | 20 | 6 to 40 | budget_mult |
+| quality appeal qa | multiplier | 0.0 | 0.1 | 0.35 | 1.0 | 0.3 | 0.5 | 0 to 1.5 | quality_mult |
+| quality weight wq | weight | 0.30 | 0.35 | 0.40 | 0.60 | 0.40 | 0.35 | 0.1 to 0.8 | dish choice |
+| wait tolerance | game min | 10 | 12 | 8 lunch, 15 dinner | 20 | 15 | 15 | 5 to 30 | wait_score, walk-aways |
+| meal length | game min | 25 | 40 | 30 lunch, 50 dinner | 60 | 50 | 45 | 15 to 90 | table cycle |
+| party size | guests (mean) | 3.0 | 3.8 | 2.2 | 2.0 | 2.0 | 2.5 | 1 to 6 | arrivals |
+| speed appeal | applies at lunch | yes | no | yes | no | no | no | | speed_mult |
+
+### 1.4 Demand and choice
+
+| Name | Unit | Start | Safe range | Read by |
+|---|---|---|---|---|
+| capture_base | fraction of passers-by | 0.035 | 0.02 to 0.06 | Demand |
+| rep_mult | formula | 0.5 + Rep/100 | slope 0.005 to 0.015 | Demand |
+| menu_fit | formula | 0.6 + 0.8 x mean taste match of top 5 dishes | base 0.4 to 0.8 | Demand |
+| price_mult cap | min, max | 0.2, 1.5 | max 1.2 to 2.0 | Demand |
+| budget_mult exponent | exponent | 2.0 | 1.0 to 3.0 | Demand |
+| budget_mult cap | min, max | 0.1, 1.2 | max 1.0 to 1.5 | Demand |
+| quality_mult pivot | Q | 60 | 50 to 70 | Demand |
+| quality_mult divisor | Q points | 50 | 30 to 80 | Demand |
+| quality_mult cap | min, max | 0.3, 1.6 | max 1.2 to 2.0 | Demand |
+| speed_ref | game min | 20 | 15 to 25 | speed_mult |
+| speed_mult cap | min, max | 0.8, 1.25 | 0.7 to 1.4 | Demand |
+| cannibalisation | competition per own location | 0.2 | 0.1 to 0.3 | Demand (chain) |
+| C_eff cap | 0..1 | 0.9 | 0.7 to 0.95 | Demand |
+| choice temperature | exponent factor | 3 | 1 to 6 | Dish choice |
+| attach drink | formula | 0.80 + 0.10 x clamp((amb-60)/25, 0, 1) | base 0.6 to 0.9 | Revenue |
+| attach starter | formula | 0.30 + 0.20 x clamp((amb-60)/25, 0, 1) | base 0.2 to 0.4 | Revenue, prep load |
+| attach dessert | formula | 0.20 + 0.25 x clamp((amb-45)/40, 0, 1) | base 0.1 to 0.3 | Revenue, prep load |
+
+### 1.5 Ingredients, recipes and pricing
+
+| Name | Unit | Start | Safe range | Read by |
+|---|---|---|---|---|
+| tier quality | 0..100 | Basic 35, Standard 55, Premium 75, Artisan 90 | spread 15 to 25 between tiers | Dish quality |
+| tier price multiplier | multiplier | 0.70, 1.00, 1.60, 2.40 | Artisan 1.8 to 3.0 | Food cost |
+| tier shelf life multiplier | multiplier | 1.3, 1.0, 0.8, 0.6 | Artisan 0.4 to 0.8 | Spoilage |
+| typical waste by tier | fraction of ingredient cost | 3%, 5%, 7%, 10% | result, not input (check) | Balance check |
+| supplier quality offset | quality points | Fratelli -3, Metro 0, Green Valley +3, Casa Artigiana +5 | -10 to +10 | Dish quality |
+| supplier price index | multiplier | Fratelli 1.00, Metro 0.90, Green Valley 1.10 | 0.8 to 1.4 | Food cost |
+| supplier reliability | probability | Fratelli 0.85, Metro 0.97, Green Valley 0.92 | 0.75 to 0.99 | Deliveries |
+| supplier lead time | days | Fratelli 1, Metro 2, Green Valley 2 | 1 to 4 | Deliveries |
+| minimum order | $ | Fratelli 0, Metro 300, Green Valley 150 | 0 to 500 | Deliveries |
+| late share of failed deliveries | fraction | 0.70 next day, 0.30 half on time | | Deliveries |
+| emergency order premium | multiplier | 1.20 | 1.1 to 1.5 | Stock-outs |
+| Standard portion costs (Margherita) | $ | dough 0.45, sauce 0.40, mozzarella 1.20, basil 0.25, oil 0.10 | +/- 30% | Food cost |
+| Q weights | weights | IQ 0.50, H 0.15, K 0.35 | sum 1.0 | Dish quality |
+| harmony base, match, clash, extra topping | points | 60, +10, -15, -10 per topping beyond 4 | | Dish quality |
+| K formula | points | 30 + 7 x skill, +5 chef specialty | slope 5 to 8 | Dish quality |
+| freshness factor | multiplier | 0.90 in last 25% of shelf life | 0.8 to 0.95 | Dish quality |
+| E clamp | quality points | -6 to +15 | max +10 to +20 | Dish quality |
+| fair price | formula | 4 + 0.08 x Q + 1.5 x food cost | intercept 2 to 6, Q slope 0.05 to 0.12 | Pricing |
+| fair price band | multiplier | 0.9 to 1.1 | | Pricing UI |
+| value_score | formula | clamp(0.7-0.6 x (r-1) x e, 0, 1) | base 0.6 to 0.8 | Satisfaction |
+| menu size | items | 4 to 16 | | Menu |
+| stock-out satisfaction penalty | points | -5 | -2 to -10 | Satisfaction |
+| novelty decay | menu fit per season without new dish | -5%, cap -15% | | Demand |
+
+### 1.6 Storage
+
+| Name | Unit | Start | Safe range | Read by |
+|---|---|---|---|---|
+| dry shelf | units, $ | 200 units, $400 | | Storage |
+| fridge | units, $ | 120 units, $1,500 | | Storage |
+| freezer | units, $ | 80 units, $1,800 | | Storage |
+| walk-in cold room (v1.0) | units, $, shelf life | 400 units, $9,000, x1.25 | shelf life 1.1 to 1.5 | Storage, spoilage |
+
+### 1.7 Kitchen equipment
+
+Servings per hour are at cook skill 5. Speed: non volume gear 0.7 + 0.06 x skill; volume gear 0.9 + 0.02 x skill. Oven servings per hour = slots x 60 / (12 x bake multiplier) x speed.
+
+| Item | Family | Price $ | Slots | Bake mult | Servings per hour | Quality mod | Skill needed | Footprint | Maintenance $/week | Unlock | Safe range notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Deck Oven | Basic | 2,400 | 4 | 1.00 | 20 | 0 | none | 2x2 | 40 | Start | reference item |
+| Double Deck Oven | Volume | 5,500 | 8 | 1.00 | 40 | -1 | none | 2x2 | 70 | Serve 500 guests | quality mod 0 to -2 |
+| Conveyor Oven | Volume | 8,500 | 5 | 0.55 | 45 | -3 | none | 3x2 | 110 | Rank Owner | 35 to 55 per hour |
+| Stone Hearth Oven | Quality | 6,000 | 4 | 1.00 | 20 | +5 | none | 2x2 | 60 | Rep 40 | +3 to +7 |
+| Wood Fired Oven | Artisan | 11,000 | 3 | 1.25 | 12 | +10 | 7 | 3x3 | 150 | Rep 55 | must stay below Deck Oven throughput |
+| Master Dome Oven (v1.0) | Artisan | 19,000 | 3 | 1.10 | 14 (13.6) | +14 | 9 | 3x3 | 180 | Restaurateur and Rep 75 | must stay below Deck Oven throughput |
+| Twin Chamber Combi Oven (v1.0) | Hybrid | 24,000 | 8 | 0.85 | 47 | +5 | none | 3x2 | 220 | Chain Founder | price at least 2x the best single family item |
+| Prep Counter | Basic | 1,200 | n/a | n/a | 30 dishes | 0 | none | 2x1 | 10 | Start | |
+| Dough Sheeter | Volume | 2,500 | n/a | n/a | x1.35 prep at its counter | -2 | none | 1x1 | 25 | Serve 500 guests | x1.2 to x1.5 |
+| Heat Lamp Pass | Volume | 1,500 | n/a | n/a | serve time x0.7 | -1 | none | 2x1 | 10 | Day 5 | |
+| Dish Machine | Volume | 4,000 | n/a | n/a | dishwashing x1.8 | 0 | none | 1x2 | 40 | Day 8 | |
+| Proving Cabinet | Quality | 3,500 | n/a | n/a | neutral | +3 | none | 1x1 | 30 | Rep 40 | |
+| Marble Bench | Quality | 4,000 | n/a | n/a | 30 dishes (replaces counter) | +2 | none | 2x1 | 10 | Rep 45 | |
+| Hand Stretch and Mozzarella Station (v1.0) | Artisan | 7,500 | n/a | n/a | x0.8 prep (replaces counter) | +5 | 6 | 2x1 | 60 | Rep 60 | |
+| Pro Prep Line (v1.0) | Hybrid | 12,000 | n/a | n/a | x1.4 prep (replaces counter) | +2 | none | 3x1 | 90 | Chain Founder | |
+
+Other kitchen constants:
+
+| Name | Unit | Start | Safe range | Read by |
+|---|---|---|---|---|
+| pizza base bake time | game min | 12 | 8 to 15 | Kitchen |
+| prep base rate | dishes per hour per counter | 30 | 20 to 40 | Kitchen |
+| prep load per cover | formula | 1 + 0.4 x (starter attach + dessert attach) | factor 0.2 to 0.6 | Kitchen |
+| artisan under-skill rule | scaling | quality mod x skill/required; speed x0.9 | | Kitchen, quality |
+| plates per cover | plates | 3 | 2 to 4 | Dishwashing |
+| dishwasher rate | plates per hour | 60 x (0.7 + 0.06 x skill) | 40 to 80 base | Dishwashing |
+| starting plate stock | plates | 90 | 60 to 150 | Dishwashing |
+| resale value | fraction | 0.80 | 0.6 to 0.9 | Build, equipment |
+
+### 1.8 Service and turnover
+
+| Name | Unit | Start | Safe range | Read by |
+|---|---|---|---|---|
+| seat time | game min | 2 with host, 5 without | | Service |
+| order time | game min | 3 / server_speed | | Service |
+| serve time | game min | 1.5 / server_speed | | Service |
+| pay and bus time | game min | 4 / server_speed | | Service |
+| server_speed | formula | (0.7 + 0.06 x skill) x morale_mult x load_mult | | Service |
+| tables per server before penalty | tables | 4 | 3 to 6 | load_mult |
+| load penalty | per extra table | -0.15, floor 0.4 | -0.1 to -0.25 | load_mult |
+| party size fit | fraction of seats usable | 0.75 | 0.6 to 0.9 | Seat capacity |
+| service utilisation U | fraction | lunch 0.60, dinner 0.65 | 0.5 to 0.8 | Service capacity |
+| queue delay | formula | min(25, 2 x rho / (1-rho)), 25 at rho 0.95+ | cap 15 to 40 | Waits |
+| perceived queue share | fraction | lunch 0.5, dinner 0.6 | | wait_score |
+| walk-away threshold | x tolerance | 1.5 | 1.2 to 2.0 | Walk-aways |
+| satisfaction weights | weights | food 0.40, service 0.20, ambience 0.15, value 0.15, wait 0.10 | sum 1.0 | Satisfaction |
+| food_score | formula | 0.7 x Q/100 + 0.3 x taste match | | Satisfaction |
+| service_score | formula | clamp(0.30 + 0.06 x skill + 0.10 host, 0, 1) | | Satisfaction |
+| review probability | per party | 0.20 | 0.1 to 0.3 | Reviews |
+| comp dessert bonus | satisfaction points | +15 | +5 to +25 | Interventions |
+
+### 1.9 Build and ambience
+
+| Name | Unit | Start | Safe range | Read by |
+|---|---|---|---|---|
+| ambience base | points | 25 | 15 to 35 | Ambience |
+| decor factor | points per decor point per 10 dining tiles | 5 | 3 to 8 | Ambience |
+| lighting bonus | points | 0 to 10 | | Ambience |
+| crowding penalty | points per crowded table | -5 | -2 to -10 | Ambience |
+| style set bonus (v1.0) | points | 15 x share of items in one style, only if share is 0.5 or more | max 10 to 20 | Ambience |
+| undo depth | steps | 20 | 10 to 50 | Build mode |
+
+### 1.10 Staff
+
+| Name | Unit | Start | Safe range | Read by |
+|---|---|---|---|---|
+| role_base salary | $ per week | chef 900, cook 550, server 450, host 420, dishwasher 380, restaurant manager 1,100, area manager 1,800 | +/- 30% | Finance |
+| salary per skill point | fraction | +0.12 per point above 5 | 0.08 to 0.18 | Finance |
+| salary per fame star | fraction | +0.25 | 0.15 to 0.40 | Finance |
+| morale target and drift | points | toward 70 at 3 per day | 60 to 80; 1 to 5 | Morale |
+| morale_mult | formula | 0.85 + 0.30 x morale/100 | range 0.2 to 0.4 | Speed |
+| overwork | morale per day per extra shift | -2 | -1 to -4 | Morale |
+| understaffed | morale per day | -1 | | Morale |
+| raise bonus | morale, once | +10 for a raise of 10% or more | | Morale |
+| notice rule | days | below 30 for 7 days, then 7 days notice | | Staff |
+| fame Rep effect | Rep per week per star | +1.5, cap +5 per location | | Reputation |
+| chef fame foodie effect | arrivals per star | +5% Foodies | | Demand |
+| skill growth | shifts per skill point | 40 | 25 to 60 | Staff |
+| training | $, days | 600, 3 days | | Staff |
+| candidates per week | count | 6 | 4 to 10 | Hiring |
+| fame candidate gate | Rep | 50 | 40 to 70 | Hiring |
+| manager reorder accuracy | formula | 0.70 + 0.03 x m | | Manager |
+| manager profit modifier | formula | -10% + 2% x m | | Manager, off-screen |
+| manager price step | per week | 5% | 2% to 10% | Manager |
+| caretaker profit modifier | fraction | -20% | -10% to -30% | Off-screen |
+
+### 1.11 Reputation
+
+| Name | Unit | Start | Safe range | Read by |
+|---|---|---|---|---|
+| starting Rep | points | 30 (40 if brand Rep 60+) | 20 to 50 | Reputation |
+| Rep learning rate | fraction of gap per day | 0.05 | 0.03 to 0.10 | Reputation |
+| walk-away penalty | Rep | -1 if walk-aways over 10% of arrivals | | Reputation |
+| critic review weight | multiplier | 5 | 3 to 10 | Reputation |
+| marketing brand bonus | Rep | 0 to 5 | | Brand Rep |
+
+### 1.12 Finance
+
+| Name | Unit | Start | Safe range | Read by |
+|---|---|---|---|---|
+| starting cash | $ | 40,000 | 25,000 to 60,000 | Finance |
+| starter loan | $, rate, term | up to 30,000, 5% per year, 104 weeks | | Finance |
+| lease deposit | weeks of rent | 8 | 4 to 12 | Property |
+| lease break fee | weeks of rent | 4 | | Property |
+| utilities | $ per day | 30 + 0.80 per cover | | Finance |
+| upkeep | $ per day | 15 + equipment maintenance per week / 7 | | Finance |
+| expansion loan | multiple, cap, rate, term | 12 x avg weekly profit, $150,000, 6%, 3 years; unlock Rep 50 | | Finance |
+| restructure trigger | days below $0 | 7 | 5 to 14 | Safety net |
+| restructure pause | weeks | 4 | | Safety net |
+| fresh start threshold | $ | -20,000 | | Safety net |
+| property resale | fraction | 0.90 | | Property |
+| saturated rent growth | per season | +5% | 0 to 10% | Property (runaway guard) |
+| loyalty discount | per 4 weeks, cap | 2%, 8% | | Purchasing |
+| central purchasing discount | at 3 and 6 locations | 5%, 10% | | Purchasing |
+
+---
+
+## 2. Worked example: one full day at the starter restaurant
+
+### 2.1 Set-up
+
+* **Location:** 110 tile starter property in Canal Quarter (80 dining tiles, 30 kitchen tiles), leased at $11 per tile = $1,210 per week.
+* **Day:** Thursday of week 1, spring (weekday_mult 1.00, season_mult 1.00). Rep 30 (new restaurant).
+* **Cash before opening:** starting cash $40,000 plus starter loan $30,000 = $70,000; minus deposit $9,680, tables and decor $6,400 (4 two-tops $1,400, 4 four-tops $2,400, decor and lamps $2,600), freezer and dry shelf $2,200, opening stock $1,200 = **$50,520** on day 1. Thursday morning cash is taken as **$51,240** for this example (illustrative result of days 1 to 3).
+* **Room:** 8 tables, 24 seats, ambience 55, no host.
+* **Kitchen (pre-installed):** 1 Deck Oven, 2 Prep Counters, 1 fridge, 1 sink, plus the freezer and dry shelf bought above. Maintenance $40 + $20 = $60 per week.
+* **Staff (weekly):** cook skill 5 $550, cook skill 4 $484, server skill 5 $450, server skill 4 $396, dishwasher skill 4 $334.40 = **$2,214.40 per week**.
+* **Ingredients:** mostly Standard from Metro (offset 0) with Fratelli basil (offset -3): IQ 54.
+
+**Menu (sales weighted averages used by the model):**
+
+| Dish | Price | Food cost | Share of mains |
+|---|---|---|---|
+| Margherita | $11.00 | $2.40 | 40% |
+| Pepperoni | $13.00 | $3.30 | 30% |
+| Funghi | $12.00 | $2.70 | 20% |
+| Quattro Formaggi | $13.00 | $3.10 | 10% |
+| **Average main** | **$12.00** | **$2.80** | |
+| Soft drink or house wine (average) | $4.00 | $0.85 | attach 0.80 |
+| Garlic bread or bruschetta (average) | $6.00 | $1.60 | attach 0.30 |
+| Tiramisu or panna cotta (average) | $6.00 | $1.40 | attach 0.2625 |
+
+### 2.2 Quality, fair price and appeal
+
+```
+K  = 30 + 7 x 4.5 (average cook skill)          = 61.5
+Q  = 0.50 x 54 + 0.15 x 70 + 0.35 x 61.5 + E 0   = 59.0
+fair price = 4 + 0.08 x 59.0 + 1.5 x 2.80        = $12.92
+r  = 12.00 / 12.92                               = 0.93  (inside the fair band, slightly cheap)
+average check     = 12.00 + 0.80 x 4 + 0.30 x 6 + 0.2625 x 6 = $18.575
+cost per cover    = 2.80 + 0.80 x 0.85 + 0.30 x 1.60 + 0.2625 x 1.40 = $4.3275
+```
+
+### 2.3 Demand by segment
+
+`T x share x 0.035 x rep_mult 0.80 x menu_fit x price_mult x budget_mult x quality_mult x speed_mult x (1-0.5 x 0.30)`
+
+| Segment | Guests | Main driver |
+|---|---|---|
+| Students | 6.6 | small share; budget_mult 0.69 at $12; speed_mult 0.8 at lunch (slow service without a host) |
+| Families | 18.5 | good taste match for classics |
+| Professionals | 18.2 | budget comfortable, speed_mult 0.8 at lunch |
+| Foodies | 6.2 | quality_mult 0.98 at Q 59 |
+| Seniors | 12.1 | |
+| Tourists | 7.5 | |
+| **Total** | **69.0** | lunch 26.3, dinner 42.7 |
+
+### 2.4 Capacity and service
+
+| | Lunch | Dinner |
+|---|---|---|
+| Service time (seat 5 + order 3.1 + cook 12.4 + serve 1.5 + pay 4.1) | 26.1 min | 26.1 min |
+| Table cycle (with meal) | 66.7 min | 71.4 min |
+| Seat capacity per hour (24 x 0.75 x 60 / cycle) | 16.2 | 15.1 |
+| Kitchen capacity per hour (oven 19.4, prep 47.5) | 19.4 | 19.4 |
+| Bottleneck | seats | seats |
+| Service capacity (x hours x U) | 29.1 | 44.3 |
+| Demand | 26.3 | 42.7 |
+| Utilisation rho | 0.90 | 0.96 |
+| Kitchen and seating queue delay | 18.6 min | 25 min |
+| Served / walk-aways | 26 / 0 | 43 / 0 |
+
+**What the player sees:** a pleasantly busy lunch, then a packed dinner where tables wait. End of day bottleneck banner: "Seats were full 96% of dinner. Two more 2-top tables (+$700) or a host (seat time 5 to 2 min, $420 per week) would help."
+
+### 2.5 One guest, end to end
+
+A family of four arrives at 19:40, waits for a table, orders Margherita and Pepperoni, a starter and drinks.
+
+```
+food_score    = 0.7 x 0.59 + 0.3 x 0.70           = 0.623
+service_score = 0.30 + 0.06 x 4.5 (no host)        = 0.57
+ambience      = 55 / 100                           = 0.55
+value_score   = 0.7 - 0.6 x (0.93 - 1) x 1.5       = 0.763
+perceived wait= 3.1 + 1.5 + 0.6 x 25               = 19.6 min vs tolerance 12
+wait_score    = 1 - (19.6 - 12) / 12               = 0.363
+S = 100 x (0.40 x 0.623 + 0.20 x 0.57 + 0.15 x 0.55 + 0.15 x 0.763 + 0.10 x 0.363) = 59.6
+stars = round(1 + 4 x 0.596) = 3
+review: "Lovely classic pizza, but we waited ages for our table."
+```
+
+### 2.6 Money flow (P&L, accrual view)
+
+| Line | Calculation | Amount |
+|---|---|---|
+| **Sales** | 69 covers x $18.575 (lunch $482.95, dinner $798.73) | **$1,281.68** |
+| Ingredients used | 69 x $4.3275 | -$298.60 |
+| Waste | 5% of ingredients used (Standard tier) | -$14.93 |
+| Staff | $2,214.40 / 7 | -$316.34 |
+| Rent | $1,210 / 7 | -$172.86 |
+| Utilities | $30 + $0.80 x 69 | -$85.20 |
+| Upkeep | $15 + $60 / 7 | -$23.57 |
+| Loan interest | $30,000 x 5% / 52 / 7 | -$4.12 |
+| **Profit** | | **$366.06** |
+
+Food cost ratio (ingredients plus waste over sales) = 24.5%, just under the healthy 25% to 35% band, which the advisor notes as good value for guests.
+
+### 2.7 Money flow (cash view)
+
+| Time | Event | Cash |
+|---|---|---|
+| 09:00 | Opening balance | $51,240.00 |
+| 09:00 | Metro delivery (ordered Tuesday) paid on arrival | -$305.00 |
+| 11:30 to 14:30 | Lunch sales | +$482.95 |
+| 18:00 to 22:30 | Dinner sales | +$798.73 |
+| 23:30 | Utilities and upkeep settled daily | -$108.77 |
+| 23:30 | **Closing balance** | **$52,107.91** |
+
+Cash rose $867.91 while profit was $366.06, because salaries, rent and loan are settled on Sunday night (week 1: salaries $2,214.40, rent $1,210.00, loan payment $303.26 including interest) and because $305 of stock arrived while $313.53 was used or wasted (stock value fell $8.53). The P&L screen explains this in one sentence: "Rent and wages are paid on Sunday; today's share is already counted in your profit."
+
+### 2.8 Reputation after the day
+
+About 26 parties, 20% review (5 reviews), expected review score 20 + 0.8 x 60.9 = 68.7. Rep = 30 + 0.05 x (68.7-30) = **31.9**. At this pace the restaurant reaches Rep 50 in about 2 weeks if it keeps satisfaction near 61, faster once a host and more tables fix the dinner waits.
+
+---
+
+## 3. Strategy comparison: luxury vs volume vs middle ground
+
+### 3.1 Reference builds
+
+Each build is a mature single location at steady state reputation (Rep where daily review score equals Rep), on a Thursday, spring. Prices are the reference prices; section 3.4 shows best prices.
+
+| | Luxury "Trattoria Stella" | Volume "Slice Hall" | Middle "Canal Corner" |
+|---|---|---|---|
+| Home district | Old Harbour | University Quarter | Canal Quarter |
+| Property | 136 tiles (100 dining, 36 kitchen) | 280 tiles (220 dining, 60 kitchen) | 150 tiles (110 dining, 40 kitchen) |
+| Seats, tables | 40 seats, 12 tables, booths | 120 seats, 34 tables | 56 seats, 16 tables |
+| Ambience | 85 | 45 | 65 |
+| Ingredients | Premium and Artisan, IQ 84, pizza food cost $6.20 | Basic and Standard, IQ 42, pizza food cost $2.10 | Standard and Premium, IQ 65, pizza food cost $3.90 |
+| Ovens | 2 Wood Fired (12 each at skill 5; 13.8 each at skill 7.5) | 3 Conveyor (44.5 each at skill 4) | 2 Stone Hearth (21.2 each at skill 6) |
+| Prep | 2 Prep Counters, 1 Proving Cabinet | 4 Prep Counters each with a Dough Sheeter, Heat Lamp Pass, Dish Machine | 2 Prep Counters |
+| Equipment modifier E | +10 oven +3 proving = +13 | -3 oven -2 sheeter = -5 | +5 |
+| Staff | chef skill 8 fame 1 ($1,530), cook skill 7 ($682), 3 servers skill 6 ($1,512), host ($420), 2 dishwashers ($760) = $4,904 per week | 4 cooks skill 4 ($1,936), 7 servers skill 4 ($2,772), host ($420), 2 dishwashers skill 4 ($668.80) = $5,796.80 per week | 2 cooks skill 6 ($1,232), 4 servers skill 5 ($1,800), host ($420), 2 dishwashers ($760) = $4,212 per week |
+| Kitchen skill K | 30 + 7 x 7.5 + 5 (chef specialty) = 87.5 | 30 + 7 x 4 = 58 | 30 + 7 x 6 = 72 |
+| Harmony H | 85 | 65 | 75 |
+| **Dish quality Q** | **98.4** | **46.1** | **74.0** |
+| Fair price | $21.17 | $10.83 | $15.77 |
+| Reference main price | $28.00 (r 1.32) | $8.50 (r 0.78) | $13.00 (r 0.82) |
+| Sides (drink, starter, dessert) | $7.00, $9.00, $8.00 | $3.00, $4.50, $4.00 | $4.50, $7.00, $6.50 |
+| Attach (from ambience) | 0.90, 0.50, 0.45 | 0.80, 0.30, 0.20 | 0.82, 0.34, 0.325 |
+| Equipment maintenance | $350 per week | $520 per week | $140 per week |
+| Waste rate (tier mix) | 9% | 3.5% | 6% |
+| Capex (equipment, furniture, deposit) | about $92,000 | about $95,000 | about $55,000 |
+
+### 3.2 Results in their home districts (per day)
+
+| | Luxury in Old Harbour | Volume in University Quarter | Middle in Canal Quarter |
+|---|---|---|---|
+| Steady state Rep | 86 | 70 | 80 |
+| Average satisfaction | 82.6 | 62.7 | 74.5 |
+| Demand | 126 | 358 | 143 |
+| Covers served | 106 | 358 | 143 |
+| Walk-aways | 20 (dinner full) | 0 | 0 |
+| Bottleneck | seats at dinner (rho 1.29) | seats and kitchen at the lunch rush (rho 0.92) | none (rho 0.8) |
+| Top segments served | Foodies 59, Tourists 31, Professionals 10 | Students 222, Families 63, Professionals 47 | Professionals 40, Families 31, Seniors 26 |
+| Service time | 23.1 min | 17.3 min (speed_mult 1.16) | 21.8 min |
+| Average check | $42.40 | $13.05 | $21.18 |
+| Cost per cover | $10.20 | $3.06 | $5.85 |
+| **Sales** | **$4,490.71** | **$4,671.99** | **$3,021.47** |
+| Ingredients used | -$1,080.31 | -$1,095.50 | -$834.73 |
+| Waste | -$97.23 | -$38.34 | -$50.08 |
+| Staff | -$700.57 | -$828.11 | -$601.71 |
+| Rent | -$369.14 | -$320.00 | -$235.71 |
+| Utilities | -$114.73 | -$316.41 | -$144.11 |
+| Upkeep | -$65.00 | -$89.29 | -$35.00 |
+| **Profit per day** | **$2,063.73** | **$1,984.34** | **$1,120.12** |
+| Profit per cover | $19.49 | $5.54 | $7.85 |
+| Payback on capex | about 45 days | about 48 days | about 49 days |
+
+**Reading the comparison.** Luxury and volume land within 4% of each other by opposite routes: luxury earns $19.49 per cover from 106 covers, volume earns $5.54 per cover from 358 covers. Luxury's limit is seats (long dinners), so it prices up; volume's limit is the lunch rush, so it adds ovens and seats. Both need about $92,000 to $95,000 of investment and pay it back in about 6.5 to 7 weeks. The middle build needs less capital, is calmer, and pays back at a similar rate but with roughly half the daily profit.
+
+### 3.3 Every build in every district (reference prices, profit per day)
+
+| Build | University Quarter | Canal Quarter | Old Harbour |
+|---|---|---|---|
+| Luxury ($28) | -$192 (25 covers) | $58 (35 covers) | **$2,064** (106 covers) |
+| Volume ($8.50) | **$1,984** (358 covers) | -$50 (147 covers) | -$576 (125 covers) |
+| Middle ($13) | $1,563 (169 covers) | **$1,120** (143 covers) | $1,142 (156 covers) |
+
+### 3.4 Best price per build and district (price searched within each strategy's band)
+
+| Build (band) | University Quarter | Canal Quarter | Old Harbour |
+|---|---|---|---|
+| Luxury ($20 to $34) | $667 at $20 | $1,014 at $20 | **$2,078 at $30** |
+| Volume ($8 to $10) | **$2,106 at $8** | -$50 at $8.50 | -$576 at $8.50 |
+| Middle ($12 to $16) | $1,652 at $12 | **$1,236 at $12** | $1,415 at $16 |
+
+### 3.5 Balance checks (automated, F-81)
+
+| Check | Rule | Result |
+|---|---|---|
+| Two strategies both win | Luxury home profit and volume home profit within 10% | $2,064 vs $1,984, 4% apart: pass |
+| Neither strictly dominates | No build is the top earner in all districts | Luxury tops Old Harbour, volume tops University Quarter, middle tops Canal Quarter: pass |
+| Middle ground not dominant | Each specialist beats the best middle build in its home district by 15% or more | Volume +27% ($2,106 vs $1,652); luxury +47% ($2,078 vs $1,415): pass |
+| Middle ground possible | Best middle build profit positive in all districts and top in the mixed district | $1,236 to $1,652, top in Canal Quarter: pass |
+| Specialists must fit their district | Specialists lose money in the other specialist's home district | Luxury -$192 in University Quarter, volume -$576 in Old Harbour: pass |
+| No dead end | Minimum viable restaurant at Rep 30 at fair price breaks even in Canal and University | +$33 and +$93 per day: pass (Old Harbour -$55, flagged "ambitious") |
+
+### 3.6 Why each strategy works, in the formulas
+
+* **Luxury:** quality_mult for Foodies is 1.6 (capped) at Q 98 and Old Harbour's wealth W 1.3 lifts Foodies' budget to $31.20, so budget_mult stays 1.2 at a $28 main. Tourists (budget $26 in the harbour) still come at 0.86. The Wood Fired Ovens give +10 quality but only 27.6 servings per hour, so the room fills with long 60 minute dinners and the right answer is to raise prices rather than add covers.
+* **Volume:** University students' budget is $8 (W 0.8), so at $8.50 their budget_mult is 0.89, while at the middle build's $12 it is 0.44. The conveyor ovens, heat lamp pass and host cut service time to 17.3 minutes, earning speed_mult 1.16 at lunch for Students and Professionals. Volume gear keeps speed high with cheap skill 4 cooks.
+* **Middle:** decent at everything, so it is never punished, but it cannot reach the foodie premium (quality_mult 1.28 instead of 1.6 and a price too low for the harbour) nor the student lunch rush (budget_mult 0.44 and no speed bonus).
+
+### 3.7 Tuning guardrails
+
+* If playtests show one strategy chosen by fewer than 30% of experienced players (M5), adjust in this order: segment budgets B, district wealth W, equipment throughput, before touching global constants.
+* Artisan equipment throughput must stay below the Deck Oven's 20 servings per hour at skill 5.
+* Hybrid equipment must cost at least twice the best single family item it combines, so it is a late game upgrade, not a shortcut.
+* Any change that moves a reference build's profit by more than 15% requires rerunning sections 2 and 3 and updating AC-10, AC-11, AC-12, AC-105 and AC-114.

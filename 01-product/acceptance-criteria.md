@@ -1,0 +1,223 @@
+# Acceptance criteria: Cosy Pizza Tycoon for iPad
+
+* Every Must Have and Should Have feature in `features.md` has at least one criterion. Nice to Have features are not covered.
+* Format: Given [context] / When [action] / Then [outcome].
+* **Test type:** **Auto** = automated test against the simulation or data (no UI); **UI** = manual or UI automation; **PT** = playtest measure.
+* Numbers come from prd.md section 5 and `balance.md`. When design retunes a constant, the expected values here are updated in the same change. "About" means within 2% unless stated.
+* Milestones: M0, v0.1, v1.0, v2.0 (see `versions.md`).
+
+---
+
+## M0: Simulation core and balance (automated)
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-01 | F-01 | M0 | Auto | Any constant listed in balance.md section 1 | A designer changes its value in the data file and relaunches | The simulation uses the new value with no code change, and the reference calculator reports the new outputs |
+| AC-02 | F-53 | M0 | Auto | The starter reference build in Canal Quarter (balance.md section 2) at Rep 30, main price at fair price | The average main price is raised to 1.5 x fair price, all else equal | Total daily demand falls by at least 30% (reference: 60.1 to 23.4 guests, -61%) |
+| AC-03 | F-53 | M0 | Auto | The same starter build at fair price | The average main price is lowered to 0.8 x fair price | Demand rises by no more than 60% (reference: +50%), because price_mult is capped at 1.5 and budget_mult at 1.2 |
+| AC-04 | F-53 | M0 | Auto | Students (B $10) in University Quarter (W 0.8) | The average main price is $16 | budget_mult for Students equals 0.25; at a main price of $6 it equals 1.2 (cap) |
+| AC-05 | F-53 | M0 | Auto | Foodies (qa 1.0) | Menu quality Q is 90, then 40 | quality_mult is 1.6 (cap) and 0.6 respectively; Students' quality_mult stays 1.0 in both cases |
+| AC-06 | F-53 | M0 | Auto | A restaurant with service_time 16 minutes, then 26 minutes | Lunch demand is computed | speed_mult for Students and Professionals is 1.25 and 0.8 respectively; for all other segments and at dinner it is 1.0 |
+| AC-07 | F-39 | M0 | Auto | Cooks of skill 5 | Oven capacity is computed | Deck Oven gives 20 servings per hour, Double Deck 40, Conveyor 45 (plus or minus 1), Stone Hearth 20, Wood Fired 12 |
+| AC-08 | F-40 | M0 | Auto | A Deck Oven and a Conveyor Oven | Cook skill changes from 1 to 10 | Deck Oven capacity rises from 15.2 to 26 per hour (+71%) while Conveyor rises from 41.8 to 50 per hour (+20%), so volume gear depends much less on skill |
+| AC-09 | F-40 | M0 | Auto | A Wood Fired Oven (quality +10, skill 7 required) | The baking cook has skill 5 | The oven's quality modifier is 7.1 and its speed is multiplied by 0.9 (10.8 servings per hour); with skill 7 or more the full +10 applies |
+| AC-10 | F-81 | M0 | Auto | The luxury, volume and middle reference builds in balance.md section 3, each at its reference price, at steady state Rep, on a Thursday | Daily profit is computed in all three v0.1 districts | Luxury in Old Harbour and volume in University Quarter are within 10% of each other (reference $2,064 vs $1,984) |
+| AC-11 | F-81 | M0 | Auto | The same three reference builds, with each build's main price optimised within its strategy band (luxury $20 to $34, middle $12 to $16, volume $8 to $10) | Best daily profit per build and district is computed | No build is the top earner in all three districts; volume beats the best middle build in University Quarter by at least 15%; luxury beats the best middle build in Old Harbour by at least 15%; the middle build is the top earner in Canal Quarter |
+| AC-12 | F-81 | M0 | Auto | The minimum viable restaurant defined in prd.md 6.3 at Rep 30, priced at fair price | Daily profit is computed | Profit is at least $0 in Canal Quarter and University Quarter |
+
+---
+
+## A. Core, platform and settings
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-13 | F-02 | v0.1 | UI | Service is running at 1x | The player taps 4x, then pause | The in-game clock advances 4 times faster (1 game minute per 0.125 s), then stops; all guests and staff freeze; the UI stays interactive |
+| AC-14 | F-02 | v0.1 | UI | Auto pause on "stock-out" is enabled | A dish sells out during service | The game pauses and shows the stock-out card with an emergency order option |
+| AC-15 | F-03 | v0.1 | Auto | Any day | The clock reaches 09:00 | The game auto pauses for morning prep; from 15:00 to 17:30 and after 23:00 with no guests present, time runs at 8x automatically |
+| AC-16 | F-04 | v0.1 | UI | A service is in progress with 20 seated guests | The app is sent to the background and killed by the OS, then relaunched | The game resumes at the same game minute with the same guests, orders, stock and cash (identical save checksum) |
+| AC-17 | F-04 | v0.1 | Auto | A day ends | The end of day summary opens | An autosave is written before the summary is shown; 3 manual slots can be saved, loaded and overwritten |
+| AC-18 | F-05 | v0.1 | UI | The player last played more than 12 real hours ago | The app launches | The recap card shows the current day, yesterday's covers and profit, pending deliveries, the active savings goal progress and the next milestone |
+| AC-19 | F-06 | v0.1 | UI | Any screen | A tester audits touch targets | Every interactive element is at least 44 x 44 pt; every action can be completed with one finger |
+| AC-20 | F-07 | v1.0 | UI | Build mode on an iPad with Apple Pencil hover support | The Pencil hovers over the grid | A ghost preview of the selected item appears at the hovered tile with its cost and ambience delta; tapping with the Pencil places it on that exact tile |
+| AC-21 | F-09 | v0.1 | UI | Settings open | The player switches Numbers from Detailed to Simple | Inspect panels show plain sentences instead of formula breakdowns; the choice persists after relaunch |
+| AC-22 | F-10 | v0.1 | UI | Text size set to Largest | Any screen with body text is shown | Text scales without truncation or overlap on an 11 inch and a 13 inch iPad |
+| AC-23 | F-10 | v1.0 | UI | Colour blind mode (deuteranopia) and Reduce Motion enabled | A service is played | Every status (stock chips, satisfaction faces, bottlenecks) is also shown by icon or label; camera and UI animations are replaced by fades |
+| AC-24 | F-11 | v0.1 | Auto | First launch | The player declines telemetry | No telemetry event is stored or sent; if accepted, events for tutorial steps, sessions, locations opened and strategy position are stored offline and sent when online |
+| AC-25 | F-12 | v1.0 | UI | Device language set to German | The game launches | All UI, tutorial and review templates appear in German with no missing string keys; currency uses the localised symbol |
+
+## B. City and property
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-26 | F-13 | v0.1 | UI | The city map | The player taps Old Harbour | The district card shows foot traffic 2,600, segment pie, wealth 1.3, rent $19 per tile per week, competition 0.25, tags, and the "ambitious" flag |
+| AC-27 | F-14 | v0.1 | UI | New game | The property picker opens | Three recommended properties are shown (two Canal Quarter, one University Quarter) each with lease cost, 8 week deposit, grid sizes and a projected guests per day range for the default menu |
+| AC-28 | F-14 | v0.1 | Auto | The player leases the 110 tile Canal Quarter starter property | The lease is signed | Cash falls by the 8 week deposit ($9,680) and weekly rent of $1,210 is accrued at $172.86 per day |
+| AC-29 | F-15 | v1.0 | Auto | A leased location with $30,000 of equipment and furniture | The player closes it | A fee of 4 weeks rent is charged and items are either resold at 80% or moved to chain storage, as chosen |
+| AC-30 | F-16 | v1.0 | Auto | A property priced $250,000 | The player buys it | Rent stops from that day; selling it later returns $225,000 |
+| AC-31 | F-17 | v1.0 | Auto | Start of a week | A district trend card is drawn | The stated change (for example Students +20% in University Quarter) is applied to demand for exactly the stated duration and then removed |
+| AC-32 | F-18 | v1.0 | Auto | Old Harbour in summer with season_mult 1.15 | Demand is computed | Demand is 1.15 times the same day's spring value, all else equal |
+
+## C. Ingredients, recipes and menu
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-33 | F-19 | v0.1 | Auto | The ingredient data | Tiers are loaded | Basic, Standard, Premium, Artisan have base quality 35, 55, 75, 90; price multipliers 0.70, 1.00, 1.60, 2.40; shelf life multipliers 1.3, 1.0, 0.8, 0.6 |
+| AC-34 | F-19 | v0.1 | Auto | Standard mozzarella (base shelf life 5 days) from Fratelli (offset -3) and Premium mozzarella from Green Valley (offset +3) | Stock is received | Quality is 52 and 78; shelf life is 5 and 4 days; unit prices follow the tier multiplier times the supplier price index |
+| AC-35 | F-20 | v0.1 | Auto | A Margherita with all ingredients at Standard from a supplier with offset 0 (IQ 55, food cost $2.40) | Every ingredient is switched to Premium from a supplier with offset 0 | IQ rises by 20, dish quality rises by 10, food cost becomes $3.84, and each ingredient's shelf life is multiplied by 0.8 |
+| AC-36 | F-20 | v0.1 | UI | The recipe card | The player taps the tier selector on mozzarella and highlights Artisan | Before confirming, a preview shows the change in Q, cost per portion, shelf life and fair price; suppliers that do not stock Artisan mozzarella are greyed out |
+| AC-37 | F-21 | v0.1 | Auto | IQ 55, harmony 70, kitchen skill K 65, freshness 1.0, equipment modifier 0 | Dish quality is computed | Q = 60.75; with an ingredient in its last 25% of shelf life Q = 54.7; with E = +10 Q = 70.75 |
+| AC-38 | F-21 | v0.1 | UI | The pizza designer | The player drags a 7th topping onto the pizza | The drop is refused with the message "6 toppings maximum"; with 5 toppings harmony shows the -10 penalty for the 5th |
+| AC-39 | F-22 | v0.1 | UI | Preset Tiramisu | The player sets its mascarpone to Premium | Its cost, Q and fair price update and it can be added to the menu |
+| AC-40 | F-23 | v0.1 | Auto | A dish with Q 60.75 and food cost $2.40 | The pricing panel opens | Fair price shows $12.46 and the band $11.21 to $13.71; margin % and six segment appeal bars are shown |
+| AC-41 | F-24 | v0.1 | UI | A menu with 16 items | The player tries to add a 17th | It is refused with a clear message; a menu with fewer than 4 items cannot open for service |
+| AC-42 | F-25 | v0.1 | Auto | A dish sold fewer than 5% of mains for 3 consecutive days | The day ends | The dish report flags it with a suggestion (price, taste match or quality) |
+| AC-43 | F-26 | v1.0 | Auto | Summer, basil in season | A Premium basil stock line is received | It carries the "seasonal" tag and +5 quality until the season ends |
+| AC-44 | F-27 | v1.0 | Auto | Milestone "Serve 500 guests" completed | The recipe notebook opens | The associated classic recipe is unlocked and can be added to the menu in one tap |
+
+## D. Purchasing and logistics
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-45 | F-29 | v0.1 | UI | The supplier directory | The player opens Green Valley Farm | It shows price index 1.10, tiers Standard to Artisan for produce and dairy, quality offset +3, reliability 92%, lead time 2 days, minimum order $150 |
+| AC-46 | F-30 | v0.1 | Auto | An order from a supplier with reliability 0.85, simulated 10,000 times | Deliveries resolve | 85% (plus or minus 1%) arrive complete and on time; of the rest, 70% arrive the next day in full and 30% arrive 50% complete on time; none are lost |
+| AC-47 | F-31 | v0.1 | Auto | One fridge (120 units) holding 100 units | A delivery of 40 fridge units arrives | 20 units are accepted, 20 refused with a message, and the refused value is refunded |
+| AC-48 | F-32 | v0.1 | Auto | Two batches of the same stock line with different expiry dates | A dish uses the ingredient | The older batch is used first; any batch past expiry at end of day is moved to the waste log with cause "expired", tier and cost |
+| AC-49 | F-33 | v0.1 | Auto | Mozzarella stock reaches 0 during service | A guest would order a dish needing it | Those dishes show sold out; the guest chooses the next best dish by appeal; that party's satisfaction drops by 5; the advisor offers an emergency order at +20% with 1 day lead |
+| AC-50 | F-34 | v1.0 | Auto | A standing order for flour with par level 80 units every 3 days | Stock is 30 units on order day | An order for 50 units is placed automatically with the chosen supplier and tier |
+| AC-51 | F-35 | v1.0 | Auto | Mozzarella bought from Metro for 16 consecutive weeks | Prices are computed in week 17 | Metro mozzarella is 8% cheaper (cap reached); switching supplier resets the streak |
+| AC-52 | F-36 | v1.0 | Auto | 3 locations join a central contract for mozzarella | Any of them orders mozzarella | Price is 5% below the list price; with 6 locations 10% |
+
+## E. Kitchen equipment
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-53 | F-38 | v0.1 | Auto | The equipment data | It is loaded | Every item has price, servings per hour or multiplier, quality modifier, footprint, weekly maintenance, family and unlock condition matching prd.md 5.5 |
+| AC-54 | F-38 | v0.1 | Auto | A location with a Wood Fired Oven and a Proving Cabinet | A week ends | Upkeep includes $150 + $30 of weekly maintenance, accrued daily |
+| AC-55 | F-38 | v0.1 | UI | Location Rep 54 | The player opens the catalogue | Wood Fired Oven is visible but locked with "Reach 2.75 stars (Rep 55)"; at Rep 55 it becomes purchasable |
+| AC-56 | F-39 | v0.1 | Auto | The starter kitchen (1 Deck Oven, 2 Prep Counters, cooks of skill 4.5 average, starter attach rates) | Kitchen capacity is computed | Oven capacity 19.4, prep capacity 47.5 per hour after prep load 1.225, kitchen capacity 19.4 per hour, bottleneck "oven" |
+| AC-57 | F-39 | v0.1 | UI | A dinner where kitchen capacity is lower than seat capacity and demand exceeds it | The kitchen panel is opened after service | It shows servings per hour per station, utilisation per station, and highlights the oven as the bottleneck |
+| AC-58 | F-40 | v0.1 | Auto | A Conveyor Oven (quality -3) and a Stone Hearth Oven (quality +5) in one kitchen | Two identical pizzas are baked, one in each | Their Q differs by exactly 8 |
+| AC-59 | F-40 | v0.1 | Auto | Any combination of equipment | E is computed for a dish | E is clamped between -6 and +15 |
+| AC-60 | F-41 | v0.1 | UI | The player pins Stone Hearth Oven ($6,000) as a savings goal with $4,100 cash and a 7 day average profit of $300 | The HUD is shown | It shows 68% progress and a projected date 7 days ahead; when cash reaches $6,000 a celebration plays and a "Buy now" shortcut appears |
+| AC-61 | F-42 | v0.1 | UI | The starter kitchen where seats are the bottleneck | The player previews a Double Deck Oven | The compare card shows oven capacity 19.4 to 59.0 per hour with the Double Deck added, Q -1 for pizzas baked in it, extra $70 per week maintenance, and the warning "Your seats are the limit, not the oven" |
+| AC-62 | F-43 | v1.0 | Auto | A Twin Chamber Combi Oven and cook skill 5 | Capacity and E are computed | 47 servings per hour (plus or minus 1) and quality +5 |
+
+## F. Dining room builder
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-63 | F-44 | v0.1 | UI | Service running | The player enters build mode | Time pauses; placing, rotating, moving and selling work by drag and tap; undo reverts up to 20 steps; selling refunds 80% |
+| AC-64 | F-44 | v0.1 | UI | An item dragged over an occupied or out of bounds tile | The player releases it | The footprint shows red while hovering and the item returns to its origin on release |
+| AC-65 | F-45 | v0.1 | Auto | The v0.1 catalogue | It is loaded | At least 40 furniture and decor items exist, including 2-top, 4-top, 6-top and booth tables, host stand, plants, lamps, wall and floor finishes |
+| AC-66 | F-46 | v0.1 | Auto | A dining room of 80 tiles with 40 decor points, lighting bonus 5, no crowding | Ambience is computed | Ambience = 25 + 5 x 5 + 5 = 55; each table with no free tile beside it lowers it by 5 |
+| AC-67 | F-47 | v0.1 | UI | A table placed so no 1 tile path connects it to the kitchen pass | The player tries to confirm the layout | Confirmation is blocked with "Table 4 cannot be reached" and the reachability overlay highlights it |
+| AC-68 | F-47 | v0.1 | UI | A layout without a sink | The player presses Open | Opening is refused with a checklist of missing requirements |
+| AC-69 | F-48 | v1.0 | Auto | 80% of dining items share the Rustic style | Ambience is computed | style_set_bonus is +12 (15 x 0.8); below 50% it is 0 |
+| AC-70 | F-49 | v1.0 | UI | A saved blueprint from a 10 x 10 dining room | The player applies it to a 12 x 12 room at another location | Items are placed at the same relative positions; missing items are listed with their total cost before purchase |
+| AC-71 | F-50 | v1.0 | Auto | A location with a staff room | A day passes | Each staff member's morale gets +1 in addition to normal drift |
+
+## G. Guests, service and turnover
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-72 | F-52 | M0 | Auto | The starter reference build at Rep 30 on a Thursday | 20 simulated days are run with fixed seeds | Average covers per day are within 10% of the aggregate reference (69) and revenue within 10% of $1,282 |
+| AC-73 | F-52 | v0.1 | Auto | A service where demand exceeds service capacity | The service ends | Served covers equal service capacity (plus or minus 10%) and the rest are logged as walk-aways by segment |
+| AC-74 | F-52 | v0.1 | Auto | A party waiting at the door | Its wait exceeds 1.5 x its segment wait tolerance | The party leaves and is counted as a walk-away |
+| AC-75 | F-52 | v0.1 | Auto | Utilisation rho of 0.5, 0.8 and 0.96 | Kitchen queue delay is computed | Delay is 2, 8 and 25 minutes |
+| AC-76 | F-52 | v0.1 | Auto | A server with skill 5, morale 70, responsible for 6 tables | server_speed is computed | load_mult is 0.70 and server_speed is 1.0 x 1.06 x 0.70 = 0.742 |
+| AC-77 | F-52 | v0.1 | Auto | A dishwasher of skill 5 and 90 clean plates | 40 covers are served within 30 minutes | Clean plates run out and serving waits (plate icon shown) until plates are cleaned at 60 per hour; with a Dish Machine at 108 per hour |
+| AC-78 | F-54 | v0.1 | Auto | Lunch service disabled on Mondays | A Monday runs | No guests arrive between 11:30 and 14:30; staff wages for that day are unchanged (salaries are weekly) |
+| AC-79 | F-55 | v0.1 | Auto | A Families guest with food_score 0.623, service_score 0.57, ambience 55, value_score 0.763, wait_score 0.363 | Satisfaction is computed | S = 59.6 |
+| AC-80 | F-55 | v0.1 | UI | Any seated guest | The player taps them | The inspect panel shows S and its 5 sub-scores with one plain sentence for the lowest one |
+| AC-81 | F-56 | v0.1 | Auto | 10,000 parties | Reviews are generated | 20% (plus or minus 1%) write a review; a party with S 60 gives 3 stars and with S 90 gives 5 stars; review text references its highest and lowest sub-score |
+| AC-82 | F-57 | v0.1 | UI | A day ends | The summary opens | It shows covers, revenue, profit, average satisfaction, walk-aways, the biggest bottleneck with one suggested fix, top 3 and worst review, waste in money, and one tip |
+| AC-83 | F-58 | v0.1 | UI | 28 days have been played | The analytics screen opens | Average wait, turns per table, seat and kitchen utilisation, and walk-aways by segment are charted for 28 days |
+| AC-84 | F-59 | v1.0 | Auto | A party with S 50 | The player comps a dessert | That party's S becomes 65 and the dessert's food cost is charged with no revenue |
+
+## H. Staff
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-85 | F-62 | v0.1 | Auto | A new week | The hiring board refreshes | 6 candidates appear across the 5 v0.1 roles; a fame 1+ candidate appears only if location Rep is 50 or more, at most one per week |
+| AC-86 | F-62 | v0.1 | Auto | A cook of skill 7 fame 0 and a chef of skill 8 fame 1 | Salaries are computed | $682 and $1,530 per week |
+| AC-87 | F-62 | v0.1 | UI | A candidate with one hidden trait | The player taps Interview | The hidden trait is revealed and the impact card updates |
+| AC-88 | F-63 | v0.1 | UI | A current rota and a candidate cook of skill 7 replacing a skill 4 cook | The impact card opens | It shows the change in Q for each menu dish, the change in cook time or kitchen capacity, and the weekly cost difference (+$198) |
+| AC-89 | F-64 | v0.1 | Auto | A staff member at morale 40 working 5 shifts, location fully staffed | 5 days pass | Morale is 55 (drifts +3 per day toward 70) |
+| AC-90 | F-64 | v0.1 | Auto | Morale 70 | morale_mult is computed | 1.06; at morale 0 it is 0.85 and at 100 it is 1.15 |
+| AC-91 | F-65 | v0.1 | Auto | A cook with trait Speedy | Oven speed for that cook is computed | It is 15% higher than an identical cook without the trait |
+| AC-92 | F-66 | v1.0 | Auto | A cook of skill 5 with potential 7 | 40 shifts are worked | Skill becomes 6; after 80 more shifts it stops at 7 |
+| AC-93 | F-66 | v1.0 | Auto | A server of skill 4 | The player pays for training | $600 is charged, the server is off the rota for 3 days, and skill becomes 5 |
+| AC-94 | F-67 | v1.0 | UI | The shift editor | The player assigns a server to 6 shifts in one week | The editor shows the morale cost (-2 per day for the extra shift) before confirming |
+| AC-95 | F-68 | v1.0 | Auto | A staff member below morale 30 for 7 consecutive days | Day 8 starts | They hand in notice with 7 days warning; a raise of 10% or more before day 15 cancels the notice |
+| AC-96 | F-69 | v1.0 | Auto | A location run by a skill 5 manager and the same location simulated with the reference attentive player policy | 4 weeks are simulated with fixed seeds | Profit differs by less than 3%; with a skill 10 manager the manager's profit is 8 to 12% higher |
+| AC-97 | F-69 | v1.0 | Auto | A manager with policy "price band 0.95 to 1.10 x fair price" and current ratio 0.85 | A week ends | Prices rise by at most 5% and never leave the band |
+| AC-98 | F-69 | v1.0 | UI | A location with a manager | The week ends | A report card lists decisions made, results vs last week and exactly one proposal the player can approve or reject |
+| AC-99 | F-70 | v2.0 | Auto | An area manager overseeing 4 locations whose managers have skill 5 | Their decisions are computed | They act as skill 6; assigning a 5th location is refused |
+
+## I. Reputation and marketing
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-100 | F-71 | v0.1 | Auto | Rep 30 | A day ends with review score 70 | Rep becomes 32.0; with no reviews it stays 30 |
+| AC-101 | F-71 | v0.1 | Auto | Walk-aways equal 12% of arrivals | The day ends | An extra -1 Rep is applied |
+| AC-102 | F-72 | v1.0 | Auto | Two locations with Rep 80 (revenue $3,000) and 50 (revenue $1,000) and no marketing | Brand Rep is computed | Brand Rep is 72.5; a new location opened now starts at Rep 40 |
+| AC-103 | F-73 | v1.0 | Auto | A critic visit rumoured for tomorrow | The critic's review is 5 stars and 4 other reviews average 3 stars | The day's review score uses weight 5 for the critic (average 4.11 stars, score 82.2) |
+| AC-104 | F-74 | v1.0 | Auto | A $1,500 local ad campaign | It runs | capture_base for that location rises by the configured amount for 7 days and returns to normal afterwards |
+
+## J. Finance
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-105 | F-75 | v0.1 | Auto | The starter reference day (balance.md section 2) | The daily P&L is produced | Lines and totals match balance.md within $1: sales $1,281.68, ingredients $298.60, waste $14.93, staff $316.34, rent $172.86, utilities $85.20, upkeep $23.57, interest $4.12, profit $366.06 |
+| AC-106 | F-75 | v0.1 | UI | The P&L in Simple mode | It opens | Money in, Money out by 5 groups, Profit and one plain sentence are shown; Detailed mode adds per dish and per category lines |
+| AC-107 | F-76 | v0.1 | Auto | A $30,000 starter loan | Weekly repayments are computed | Payment is $303.26 per week for 104 weeks and the balance reaches $0 at week 104 |
+| AC-108 | F-77 | v0.1 | Auto | Cash below $0 for 7 consecutive days | Day 8 starts | The bank advisor offers a restructure: loan payments paused 4 weeks and 3 suggestions computed from the player's data; no game over screen exists anywhere |
+| AC-109 | F-77 | v0.1 | Auto | Cash below -$20,000 | The player chooses Fresh Start | The game restarts with one location and $40,000, keeping unlocks, recipes and blueprints |
+| AC-110 | F-78 | v0.1 | Auto | Food cost at 44% of sales for the day | The day ends | The advisor tip names the dish or ingredient with the largest cost and a cheaper tier or supplier with the weekly saving; at most one unrequested tip per day |
+| AC-111 | F-79 | v1.0 | Auto | Location Rep 52 and 4 week average weekly profit $5,000 | The player opens loans | An expansion loan of up to $60,000 at 6% over 3 years is offered; at Rep 49 it is not offered |
+| AC-112 | F-80 | v1.0 | UI | 3 locations | The chain P&L opens | Totals equal the sum of location P&Ls; the comparison table sorts by profit, Rep and covers |
+
+## K. Strategy
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-113 | F-81 | v0.1 | Auto | Any change to a tuning data file | The build runs | AC-10, AC-11 and AC-12 are rerun and the build fails if any of them fails |
+| AC-114 | F-81 | v0.1 | Auto | The luxury reference build in University Quarter and the volume reference build in Old Harbour | Daily profit is computed | Both are below $0 (reference -$192 and -$576), proving specialists must match their district |
+| AC-115 | F-81 | v0.1 | PT | Playtesters who play 3+ hours | Their final price and tier choices are classified | At least 25% lean luxury and at least 25% lean volume |
+| AC-116 | F-82 | v1.0 | UI | A location with main price 1.3 x district average, 70% Premium or Artisan ingredients and a Wood Fired Oven | Its card is shown | It carries the "Luxury" badge and a district fit hint derived from wealth and segment mix |
+
+## L. Chain
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-117 | F-83 | v1.0 | Auto | 6 open locations | The player tries to open a 7th in city 1 | It is refused with a clear message; with no location at Rep 50 or more, opening a 2nd is refused |
+| AC-118 | F-84 | v1.0 | UI | 4 locations | The player taps a card on the chain map | The view switches to that location within 2 seconds and shows its stars, strategy badge, weekly profit and manager |
+| AC-119 | F-85 | v1.0 | Auto | A location simulated for 7 days on screen and, with identical seeds and settings, 7 days off screen | Weekly results are compared | Covers and revenue differ by less than 10% |
+| AC-120 | F-85 | v1.0 | Auto | An off-screen location with no manager | A week passes | Profit is 20% lower than the same location under a skill 5 manager, and only standing orders are placed |
+| AC-121 | F-86 | v1.0 | Auto | A chain dish on the menu of 3 locations | The player changes its mozzarella tier in the chain recipe | All 3 locations use the new tier from the next day; local slots (4 per location) are unaffected |
+| AC-122 | F-87 | v1.0 | Auto | Canal Quarter competition 0.30 and 2 own locations in Canal Quarter | Demand is computed for each | C_eff is 0.50 for each |
+| AC-123 | F-88 | v2.0 | Auto | The second city is unlocked | The player opens a location there | It uses its own districts and suppliers, and the strategy balance suite (AC-10, AC-11) passes for its reference districts |
+
+## M. Progression and modes
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-124 | F-90 | v0.1 | Auto | 499 guests served | The 500th guest pays | Milestone "Serve 500 guests" completes, Double Deck Oven and Dough Sheeter unlock, and a notification appears |
+| AC-125 | F-90 | v0.1 | Auto | Any unlock | Its condition is checked | No unlock can be obtained with money alone |
+| AC-126 | F-91 | v0.1 | UI | New game with tutorial on | Days 1 to 7 are played | Each day introduces exactly its planned system (prd.md 8); every step can be skipped; skipped topics appear in the Mentor's notebook |
+| AC-127 | F-91 | v0.1 | PT | 30 first time players | They play the guided first week | 85% complete it (M1) |
+| AC-128 | F-92 | v1.0 | UI | Sandbox setup | The player sets $500,000 and all unlocks | The game starts with those settings and milestones are marked as sandbox |
+
+## N. Presentation
+
+| ID | Feature | Milestone | Type | Given | When | Then |
+|---|---|---|---|---|---|---|
+| AC-129 | F-95 | v0.1 | UI | A day played at 1x | The clock passes 17:00 to 19:00 | Lighting shifts to golden hour and then lamp light without a visible jump |
+| AC-130 | F-96 | v1.0 | Auto | Day 28 ends (spring to summer) | Day 29 starts | Visual dressing, season_mult values and seasonal ingredient availability switch to summer |
+| AC-131 | F-97 | v0.1 | UI | Occupancy rises from 10% to 90% | Ambient audio is sampled | Chatter volume rises with occupancy; a Wood Fired Oven and a Conveyor Oven each have a distinct loop; no alarm or siren sound exists in the audio set |
+| AC-132 | F-98 | v0.1 | UI | Any warning state (stock low, bottleneck, low morale) | It is shown | It uses amber styling and a gentle icon; no full screen flashing or red pulsing is used |
+| AC-133 | F-52, F-44 | v0.1 | Auto | A 120 seat room at full occupancy on the minimum supported iPad | A dinner is run at 1x and at 4x | Frame rate is 60 fps at 1x and never below 30 fps at 4x (M13) |
+
+## Coverage check
+
+All Must and Should features have criteria: F-01 to F-07, F-09 to F-27, F-29 to F-36, F-38 to F-50, F-52 to F-59, F-62 to F-74, F-75 to F-88, F-90 to F-92, F-95 to F-98. Nice features not covered: F-08, F-28, F-37, F-51, F-60, F-61, F-89, F-93, F-94, F-99.
