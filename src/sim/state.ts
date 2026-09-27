@@ -181,6 +181,8 @@ export interface DeliveryDay {
   packaging?: number;
   other?: number;
   orderValue?: number;
+  /** Refunds for deliveries with a time score of 0. */
+  refunds?: number;
 }
 
 /** One line of the mood breakdown on the player card (staff-management.md 5). */

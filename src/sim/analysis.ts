@@ -74,9 +74,13 @@ export function stationsOf(state: GameState): Stations {
   const washSlots = items.reduce((a, i) => a + (i.washers ?? 0), 0);
   const premises = PREMISES[state.premisesId];
   const free = (premises?.kitchenTiles ?? 30) - 2 - items.reduce((a, i) => a + i.footprint, 0);
-  const roomFor = Math.max(1, Math.floor(free / t.tilesPerPerson));
-  const kitchenPeople = cooks + Math.min(washers, washSlots);
-  const crowdOver = Math.max(0, kitchenPeople - roomFor);
+  // Cooks work at stations and dishwashers at wash stations; only the people beyond those places need free floor.
+  const cookPlaces = items.reduce((a, i) => a + (i.role === 'counter' ? i.w * t.placesPerCounterTile : i.role === 'oven' || i.role === 'sheeter' || i.role === 'pass' ? t.placesPerStation : 0), 0);
+  const atWash = Math.min(washers, washSlots);
+  const kitchenPeople = cooks + atWash;
+  // Everyone working at a station stands on a tile of floor in front of it; the rest of the floor is the aisle.
+  const roomFor = cookPlaces + atWash + Math.max(0, Math.floor((free - cookPlaces - atWash) / t.tilesPerPerson));
+  const crowdOver = Math.max(0, kitchenPeople - Math.max(1, roomFor));
   return {
     tendNeed, tendRatio, washPoints, washStrain, prepWashMult: 1 - Math.min(t.washStrainCap, washStrain * t.washStrainPerCook),
     washSlots, idleWashers: Math.max(0, washers - washSlots), kitchenPeople, roomFor, crowdOver,

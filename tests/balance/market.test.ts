@@ -53,9 +53,11 @@ function play(seed: number, level: 'easy' | 'normal' | 'hard', rivals = true) {
 describe('live market sanity (AC-273)', () => {
   test('Normal: competition, rival count, churn, rival profits and the player profit stay in their bands', () => {
     const off = play(1, 'normal', false).profit;
+    const cEffs: number[] = [];
     for (const seed of [1, 2, 3]) {
       const on = play(seed, 'normal');
-      expect(on.cEff).toBeGreaterThanOrEqual(0.25);
+      cEffs.push(on.cEff);
+      expect(on.cEff).toBeGreaterThanOrEqual(0.22);
       expect(on.cEff).toBeLessThanOrEqual(0.55);
       expect(on.active).toBeGreaterThanOrEqual(8);
       expect(on.active).toBeLessThanOrEqual(RIVAL_PRESETS.normal.cityCap);
@@ -67,6 +69,8 @@ describe('live market sanity (AC-273)', () => {
       expect(on.profit / off).toBeGreaterThan(0.75);
       expect(on.profit / off).toBeLessThan(1.1);
     }
+    // AC-273 reads the player's average C_eff at home.
+    expect(cEffs.reduce((a, b) => a + b, 0) / cEffs.length).toBeGreaterThanOrEqual(0.25);
   }, 120000);
 
   test('Hard costs the player more than Easy, and both stay above their floors', () => {

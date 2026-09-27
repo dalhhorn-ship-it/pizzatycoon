@@ -123,8 +123,8 @@ export const T = {
   /** Live rivals (competition.md 2, 3, 11.1). */
   rivals: {
     backgroundShare: 0.7,
-    unitPressure: 0.14,
-    relMin: 0.35,
+    unitPressure: 0.15,
+    relMin: 0.5,
     relMax: 2.5,
     sameStreetUnits: 6,
     sameStreetMult: 1.3,
@@ -198,9 +198,9 @@ export const T = {
   delivery: {
     unlockRep: 60,
     unlockDays: 28,
-    orderRate: 0.004,
+    orderRate: 0.005,
     adjacentWeight: 0.5,
-    lunchShare: 0.3,
+    lunchShare: 0.4,
     mainsPerOrder: 1.8,
     drinksPerOrder: 0.5,
     dessertsPerOrder: 0.15,
@@ -224,8 +224,10 @@ export const T = {
     noveltyDays: 14,
     background: 0.3,
     throttleDefault: 0.8,
-    refusePenalty: 0.5,
-    cancelPenalty: 1,
+    refusePenalty: 0.2,
+    cancelPenalty: 2,
+    /** Share of the order value refunded at a time score of 0; refunds start below a time score of 0.5. */
+    lateRefund: 0.5,
     cancelThreshold: 0.05,
     startDRep: 50,
     riderBase: 380,
@@ -235,10 +237,10 @@ export const T = {
     packingStation: 900,
     utilitiesPerOrder: 0.4,
     markupDefault: 0.1,
-    affinity: { students: 1.4, families: 1.2, professionals: 1.1, foodies: 0.5, seniors: 0.4, tourists: 0.3 } as Record<string, number>,
+    affinity: { students: 1.4, families: 1.2, professionals: 1.1, foodies: 0.3, seniors: 0.4, tourists: 0.15 } as Record<string, number>,
     /** Top rated on Scoot (6.12). */
-    topRatedDrep: 85,
-    topRatedLoseBelow: 80,
+    topRatedDrep: 80,
+    topRatedLoseBelow: 75,
     topRatedDays: 14,
     topRatedBoost: 1.25,
     /** Rival delivery orders are capped at this share of its dining capacity. */
@@ -253,7 +255,14 @@ export const T = {
     cooksPerWashPoint: 2,
     washStrainPerCook: 0.06,
     washStrainCap: 0.3,
-    /** Free kitchen tiles each person on the kitchen floor needs. */
+    /**
+     * Where people work (founder feedback: a small kitchen runs several cooks shoulder to shoulder). Each station is a
+     * working place: a counter or bench gives one place per tile of length, an oven, sheeter or pass one; a dishwasher
+     * works at a wash station. Only people beyond those places need free floor, tilesPerPerson each.
+     */
+    placesPerCounterTile: 1,
+    placesPerStation: 1,
+    /** Free kitchen tiles each person without a working place needs. */
     tilesPerPerson: 2.25,
     crowdPerPerson: 0.05,
     crowdCap: 0.25,

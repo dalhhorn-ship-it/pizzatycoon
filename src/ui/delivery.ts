@@ -3,7 +3,7 @@
 import { T } from '../data/tunables';
 import { forecastSaturday } from '../sim/forecast';
 import { deliveryMissing, hasPacking, MODE_BLURB, MODE_NAMES, ridersNeeded, ridersToday } from '../sim/delivery';
-import type { DeliveryDay, DeliveryMode, DeliveryState, GameState } from '../sim/state';
+import type { DeliveryDay, DeliveryMode, DeliveryState, GameState, ServiceReport } from '../sim/state';
 import { act, h, money, signed, signedMoney, stars } from './dom';
 import type { PanelCtx } from './panels';
 
@@ -11,9 +11,26 @@ const MODES: DeliveryMode[] = ['platform', 'marketplace', 'own'];
 const THROTTLES: (number | null)[] = [0.7, 0.8, 0.9, 1, null];
 
 /** A busy day (Saturday) with these delivery settings, for the previews. */
-function busyDay(state: GameState, d: Partial<DeliveryState>): { day: DeliveryDay | undefined; profit: number } {
+function busyDay(state: GameState, d: Partial<DeliveryState>): { day: DeliveryDay | undefined; profit: number; services: ServiceReport[] } {
   const r = forecastSaturday({ ...state, delivery: { ...(state.delivery as DeliveryState), ...d } });
-  return { day: r.delivery, profit: r.pnl.profit };
+  return { day: r.delivery, profit: r.pnl.profit, services: r.services };
+}
+
+const STAGE_FIX: Record<string, string> = {
+  oven: 'a bigger or faster oven (a conveyor oven suits delivery)',
+  prep: 'another prep station or a cook',
+  cold: 'more fridge space for dough',
+};
+
+/** When the app turns many orders away on a busy day, name the kitchen stage that limits it (competition.md 6.11). */
+function kitchenLimitLine(b: { day: DeliveryDay | undefined; services: ServiceReport[] }): string | null {
+  const d = b.day;
+  if (!d || d.wanted < 5 || d.refused < 0.2 * d.wanted) return null;
+  const dinner = b.services.find((x) => x.service === 'dinner');
+  if (!dinner) return null;
+  const stages = (['oven', 'prep', 'cold'] as const).map((k) => [k, dinner.stages[k] ?? Infinity] as const).sort((x, y) => x[1] - y[1]);
+  const [limit] = stages[0] ?? ['oven'];
+  return `Your kitchen is the limit: on a Saturday the app wanted ${Math.round(d.wanted)} orders and you could take ${Math.round(d.accepted)}. The ${limit === 'cold' ? 'dough supply' : limit} sets the pace; ${STAGE_FIX[limit]} would take more.`;
 }
 
 const throttleName = (t: number | null): string => (t === null ? 'Off' : `${Math.round(t * 100)}%`);
@@ -58,7 +75,8 @@ export function deliveryCard(ctx: PanelCtx): HTMLElement {
         onclick: () => act(ctx, { type: 'setDelivery', throttle: t }),
       }, throttleName(t));
     })),
-    now.day ? h('div', { class: 'small muted' }, `On a Saturday: about ${Math.round(now.day.refused)} orders refused, deliveries ${Math.round(now.day.time.dinner)} min at dinner.`) : null);
+    now.day ? h('div', { class: 'small muted' }, `On a Saturday: about ${Math.round(now.day.refused)} orders refused, deliveries ${Math.round(now.day.time.dinner)} min at dinner.`) : null,
+    kitchenLimitLine(now) ? h('div', { class: 'small warn' }, kitchenLimitLine(now)) : null);
   const markupRow = h('div', { class: 'row' },
     h('span', { class: 'small' }, `App prices ${Math.round(d.markup * 100)}% above the menu`),
     h('button', { class: 'small', disabled: d.markup <= 0, onclick: () => act(ctx, { type: 'setDelivery', markup: d.markup - 0.05 }) }, '−5%'),

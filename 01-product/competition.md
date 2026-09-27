@@ -77,12 +77,12 @@ For the player every factor is read from the start of day analysis (prices, menu
 ### 2.3 Pressure of one rival
 
 ```
-rel_k,s       = clamp(A_k,s / A_p,s, relMin 0.35, relMax 2.5)
+rel_k,s       = clamp(A_k,s / A_p,s, relMin 0.5, relMax 2.5)
 proximity_k   = 1.3  same district and within 6 map units ("same street")
                 1.0  same district
                 0.3  other district, within 12 map units ("nearby")
                 0    otherwise
-pressure_k,s  = unitPressure (0.14) x proximity_k x rel_k,s
+pressure_k,s  = unitPressure (0.15) x proximity_k x rel_k,s
 ```
 
 * An equal rival in the same district takes 0.10, so two equal rivals plus the background reproduce University Quarter's old 0.40.
@@ -418,11 +418,11 @@ The mode can be changed any morning. Switching away from own riders does not let
 
 ```
 catchment    = traffic_v + 0.5 x sum of foot traffic of adjacent districts
-orders_day   = catchment x orderRate (0.004) x sum over s of share_v,s x affinity_s x priceMult_s(r_d) x budgetMult_s(p_d) x qualityMult_s
+orders_day   = catchment x orderRate (0.005; draft 0.004) x sum over s of share_v,s x affinity_s x priceMult_s(r_d) x budgetMult_s(p_d) x qualityMult_s
                x repMult(DRep) x weekdayMult x reach_mode x mktD x novelty x (1 - 0.5 x Cd_eff) x economy.demand
 r_d          = r x (1 + markup)        markup is the delivery price markup, 0% to 20%, default 10%
 p_d          = average main price x (1 + markup)
-affinity     = students 1.4, families 1.2, professionals 1.1, foodies 0.5, seniors 0.4, tourists 0.3
+affinity     = students 1.4, families 1.2, professionals 1.1, foodies 0.3, seniors 0.4, tourists 0.15   (draft: foodies 0.5, tourists 0.3)
 novelty      = 1.2 for the first 14 days after delivery starts ("New on Scoot"), then 1.0
 Cd_eff       = min(0.9, 0.3 + sum over rivals with delivery of 0.1 x prox_d x rel_d,s)   prox_d: same district 1.0, adjacent 0.5
 split        = lunch 30%, dinner 70%
@@ -553,8 +553,8 @@ Hand estimate, a hole in the wall in Canal Quarter played well: two deck ovens, 
 
 | Tunable (`T.delivery`) | Unit | Start | Safe range |
 |---|---|---|---|
-| topRatedDrep | DRep | 85 | 80 to 90 |
-| topRatedLoseBelow | DRep | 80 | 75 to 85 |
+| topRatedDrep | DRep | 80 (draft 85) | 80 to 90 |
+| topRatedLoseBelow | DRep | 75 (draft 80) | 75 to 85 |
 | topRatedDays | days | 14 | 7 to 28 |
 | topRatedBoost | orders multiplier | 1.25 | 1.1 to 1.4 |
 
@@ -692,8 +692,8 @@ Schema bump (7 at the time of writing, or the next free number).
 | Tunable (`T.rivals`) | Unit | Start | Safe range |
 |---|---|---|---|
 | backgroundShare | share of district competition | 0.7 (draft 0.5) | 0.3 to 0.7 |
-| unitPressure | competition per equal rival | 0.14 (draft 0.10) | 0.06 to 0.15 |
-| relMin / relMax | ratio | 0.35 (draft 0.25) / 2.5 | 0.1 to 0.5 / 1.5 to 3.5 |
+| unitPressure | competition per equal rival | 0.15 (draft 0.10) | 0.06 to 0.15 |
+| relMin / relMax | ratio | 0.5 (draft 0.25) / 2.5 | 0.1 to 0.5 / 1.5 to 3.5 |
 | sameStreetUnits / sameStreetMult | map units / factor | 6 / 1.3 | 4 to 8 / 1.1 to 1.5 |
 | nearbyUnits / nearbyMult | map units / factor | 12 / 0.3 | 8 to 16 / 0.1 to 0.5 |
 | pBestBase / pBestPerSkill | probability | 0.35 / 0.06 | 0.2 to 0.5 / 0.03 to 0.08 |
@@ -720,9 +720,9 @@ Schema bump (7 at the time of writing, or the next free number).
 | Tunable (`T.delivery`) | Unit | Start | Safe range |
 |---|---|---|---|
 | unlockRep / unlockDays | Rep / days | 60 / 28 | 50 to 70 / 14 to 56 |
-| orderRate | orders per catchment person | 0.004 | 0.002 to 0.006 |
+| orderRate | orders per catchment person | 0.005 (draft 0.004) | 0.002 to 0.006 |
 | adjacentWeight | share | 0.5 | 0.3 to 0.7 |
-| lunchShare | share | 0.30 | 0.2 to 0.4 |
+| lunchShare | share | 0.4 (draft 0.30) | 0.2 to 0.4 |
 | mainsPerOrder / work | mains / factor | 1.8 / 1.1 | 1.5 to 2.2 / 1.0 to 1.3 |
 | promise / span / packMinutes | min | 35 / 25 / 3 | 30 to 45 / 15 to 35 / 2 to 5 |
 | platformWait / platformRide / bikeRide / scooterRide | min | 5 / 14 / 16 / 12 | |
@@ -733,7 +733,8 @@ Schema bump (7 at the time of writing, or the next free number).
 | novelty / noveltyDays | factor / days | 1.2 / 14 | 1.0 to 1.4 / 7 to 28 |
 | background | competition | 0.3 | 0.2 to 0.5 |
 | throttleDefault | kitchen load | 0.8 | 0.7 to 0.9 |
-| refusePenalty / cancelPenalty / cancelThreshold | Rep / Rep / share | 0.5 / 1 / 0.05 | 0.2 to 1 / 0.5 to 2 / 0.03 to 0.1 |
+| refusePenalty / cancelPenalty / cancelThreshold | Rep / Rep / share | 0.2 / 2 / 0.05 (draft 0.5 / 1) | 0.2 to 1 / 0.5 to 2 / 0.03 to 0.1 |
+| lateRefund (new) | share of order value | 0.5 | 0.3 to 0.8 |
 | startDRep | Rep | 50 | 40 to 60 |
 | riderBase / bike / scooter | $ | 380 / 600 / 1,900 | |
 | ownReach / webShopFee | factor / $ per week | 0.4 / 150 | 0.3 to 0.6 / 50 to 250 |
@@ -786,6 +787,9 @@ What the build does differently from the text above, and the balance numbers it 
 | `T.rivals.closeLosingWeeks` | 8 | 6 | Closings in 26 weeks. |
 | `T.rivals.salaryBase` | 520 | 600 | Rivals that do not fit their district now lose money, as in the Pizza Pronto example of section 2. |
 | `T.rivals.seedCashMin` (new) | | 0.15 | Rivals present at the start hold 15% to 100% of the capital setting: some are one bad season from closing. |
+| `T.rivals.unitPressure`, `relMin` (sprint 4) | 0.14, 0.35 | 0.15, 0.5 | Rivals that fall far behind the player still take guests; keeps the average home C_eff above 0.25. |
+| Delivery (sprint 4) | see 11.1 | orderRate 0.005, lunchShare 0.4, foodie and tourist affinity 0.3 and 0.15, refuse 0.2, cancel 2, Top rated 80 and 75 | Delivery rewards a well run kitchen and punishes a hot one. |
+| `T.delivery.lateRefund` (new) | | 0.5 | Very late orders are refunded: nothing down to a time score of 0.5 (about 47 minutes), half the order value at a time score of 0. Running the kitchen hot now costs money, not only rating. |
 | `T.delivery.ordersPerTrip` (new) | 1.3 | 2 | With 1.3 the rider counts of section 6.9 (3 on shift for about 40 orders a day) could not keep deliveries under the promise. |
 
 Other deviations:
@@ -810,14 +814,15 @@ Live market (`tests/balance/market.test.ts`: middle build in Canal Quarter, 26 w
 | Player profit, live against off, Normal | 75% to 110% | 100% to 102% |
 | Easy / Hard | 85% or more / 65% or more | 101% / 90% to 98% |
 
-Delivery (`tests/balance/delivery.test.ts`, platform mode, throttle 0.8):
+Delivery after cleanup sprint 4 (`tests/balance/delivery.test.ts`, platform mode, throttle 0.8, AC-274 and AC-286 as restated):
 
-| Build | Target gain | Measured | Note |
+| Build | Target (restated) | Measured | Note |
 |---|---|---|---|
-| Volume, University Quarter | 15% to 35% | about 16% | |
-| Middle, Canal Quarter | 10% to 35% | about 2% | **Open.** Its dining room already fills 80% of the kitchen at dinner, so the throttle refuses most orders. The best setup needs a bigger kitchen. |
-| Luxury, Old Town | under 10% | about 16% | **Open.** Only about 5 orders a day, but at $38 a pizza each order earns about $40. |
-| Delivery kitchen, hole in the wall in Canal Quarter, run well | 4 times its dining profit, 60% of the middle build | from -$268 to about +$350 a day, about 25% of the middle build | **Open.** It is demand limited at about 64 orders a day: Top rated needs food quality around 0.8 to reach DRep 85. The money per order matches section 6.9. |
-| The same kitchen run badly (platform, throttle off) | a quarter of the well run gain | similar money, delivery rating about 20 points lower | Throttle off pays today and costs the rating. |
+| Volume, University Quarter | 10% to 40% | about 17% (20% at throttle 0.9) | |
+| Middle, Canal Quarter | 0% or more | 2% (6% at throttle 0.9) | Its dining room fills its kitchen; delivery needs a bigger kitchen, not the app. Even an extra oven adds little because prep is the limit. |
+| Luxury, Old Harbour | under 15% and less than volume | about 11% | About 6 orders a day at $38 a pizza. The draft's "under 10%" would need luxury to earn less per order. |
+| Any build, throttle off | loses money against throttle 0.8 | middle -30%, volume +7% against +17% | Grow the kitchen before the app. |
+| Delivery kitchen: a hole in the wall in Canal Quarter with two conveyor ovens, five riders with scooters, marketplace mode, eco packaging, one matched campaign | 40% to 50% of the middle build's home profit (draft 60%) | about 41% ($583 a day against -$268 without delivery) | With two deck ovens it stays at about 23%: the ovens cap it at 66 orders while about 150 are wanted on a Saturday. |
+| The same restaurant played badly (one deck oven, platform, throttle off) | at most a quarter of the well run gain | a loss: -$383 a day (delivery rating 20) | Late refunds and the cancel penalty. |
 
-Levers for the open items, in order: `orderRate` (0.004 to 0.006) for the delivery kitchen, a luxury specific delivery affinity, and a coach line that tells a middle build to add an oven before switching delivery on.
+Still open: the player's profit with live rivals is 98% to 102% of rivals off on Normal (the draft asked 88% to 95%). The reference middle build turns away a quarter of its guests, so lost demand costs it nothing; rivals bite a restaurant with spare capacity. A future check should use a player with spare capacity.

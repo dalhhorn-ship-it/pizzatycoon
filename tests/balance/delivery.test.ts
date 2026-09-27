@@ -1,4 +1,4 @@
-// Delivery balance (competition.md 11, AC-274 and AC-286).
+// Delivery balance (competition.md 11 and 15, AC-274 and AC-286 as restated in cleanup sprint 4).
 
 import { describe, expect, test } from 'vitest';
 import { apply, type Command } from '../../src/sim/game';
@@ -7,21 +7,20 @@ import { staffFromSkill } from '../../src/sim/staff';
 import type { GameState } from '../../src/sim/state';
 import { type BuildId, buildFromSpec, type BuildSpec, buildState } from './builds';
 
-/** A hole in the wall set up as a delivery kitchen (6.12). */
+/** A hole in the wall set up as a delivery kitchen (6.12): two conveyor ovens, two counters, a prep fridge. */
 const DELIVERY_KITCHEN: BuildSpec = {
   premises: 'hole', tables: { table2: 4 }, ambience: 45,
   tierFor: { dry: 'standard', dairy: 'premium', produce: 'premium', meat: 'standard', drinks: 'basic' },
   menu: ['margherita', 'pepperoni', 'diavola', 'quattroFormaggi'], mainPrice: 12,
   sides: { drink: 3.5, starter: 5, dessert: 5 },
-  equipment: ['deckOven', 'deckOven', 'prepCounter', 'prepCounter', 'prepFridge', 'packingStation'],
+  equipment: ['conveyorOven', 'conveyorOven', 'prepCounter', 'prepCounter', 'prepFridge', 'packingStation'],
   staff: [['cook', 6, 0], ['cook', 6, 0], ['cook', 6, 0], ['server', 5, 0], ['dishwasher', 4, 0]],
 };
-/** The same kitchen played badly (AC-286): one oven. */
-const ONE_OVEN: BuildSpec = { ...DELIVERY_KITCHEN, equipment: DELIVERY_KITCHEN.equipment.filter((e, i) => e !== 'deckOven' || i > 0) };
-const SPECS: Record<string, BuildSpec> = { deliveryKitchen: DELIVERY_KITCHEN, oneOven: ONE_OVEN };
+/** The same restaurant played badly (AC-286): one deck oven. */
+const ONE_OVEN: BuildSpec = { ...DELIVERY_KITCHEN, equipment: ['deckOven', 'prepCounter', 'prepCounter', 'prepFridge', 'packingStation'] };
 
-function ready(build: string, district: string): GameState {
-  const s = SPECS[build] ? buildFromSpec(SPECS[build] as BuildSpec, district) : buildState(build as BuildId, district);
+function ready(s: GameState): GameState {
+  s.unlockAll = true;
   s.rep = 70;
   s.daysOpen = 40;
   s.cash = 60000;
@@ -32,9 +31,13 @@ function ready(build: string, district: string): GameState {
   return s;
 }
 
-/** Average daily profit and the final delivery rating over weeks 3 to `weeks`. */
-function run(s: GameState, setup: Command[], weeks: number): { profit: number; drep: number } {
-  for (const c of setup) s = apply(s, c).state;
+/** Average daily profit over weeks 3 to `weeks`. Every setup command must succeed. */
+function run(s: GameState, setup: Command[], weeks: number): number {
+  for (const c of setup) {
+    const r = apply(s, c);
+    expect(r.error, `${c.type}: ${r.error}`).toBeUndefined();
+    s = r.state;
+  }
   let profit = 0;
   let n = 0;
   for (let d = 0; d < weeks * 7; d++) {
@@ -44,24 +47,33 @@ function run(s: GameState, setup: Command[], weeks: number): { profit: number; d
       n++;
     }
   }
-  return { profit: profit / n, drep: s.delivery?.drep ?? 0 };
+  return profit / n;
 }
 
-// AC-274's per build bands and AC-286's 60% target are Open (competition.md 15.2, cleanup sprint 4); these checks pin
-// what holds today so a change cannot make it worse unnoticed.
-describe('delivery balance', () => {
-  test('AC-274: delivery helps the volume build, and no reference build gains more than 40%', () => {
-    for (const [build, district] of [['volume', 'university'], ['middle', 'canal'], ['luxury', 'harbour']] as const) {
-      const off = run(ready(build, district), [], 4).profit;
-      const on = run(ready(build, district), [{ type: 'startDelivery', mode: 'platform' }], 4).profit;
-      expect(on / off).toBeLessThan(1.4);
-      if (build === 'volume') expect(on / off).toBeGreaterThan(1.1);
-    }
-  }, 120000);
+const platform: Command[] = [{ type: 'startDelivery', mode: 'platform' }];
+const throttleOff: Command[] = [...platform, { type: 'setDelivery', throttle: null }];
 
-  test('AC-286: a small kitchen run well as a delivery kitchen turns a loss into a solid profit; run badly it rates lower', () => {
-    const dining = run(ready('deliveryKitchen', 'canal'), [], 8).profit;
-    const wellRun = ready('deliveryKitchen', 'canal');
+describe('delivery balance', () => {
+  test('AC-274: volume gains 10% to 40%, luxury less than volume and under 15%, nobody over 40%; the throttle protects', () => {
+    const gain: Record<string, number> = {};
+    for (const [build, district] of [['volume', 'university'], ['middle', 'canal'], ['luxury', 'harbour']] as const) {
+      const off = run(ready(buildState(build as BuildId, district)), [], 5);
+      const on = run(ready(buildState(build as BuildId, district)), platform, 5);
+      gain[build] = on / off - 1;
+      expect(gain[build]).toBeLessThan(0.4);
+      // Switching the throttle off on a busy kitchen costs money (grow the kitchen before the app).
+      if (build !== 'luxury') expect(run(ready(buildState(build as BuildId, district)), throttleOff, 5)).toBeLessThan(on);
+    }
+    expect(gain.volume).toBeGreaterThan(0.1);
+    expect(gain.luxury).toBeLessThan(gain.volume ?? 0);
+    expect(gain.luxury).toBeLessThan(0.15);
+    expect(gain.middle).toBeGreaterThanOrEqual(0);
+  }, 180000);
+
+  test('AC-286: a delivery kitchen played well earns 40% to 50%+ of the middle build; played badly it loses money', () => {
+    const middleHome = run(ready(buildState('middle', 'canal')), [], 5);
+    const dining = run(ready(buildFromSpec(DELIVERY_KITCHEN, 'canal')), [], 8);
+    const wellRun = ready(buildFromSpec(DELIVERY_KITCHEN, 'canal'));
     for (let i = 0; i < 5; i++) wellRun.staff.push(staffFromSkill(7000 + i, `Rider ${i}`, 'rider', 6, { morale: 60 }));
     const good = run(wellRun, [
       { type: 'startDelivery', mode: 'marketplace' },
@@ -69,9 +81,9 @@ describe('delivery balance', () => {
       ...Array.from({ length: 5 }, (): Command => ({ type: 'buyVehicle', kind: 'scooter' })),
       { type: 'startCampaign', campaignId: 'social', audience: ['students', 'families'] },
     ], 8);
-    const bad = run(ready('oneOven', 'canal'), [{ type: 'startDelivery', mode: 'platform' }, { type: 'setDelivery', throttle: null }], 8);
+    const bad = run(ready(buildFromSpec(ONE_OVEN, 'canal')), throttleOff, 8);
     expect(dining).toBeLessThan(0);
-    expect(good.profit - dining).toBeGreaterThan(400);
-    expect(good.drep).toBeGreaterThan(bad.drep + 10);
-  }, 120000);
+    expect(good / middleHome).toBeGreaterThanOrEqual(0.4);
+    expect(bad - dining).toBeLessThanOrEqual(0.25 * (good - dining));
+  }, 180000);
 });

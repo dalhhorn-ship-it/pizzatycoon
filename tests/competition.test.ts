@@ -157,14 +157,17 @@ describe('delivery', () => {
     expect(after.delivery?.drep).not.toBeCloseTo(after.rep, 1);
   });
 
-  test('Top rated: 14 days at 85 or more earns it, falling below 80 loses it (6.12)', () => {
+  test('Top rated: 14 days at the threshold earns it, falling below the lower line loses it (6.12)', () => {
     let d = { ...newDelivery(1, 'platform'), drep: 90 };
     for (let i = 0; i < T.delivery.topRatedDays; i++) {
       const n = nextDrep(d, 100, 50, 0, 50, 0, 1);
       d = { ...d, ...n };
     }
     expect(d.topRated).toBe(true);
-    d = { ...d, ...nextDrep({ ...d, drep: 79 }, 60, 50, 0, 50, 0, 1) };
+    // Between the two lines the badge is kept.
+    const kept = { ...d, ...nextDrep({ ...d, drep: T.delivery.topRatedLoseBelow + 2 }, 70, 50, 0, 50, 0, 1) };
+    expect(kept.topRated).toBe(true);
+    d = { ...d, ...nextDrep({ ...d, drep: T.delivery.topRatedLoseBelow - 4 }, 60, 50, 0, 50, 0, 1) };
     expect(d.topRated).toBe(false);
   });
 

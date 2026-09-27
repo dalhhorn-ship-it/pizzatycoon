@@ -50,8 +50,8 @@ export function stationIssues(state: GameState, a: Analysis = analyse(state), la
   if (st.crowdOver > 0) {
     out.push({
       id: 'crowd', severity: 1 - st.crowdMult,
-      text: `${st.kitchenPeople} people on a kitchen floor with room for ${st.roomFor}: everyone works ${pct(1 - st.crowdMult)} slower.`,
-      fix: 'Sell a station you do not need, swap two small stations for one bigger, or move to a bigger kitchen.',
+      text: `${st.kitchenPeople} people in a kitchen with working room for ${st.roomFor}: everyone works ${pct(1 - st.crowdMult)} slower.`,
+      fix: 'Every counter gives a cook a place to work: swap a small station for a longer counter, send someone to the floor, or move to a bigger kitchen.',
     });
   }
   const pizzas = lastDay?.open ? Object.entries(lastDay.dishSales).filter(([id]) => state.recipes.find((r) => r.id === id)?.kind === 'pizza').reduce((x, [, n]) => x + n, 0) : 0;

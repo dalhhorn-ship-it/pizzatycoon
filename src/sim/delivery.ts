@@ -189,7 +189,11 @@ export function settleDelivery(i: DeliveryInput): DeliverySettlement {
   const time = delivered > 0 ? (['lunch', 'dinner'] as const).reduce((x, sv) => x + (i.delivered[sv] / delivered) * timeScore(i.time[sv]), 0) : 0;
   const S = 100 * (0.45 * food + 0.35 * time + 0.2 * value);
   const next = nextDrep(d, S, accepted, accepted - delivered, wanted, wanted - accepted, i.economy.reputation);
-  const sales = delivered * (i.orderValue + (d.mode === 'platform' ? 0 : t.fee));
+  // Very late orders are partly refunded: nothing down to a time score of 0.5 (about 47 minutes), up to lateRefund of the
+  // order value at a time score of 0
+  // (cleanup sprint 4: running the kitchen hot must cost money, not only rating).
+  const refunds = (['lunch', 'dinner'] as const).reduce((x, sv) => x + t.lateRefund * Math.max(0, 1 - 2 * timeScore(i.time[sv])) * i.orderValue * i.delivered[sv], 0);
+  const sales = delivered * (i.orderValue + (d.mode === 'platform' ? 0 : t.fee)) - refunds;
   const commission = t.commission[d.mode] * i.orderValue * delivered;
   const foodCost = delivered * i.foodPerOrder * i.economy.ingredients;
   const packaging = delivered * t.mainsPerOrder * t.packaging[d.packaging];
@@ -208,7 +212,7 @@ export function settleDelivery(i: DeliveryInput): DeliverySettlement {
       drepBefore: d.drep, drepAfter: next.drep, topRated: next.topRated, topRatedDays: next.topRatedDays,
       profit: sales - foodCost - deliveryCosts - riderWages(i.staff) / 7,
       kitchenShare: mainsOut + i.covers > 0 ? mainsOut / (mainsOut + i.covers) : 0,
-      satisfaction: S, scores: { food, time, value }, sales, commission, food: foodCost, packaging, other, orderValue: i.orderValue,
+      satisfaction: S, scores: { food, time, value }, sales, commission, food: foodCost, packaging, other, orderValue: i.orderValue, refunds,
     },
   };
 }
