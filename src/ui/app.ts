@@ -7,9 +7,9 @@ import { T } from '../data/tunables';
 import type { Controller } from '../game/controller';
 import { fromSaveCode, toSaveCode } from '../save/saveFile';
 import { analyse } from '../sim/analysis';
-import { type GameEvent, moveQuote, RANK_NAMES, venueDeposit } from '../sim/game';
+import { type GameEvent, moveQuote, newGameAt, RANK_NAMES, venueDeposit } from '../sim/game';
 import { locationName, managerOf } from '../sim/chain';
-import { ECONOMY_LABELS, ECONOMY_RANGE, type Economy, type EconomyKey, economyOf, PRESETS, presetName } from '../sim/economy';
+import { ECONOMY_LABELS, ECONOMY_RANGE, type Economy, type EconomyKey, economyOf, PRESETS, presetName, RIVAL_OPTIONS, RIVAL_PRESETS, rivalSettingsOf, type RivalSettings } from '../sim/economy';
 import { outlook } from './impact';
 import type { DayReport, GameState } from '../sim/state';
 import { h, modal, money, signed, stars, toast } from './dom';
@@ -23,9 +23,11 @@ import { dayCapacityLine, weekKitchenCard } from './capacity';
 import { formArrow, moraleFace, needsAttention, openPlayerCard, squadPanel, staffAdvice } from './squad';
 import { ROLE_NAMES } from '../data/staff';
 import type { TeamLine } from '../sim/state';
+import { lossLine } from '../sim/market';
+import { type Nav, openMarketing, rivalsPanel, weekCompetitionCard } from './rivals';
 
-type Tab = 'menu' | 'kitchen' | 'room' | 'staff' | 'money';
-const TABS: [Tab, string][] = [['menu', 'Menu'], ['kitchen', 'Kitchen'], ['room', 'Room'], ['staff', 'Squad'], ['money', 'Money']];
+type Tab = 'menu' | 'kitchen' | 'room' | 'staff' | 'rivals' | 'money';
+const TABS: [Tab, string][] = [['menu', 'Menu'], ['kitchen', 'Kitchen'], ['room', 'Room'], ['staff', 'Squad'], ['rivals', 'Rivals'], ['money', 'Money']];
 const TAB_KEY = 'pizzad:ui:tab';
 const ECONOMY_KEY = 'pizzad:economy';
 
@@ -205,6 +207,12 @@ export class App {
       onBack: () => this.showShop(),
       onRent: (venueId) => this.confirmMove(venueId),
       onOpen: (venueId) => this.confirmOpen(venueId),
+      dispatch: (cmd) => {
+        const err = this.game.dispatch(cmd);
+        if (err) toast(err, 'warn');
+        else if (this.game.state) this.city.update(this.game.state);
+        return err;
+      },
       onSwitch: (locationId) => this.switchRestaurant(locationId),
     }, focusDistrict);
     this.renderHud();
@@ -260,6 +268,16 @@ export class App {
           }
           this.showShop();
         } }, 'Move here'))), { onClose: () => undefined });
+  }
+
+  /** Where the coach's answers lead (competition.md 7.5). */
+  private nav(): Nav {
+    const go = (t: Tab): void => {
+      this.tab = t;
+      this.renderTabs();
+      this.renderPanel();
+    };
+    return { tab: go, delivery: () => go('money') };
   }
 
   private ctx(): PanelCtx {
@@ -446,7 +464,10 @@ export class App {
       case 'kitchen': content = kitchenPanel(ctx, this.kitchen); break;
       case 'room': content = roomPanel(ctx); break;
       case 'staff': content = squadPanel(ctx); break;
-      case 'money': content = moneyPanel(ctx, h('button', { class: 'small', onclick: () => this.showSettings() }, '⚙ Settings, saves and difficulty')); break;
+      case 'rivals': content = rivalsPanel(ctx, this.nav()); break;
+      case 'money': content = moneyPanel(ctx, h('div', { class: 'row' },
+        h('button', { class: 'small', onclick: () => openMarketing(ctx) }, '📣 Marketing'),
+        h('button', { class: 'small', onclick: () => this.showSettings() }, '⚙ Settings, saves and difficulty'))); break;
     }
     this.panel.replaceChildren(content);
     this.panel.scrollTop = scroll;
@@ -508,6 +529,7 @@ export class App {
           h('div', { class: 'card' }, h('span', { class: 'muted small' }, 'Profit'), h('span', { class: `big ${r.pnl.profit >= 0 ? 'good' : 'bad'}` }, money(r.pnl.profit)),
             h('span', { class: 'small muted' }, `Sales ${money(r.pnl.sales)} · reputation ${signed(repDelta, 1)}`))),
       dayCapacityLine(r),
+      r.open && lossLine(state, r) ? h('div', { class: 'small' }, lossLine(state, r)) : null,
       r.open ? h('div', { class: 'small muted' },
         `Word of mouth: ${Math.round(r.followingBefore * 100)}% → ${Math.round(r.followingAfter * 100)}% of locals know you. ` +
         `At today's satisfaction the following heads for ${Math.round(r.followingTarget * 100)}%.`) : null,
@@ -527,7 +549,7 @@ export class App {
           h('b', { class: !b.open ? 'warn' : b.profit >= 0 ? 'good' : 'bad' }, b.open ? `${Math.round(b.covers)} guests · ${money(b.profit)}` : 'closed'),
         ]))) : null,
       r.weeklyPayments ? h('div', { class: 'small muted' }, `Sunday bills paid: ${money(r.weeklyPayments)} for wages, rent and loan.`) : null,
-      events.length ? h('div', { class: 'stack' }, ...events.map((e) => h('div', { class: e.kind === 'unlocked' || e.kind === 'rankUp' ? 'good' : e.kind === 'restructure' ? 'warn' : '' }, e.text))) : null,
+      events.length ? h('div', { class: 'stack' }, ...events.map((e) => h('div', { class: e.kind === 'unlocked' || e.kind === 'rankUp' ? 'good' : e.kind === 'restructure' ? 'warn' : e.kind === 'market' ? 'small' : '' }, e.kind === 'market' ? `📰 ${e.text}` : e.text))) : null,
       h('div', { class: 'row', style: 'justify-content:flex-end' }, h('button', { class: 'primary', onclick: () => close() }, 'Tomorrow')));
     close = modal(content, { onClose: () => undefined });
   }
@@ -562,6 +584,7 @@ export class App {
       weekKitchenCard(reports, this.game.state as GameState),
       weekTeamCard(reports, this.game.state as GameState, (id) => openPlayerCard(this.ctx(), id)),
       branchWeek(reports),
+      weekCompetitionCard(reports, this.game.state as GameState, this.ctx(), { ...this.nav(), tab: (t) => { close(); this.nav().tab(t); } }),
       last.tips.length ? h('div', { class: 'card' }, h('h3', null, 'Your advisor'), ...last.tips.map((t) => h('div', { class: 'small' }, t))) : null,
       bills ? h('div', { class: 'small muted' }, `Sunday bills paid: ${money(bills)} for wages, rent and loan.`) : null,
       events.length ? h('div', { class: 'stack' }, ...events.map((e) => h('div', { class: e.kind === 'unlocked' || e.kind === 'rankUp' ? 'good' : e.kind === 'info' ? '' : 'warn' }, e.text))) : null,
@@ -572,16 +595,21 @@ export class App {
   /** A new game starts on the city map (city-map.md 2). */
   showNewGame(): void {
     const hadGame = !!this.game.state;
-    const economy = savedEconomy();
+    const saved = savedEconomy();
+    // New games have live rivals on the chosen difficulty unless the player switched them off (competition.md 9).
+    const economy: Economy = { ...(saved ?? PRESETS.normal), rivals: saved?.rivals ?? RIVAL_PRESETS[presetName(saved ?? PRESETS.normal) === 'custom' ? 'normal' : (presetName(saved ?? PRESETS.normal) as 'easy' | 'normal' | 'hard')] };
+    const seed = Math.floor(Math.random() * 2 ** 31);
+    const preview = newGameAt(seed, 'towpathKiosk', economy);
     this.setView('city');
     this.city.open({
       mode: 'new',
       state: null,
+      preview,
       startCash: Math.round(T.finance.startingCash * (economy?.startingCash ?? 1)),
       difficulty: `${presetName(economyOf({ economy }))}, ${economyOf({ economy }).start} start`,
       onBack: hadGame ? () => this.showShop() : null,
       onRent: (venueId) => {
-        this.game.start(Math.floor(Math.random() * 2 ** 31), venueId, economy);
+        this.game.start(seed, venueId, economy);
         this.shown = this.game.state;
         this.setViews(this.game.state as GameState);
         this.setView('shop');
@@ -653,6 +681,44 @@ export class App {
   }
 
   /** One place for game, difficulty, saves and display settings. */
+  /** The Competition group (competition.md 9): old saves add rivals here; there is no prompt. */
+  private competitionCard(st: GameState, setEco: (e: Partial<Economy>) => void): HTMLElement {
+    const r = rivalSettingsOf(st);
+    const set = (x: Partial<RivalSettings>): void => setEco({ rivals: { ...r, ...x } });
+    const seg = <X extends string | number | boolean>(items: [X, string][], cur: X, pick: (x: X) => void): HTMLElement =>
+      h('div', { class: 'seg wrap' }, ...items.map(([v, label]) => h('button', { class: cur === v ? 'on' : '', 'aria-pressed': cur === v ? 'true' : 'false', onclick: () => pick(v) }, label)));
+    const stepper = (label: string, v: number, lo: number, hi: number, pick: (x: number) => void): HTMLElement =>
+      h('div', { class: 'spread' }, h('span', null, label), h('div', { class: 'price' },
+        h('button', { class: 'small', 'aria-label': `Fewer: ${label}`, disabled: v <= lo, onclick: () => pick(v - 1) }, '−'),
+        h('b', null, String(v)),
+        h('button', { class: 'small', 'aria-label': `More: ${label}`, disabled: v >= hi, onclick: () => pick(v + 1) }, '+')));
+    const skillWord: Record<number, string> = {
+      3: 'Casual rivals make slow, sometimes clumsy choices and often pick the wrong crowd.',
+      5: 'Capable rivals read the market fairly well.',
+      7: 'Sharp rivals read the market well and rarely waste money on the wrong crowd.',
+      9: 'Master rivals nearly always make the best move.',
+    };
+    const active = (st.rivals ?? []).filter((x) => x.closedDay === undefined).length;
+    return h('div', { class: 'card' },
+      h('h3', null, h('span', null, 'Competition'), h('span', { class: 'small' }, r.on ? `${active} rival${active === 1 ? '' : 's'} in the city` : 'off')),
+      h('div', { class: 'small muted' }, 'Other pizzerias open around the city, pick a way to compete (price, quality or marketing) and go after the same guests. There is never a game over.'),
+      seg([[true, 'Live rivals on'], [false, 'Off']], r.on, (on) => set({ on, ...(on && !r.start ? { start: RIVAL_PRESETS.normal.start } : {}) })),
+      r.on ? h('div', { class: 'stack', style: 'gap:8px' },
+        stepper('Rivals at the start (new games, or arriving now)', r.start, 0, 20, (v) => set({ start: v })),
+        h('span', null, 'Rival skill'), seg(RIVAL_OPTIONS.skill, r.skill, (v) => set({ skill: v })),
+        h('div', { class: 'small muted' }, skillWord[r.skill] ?? ''),
+        h('span', null, 'Rival start capital'), seg(RIVAL_OPTIONS.capital, r.capital, (v) => set({ capital: v })),
+        h('div', { class: 'small muted' }, 'Decides how big newcomers can open and how long they survive a slow start.'),
+        h('span', null, 'New rivals later'), seg(RIVAL_OPTIONS.entrants, r.entrants, (v) => set({ entrants: v })),
+        stepper('Most rivals in the city', r.cityCap, 4, 30, (v) => set({ cityCap: v })),
+        stepper('Most rivals per neighbourhood', r.districtCap, 1, 5, (v) => set({ districtCap: v })),
+        h('label', { class: 'row small' },
+          h('input', { type: 'checkbox', checked: r.targetLeader, onchange: (e: Event) => set({ targetLeader: (e.target as HTMLInputElement).checked }) }),
+          'Rivals target the leader: marketing minded rivals seek out your most successful restaurant'),
+        h('div', { class: 'small muted' }, 'Switching rivals on mid game: they arrive over the next four weeks, each with a week of notice. Switching off: every rival closes quietly overnight.'))
+        : h('div', { class: 'small muted' }, 'Off: competition is a steady background number per neighbourhood, as before.'));
+  }
+
   private showSettings(): void {
     let close = (): void => {};
     const body = h('div', { class: 'stack' });
@@ -703,7 +769,7 @@ export class App {
           h('h3', null, 'Economy and difficulty'),
           h('div', { class: 'small muted' }, 'Make the game easier or harder at any time. Changes apply from the next service. Selling equipment never pays more than the normal 80%, whatever the price slider says.'),
           h('div', { class: 'seg' }, ...(['easy', 'normal', 'hard'] as const).map((p) =>
-            h('button', { class: preset === p ? 'on' : '', onclick: () => setEco(PRESETS[p]) }, p[0]?.toUpperCase() + p.slice(1))),
+            h('button', { class: preset === p ? 'on' : '', onclick: () => setEco({ ...PRESETS[p], ...(rivalSettingsOf(st).on ? { rivals: RIVAL_PRESETS[p] } : {}) }) }, p[0]?.toUpperCase() + p.slice(1))),
             h('button', { class: preset === 'custom' ? 'on' : '', disabled: true }, 'Custom')),
           h('div', { class: 'sliders' }, ...(Object.keys(ECONOMY_LABELS) as EconomyKey[]).map(slider)),
           h('div', { class: 'stack', style: 'gap:6px' },
@@ -717,6 +783,8 @@ export class App {
           o.covers > 0
             ? h('div', { class: 'impact' }, 'With these settings an average day earns about ', h('b', { class: o.profit >= 0 ? 'good' : 'bad' }, money(o.profit)), ` from ${o.covers.toFixed(0)} guests (at your current reputation).`)
             : h('div', { class: 'impact' }, 'Set up and open your pizzeria to see what these settings do to a day\'s profit.')),
+
+        this.competitionCard(st, setEco),
 
         h('div', { class: 'card' },
           h('h3', null, 'Saves and devices'),

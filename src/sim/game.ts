@@ -253,7 +253,14 @@ export function newGame(seed: number, districtId: string, premisesId = 'hole', e
   if (economy) state.economy = clampEconomy(economy);
   state.openedIn = { [districtId]: 1 };
   // Live rivals are placed when the game is created, so the welcome map already shows them (competition.md 3.2).
-  if (rivalSettingsOf(state).on) seedRivals(state);
+  if (rivalSettingsOf(state).on) {
+    // Placed without looking at the player's venue, so the welcome map preview and the game agree.
+    state.ownList = [];
+    seedRivals(state);
+    delete state.ownList;
+    for (const r of state.rivals ?? []) r.locations = r.locations.filter((l) => l.venueId !== venueId);
+    state.rivals = (state.rivals ?? []).filter((r) => r.locations.length);
+  }
   firstMarket(state);
   return state;
 }

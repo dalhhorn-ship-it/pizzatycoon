@@ -117,3 +117,13 @@
   .vrow .vnum:nth-child(2), .vrow .vnum:nth-child(4) { display: none; }
   .proscons, .figs { grid-template-columns: 1fr; }
 }
+
+/* Rival pizzerias (competition.md 4.3): a logo pin with a ring in the archetype colour and its letter. */
+.city-map .pin .rring { fill: none; stroke-width: 0.7; }
+.city-map .pin .rdot { fill: var(--panel); stroke: var(--ink); stroke-width: 0.3; }
+.city-map .pin .rletter { font-size: 1.9px; font-weight: 800; fill: var(--ink); text-anchor: middle; pointer-events: none; }
+.city-map .pin.on .rdot { fill: var(--accent); }
+.city-map .pin .viewing { fill: none; stroke-width: 0.5; stroke-dasharray: 0.8 0.6; }
+.city-map .vflag { font-size: 1.9px; font-weight: 700; fill: var(--ink); text-anchor: middle; paint-order: stroke; stroke: var(--panel); stroke-width: 0.6px; pointer-events: none; }
+.lg.rival { width: 11px; height: 11px; background: var(--panel); border: 2px solid var(--accent); }
+.chip.rival { background: var(--panel-2); color: var(--ink); font-weight: 700; justify-self: start; }

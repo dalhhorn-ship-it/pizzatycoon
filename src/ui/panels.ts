@@ -622,6 +622,7 @@ export function moneyPanel(ctx: PanelCtx, extra: HTMLElement): HTMLElement {
     h('span', null, 'Rent'), h('b', null, money(-x.rent)),
     h('span', null, 'Utilities and upkeep'), h('b', null, money(-(x.utilities + x.upkeep))),
     h('span', null, 'Loan interest'), h('b', null, money(-x.interest)),
+    ...(x.marketing ? [h('span', null, 'Marketing'), h('b', null, money(-x.marketing))] : []),
     h('span', { class: 'total' }, 'Profit'), h('b', { class: `total ${x.profit >= 0 ? 'good' : 'bad'}` }, money(x.profit)),
   ];
   return h('div', { class: 'stack' },

@@ -7,7 +7,10 @@ import type { SegmentId, Venue } from '../data/types';
 import { T } from '../data/tunables';
 import { VENUES } from '../data/venues';
 import { bestRep, CARETAKER_TEXT, locationName, managerOf, ownedVenues } from '../sim/chain';
-import { moveQuote, seatLimit, venueDeposit } from '../sim/game';
+import { type Command, moveQuote, seatLimit, venueDeposit } from '../sim/game';
+import { ARCHETYPES } from '../data/rivals';
+import { activeRivals, archetypeKnown, proximity, proximityLabel, rivalAt, rivalLocations, viewerOf } from '../sim/rivals';
+import { economyOf } from '../sim/economy';
 import { bestFor, type LocationFacts, locationFacts, stateLocation } from '../sim/location';
 import type { GameState } from '../sim/state';
 import { h, money, signed } from './dom';
@@ -27,9 +30,14 @@ export interface CityCtx {
   /** Move mode: go and run a restaurant you already own. */
   onSwitch?: (locationId: number) => void;
   onLinkDevice?: () => void;
+  /** New game: the city as it will be, so rivals show on the welcome map. */
+  preview?: GameState | null;
+  /** Move mode: send a command (holding a venue). */
+  dispatch?: (cmd: Command) => string | null;
 }
 
 type SortKey = 'traffic' | 'rent' | 'size' | 'name';
+type Show = 'all' | 'free' | 'rivals' | 'mine';
 
 /** Neighbourhood blocks on the 100 x 70 map. */
 const BLOCKS: Record<string, { x: number; y: number; w: number; h: number; lx: number; ly: number }> = {
@@ -69,13 +77,25 @@ export class CityView {
   private district: string | null = null;
   private sort: SortKey = 'traffic';
   private filter = 'all';
+  private show: Show = 'all';
   private ctx: CityCtx | null = null;
+
+  /** The city's market: the running game, or the new game preview. */
+  private get market(): GameState | null {
+    return this.ctx?.state ?? this.ctx?.preview ?? null;
+  }
 
   open(ctx: CityCtx, focusDistrict: string | null = null): void {
     this.ctx = ctx;
     this.selected = focusDistrict ? null : (ctx.state?.venueId ?? 'towpathKiosk');
     this.district = focusDistrict;
     this.filter = 'all';
+    this.render();
+  }
+
+  /** After a command from the map (holding a venue): show the new state. */
+  update(state: GameState): void {
+    if (this.ctx) this.ctx.state = state;
     this.render();
   }
 
@@ -130,13 +150,27 @@ export class CityView {
     );
     // Park trees in Linden Park.
     for (const [x, y] of [[80, 20], [84, 22], [90, 24], [94, 20], [82, 34], [92, 32]] as const) root.append(svg('circle', { cx: x, cy: y, r: 1.3, class: 'tree' }));
-    const pins = Object.values(VENUES).sort((a, b) => (a.id === this.selected ? 1 : b.id === this.selected ? -1 : 0));
+    const pins = Object.values(VENUES).filter((v) => this.visible(v.id)).sort((a, b) => (a.id === this.selected ? 1 : b.id === this.selected ? -1 : 0));
+    const m = this.market;
     for (const v of pins) {
       const r = pinRadius(v.premisesId);
       const owned = this.ctx?.state ? ownedVenues(this.ctx.state).has(v.id) : false;
-      const cls = ['pin', v.id === this.selected ? 'on' : '', v.id === hereId || owned ? 'here' : ''].join(' ');
-      const g = svg('g', { class: cls, tabindex: 0, role: 'button', 'aria-label': v.name });
-      g.append(svg('circle', { cx: v.x, cy: v.y, r: 3.6, class: 'hit' }), svg('circle', { cx: v.x, cy: v.y, r: v.id === this.selected ? r + 0.5 : r, class: 'dot' }));
+      const rival = m ? rivalAt(m, v.id) : undefined;
+      const viewer = m ? viewerOf(m, v.id) : undefined;
+      const held = m?.venueHold && m.venueHold.venueId === v.id && m.venueHold.untilDay > m.day;
+      const cls = ['pin', v.id === this.selected ? 'on' : '', v.id === hereId || owned ? 'here' : '', rival ? 'rival' : ''].join(' ');
+      const label = rival ? `${v.name}: ${rival.name}` : viewer ? `${v.name}: ${viewer.name} is viewing` : v.name;
+      const g = svg('g', { class: cls, tabindex: 0, role: 'button', 'aria-label': label });
+      g.append(svg('circle', { cx: v.x, cy: v.y, r: 3.6, class: 'hit' }));
+      if (rival) {
+        // Rivals: a logo pin with a ring in the archetype colour and its letter, for colour blind players too.
+        const a = ARCHETYPES[rival.archetype];
+        g.append(svg('circle', { cx: v.x, cy: v.y, r: r + 0.6, class: 'rring', stroke: a.color }), svg('circle', { cx: v.x, cy: v.y, r: r, class: 'rdot' }),
+          svg('text', { x: v.x, y: v.y + 0.9, class: 'rletter' }, a.letter));
+      } else g.append(svg('circle', { cx: v.x, cy: v.y, r: v.id === this.selected ? r + 0.5 : r, class: 'dot' }));
+      if (viewer && m) g.append(svg('circle', { cx: v.x, cy: v.y, r: r + 1.2, class: 'viewing', stroke: ARCHETYPES[viewer.archetype].color }),
+        svg('text', { x: v.x, y: v.y + r + 3, class: 'vflag' }, `👁 ${Math.max(0, (viewer.viewing?.signsOn ?? 0) - m.day)}d`));
+      if (held) g.append(svg('text', { x: v.x, y: v.y + r + 3, class: 'vflag' }, '🔒'));
       if (v.id === hereId) g.append(svg('text', { x: v.x, y: v.y - r - 1.2, class: 'flag' }, 'You are here'));
       else if (v.id === this.selected) g.append(svg('text', { x: v.x, y: v.y - r - 1.4, class: 'flag' }, v.name));
       g.addEventListener('click', (e) => { e.stopPropagation(); this.select(v.id); });
@@ -148,14 +182,31 @@ export class CityView {
 
   private legend(): HTMLElement {
     const item = (cls: string, text: string): HTMLElement => h('span', { class: 'row small muted' }, h('i', { class: `lg ${cls}` }), text);
-    return h('div', { class: 'city-legend' }, item('xs', 'Hole in the wall'), item('s', 'Small (cosy)'), item('m', 'Medium'), item('l', 'Large'), item('here', 'Your pizzeria'));
+    const showBtn = (k: Show, label: string): HTMLElement => h('button', { class: this.show === k ? 'on' : '', 'aria-pressed': this.show === k ? 'true' : 'false', onclick: () => { this.show = k; this.render(); } }, label);
+    return h('div', { class: 'stack', style: 'gap:6px' },
+      h('div', { class: 'city-legend' }, item('xs', 'Hole in the wall'), item('s', 'Small (cosy)'), item('m', 'Medium'), item('l', 'Large'), item('here', 'Your pizzeria'),
+        this.market?.rivals?.length ? item('rival', 'Rival pizzeria') : null),
+      this.market?.rivals?.length ? h('div', { class: 'seg' }, showBtn('all', 'All'), showBtn('free', 'Free'), showBtn('rivals', 'Rivals'), showBtn('mine', 'Mine')) : null);
+  }
+
+  /** Filter chips: all, free, rivals, mine (competition.md 4.3). */
+  private visible(venueId: string): boolean {
+    const m = this.market;
+    if (this.show === 'all' || !m) return true;
+    const mine = this.ctx?.state ? ownedVenues(this.ctx.state).has(venueId) : false;
+    const rival = !!rivalAt(m, venueId);
+    if (this.show === 'mine') return mine;
+    if (this.show === 'rivals') return rival;
+    return !mine && !rival;
   }
 
   // ---------- Venue list ----------
 
   private list(): HTMLElement {
+    const m = this.market;
     const rows = Object.values(VENUES)
       .filter((v) => this.filter === 'all' || v.districtId === this.filter)
+      .filter((v) => this.visible(v.id))
       .map((v) => ({ v, f: venueFacts(v) }))
       .sort((a, b) => {
         switch (this.sort) {
@@ -177,7 +228,8 @@ export class CityView {
         sortBtn('traffic', 'Foot traffic'), sortBtn('rent', 'Rent'), sortBtn('size', 'Size'), sortBtn('name', 'Name'))),
       h('div', { class: 'vrows' }, ...rows.map(({ v, f }) => h('button', { class: `vrow ${v.id === this.selected ? 'on' : ''}`, onclick: () => this.select(v.id) },
         h('span', { class: 'vname' }, h('b', null, v.name), v.id === hereId ? h('span', { class: 'chip here' }, 'You are here')
-          : this.ctx?.state && ownedVenues(this.ctx.state).has(v.id) ? h('span', { class: 'chip here' }, 'Yours') : null,
+          : this.ctx?.state && ownedVenues(this.ctx.state).has(v.id) ? h('span', { class: 'chip here' }, 'Yours')
+            : m && rivalAt(m, v.id) ? h('span', { class: 'chip rival' }, rivalAt(m, v.id)?.name ?? '') : null,
           h('span', { class: 'small muted' }, `${f.district.name} · ${f.premises.name}`)),
         h('span', { class: 'vnum' }, h('b', null, Math.round(f.footTraffic).toLocaleString('en-US')), h('span', { class: 'small muted' }, 'a day')),
         h('span', { class: 'vnum' }, h('b', null, money(f.weeklyRent)), h('span', { class: 'small muted' }, 'a week')),
@@ -249,12 +301,36 @@ export class CityView {
       h('div', { class: 'proscons' },
         h('div', null, h('h3', null, 'Pros'), h('ul', { class: 'pros' }, ...v.pros.map((p) => h('li', null, p)))),
         h('div', null, h('h3', null, 'Cons'), h('ul', { class: 'cons' }, ...v.cons.map((c) => h('li', null, c))))),
+      this.rivalsNear(v),
       demographics(f),
       this.rentBox(v, f, here));
   }
 
+  /** Rivals within reach of a venue, and who runs or views it (competition.md 4.3). */
+  private rivalsNear(v: Venue): HTMLElement | null {
+    const m = this.market;
+    if (!m?.rivals?.length) return null;
+    const near = rivalLocations(m)
+      .map(({ rival, loc }) => ({ rival, loc, prox: proximity(v.districtId, v.id, VENUES[loc.venueId]?.districtId ?? '', loc.venueId) }))
+      .filter((x) => x.prox > 0 && x.loc.venueId !== v.id)
+      .sort((a, b) => b.prox - a.prox);
+    const occupant = rivalAt(m, v.id);
+    const viewer = viewerOf(m, v.id);
+    const label = (r: typeof near[number]['rival']): string => (archetypeKnown(m, r) ? ARCHETYPES[r.archetype].name : 'Archetype ?');
+    return h('div', { class: 'card' },
+      h('h3', null, h('span', null, 'Rivals within reach'), h('span', { class: 'small' }, `${near.length}`)),
+      occupant ? h('div', { class: 'small warn' }, `${occupant.name} runs a pizzeria here (${label(occupant)}). Not to let.`) : null,
+      viewer ? h('div', { class: 'small warn' }, `${viewer.name} is viewing this venue and signs on day ${viewer.viewing?.signsOn}. Rent or hold it first to keep it.`) : null,
+      near.length ? h('div', { class: 'kv' }, ...near.slice(0, 8).flatMap(({ rival, loc, prox }) => [
+        h('span', null, h('i', { class: 'lg rival', style: `border-color:${ARCHETYPES[rival.archetype].color}` }), ` ${rival.name} · ${label(rival)}`),
+        h('b', null, `${'★'.repeat(Math.round(loc.rep / 20))} · ${proximityLabel(prox)}`),
+      ])) : h('div', { class: 'small muted' }, 'No rival pizzeria nearby.'));
+  }
+
   private rentBox(v: Venue, f: LocationFacts, here: boolean): HTMLElement {
     const ctx = this.ctx as CityCtx;
+    const occupant = this.market ? rivalAt(this.market, v.id) : undefined;
+    if (occupant && !here) return h('div', { class: 'card rentbox' }, h('div', { class: 'small muted' }, `${occupant.name} has the lease here. If they close, the venue comes back on the market.`));
     if (ctx.mode === 'new' || !ctx.state) {
       const deposit = venueDeposit(v.id);
       const left = (ctx.startCash ?? T.finance.startingCash) - deposit;
@@ -300,7 +376,24 @@ export class CityView {
       sold.length ? h('div', { class: 'small warn' }, `Will not fit and gets sold: ${sold.join(', ')}.`) : null,
       short ? h('div', { class: 'small bad' }, `You need ${money(q.total - ctx.state.cash)} more cash.`) : null,
       h('button', { class: 'primary', disabled: short, onclick: () => ctx.onRent(v.id) }, 'Move here'),
-      this.openBox(v));
+      this.openBox(v),
+      this.holdBox(v, f));
+  }
+
+  /** Hold a free venue so no rival takes it (competition.md 3.5). */
+  private holdBox(v: Venue, f: LocationFacts): HTMLElement | null {
+    const ctx = this.ctx as CityCtx;
+    const state = ctx.state;
+    if (!state || !activeRivals(state).length && !state.rivals?.length) return null;
+    const hold = state.venueHold && state.venueHold.untilDay > state.day ? state.venueHold : null;
+    const fee = Math.round(f.weeklyRent * economyOf(state).rent);
+    if (hold?.venueId === v.id) return h('div', { class: 'small good', style: 'margin-top:10px' }, `🔒 Held for you until day ${hold.untilDay}. The ${money(hold.fee)} comes off the deposit if you take it.`);
+    return h('div', { class: 'stack', style: 'margin-top:10px' },
+      h('h3', null, 'Or hold it for later'),
+      h('div', { class: 'small muted' }, `Pay one week of rent (${money(fee)}, not refundable) and no rival views or signs it for ${T.rivals.holdDays} days. If you take it within the hold, the fee comes off the deposit.${hold ? ` You already hold ${VENUES[hold.venueId]?.name}.` : ''}`),
+      h('button', { disabled: !!hold || state.cash < fee, onclick: () => {
+        ctx.dispatch?.({ type: 'holdVenue', venueId: v.id });
+      } }, `Hold for ${money(fee)}`));
   }
 
   /** Open a second restaurant here: the current one keeps running under its manager (prd.md 5.9). */
