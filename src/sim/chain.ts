@@ -8,6 +8,7 @@ import { economyOf } from './economy';
 import { stateLocation } from './location';
 import { hasTalent, managerOf, ovr } from './staff';
 import { type BranchDay, dailyCash, type GameState, LOCATION_KEYS, type Location, profitOf, type Staff } from './state';
+import { applyDeliveryDay } from './delivery';
 import { renewCampaigns } from './marketing';
 import { venueFacts } from './rivals';
 import { dayRun, managerWeek, teamDay, type TeamEvent } from './team';
@@ -95,6 +96,7 @@ export function runBranchDay(state: GameState, b: Location, weekday: number, opt
   }
   b.rep = report.repAfter;
   b.following = report.followingAfter;
+  applyDeliveryDay(b.delivery, report.delivery);
   if (report.open) b.daysOpen += 1;
   state.totalServed += report.covers;
   // The manager runs the team (staff-management.md 8): staff grow and change morale here too.

@@ -1,11 +1,11 @@
 import type { AttrId, Role, Talent, TalentId } from './types';
 
 export const ROLE_BASE_SALARY: Record<Role, number> = {
-  chef: 900, cook: 550, server: 450, host: 420, dishwasher: 380, manager: 1100,
+  chef: 900, cook: 550, server: 450, host: 420, dishwasher: 380, manager: 1100, rider: 380,
 };
 
 export const ROLE_NAMES: Record<Role, string> = {
-  chef: 'Chef', cook: 'Cook', server: 'Server', host: 'Host', dishwasher: 'Dishwasher', manager: 'Restaurant manager',
+  chef: 'Chef', cook: 'Cook', server: 'Server', host: 'Host', dishwasher: 'Dishwasher', manager: 'Restaurant manager', rider: 'Delivery rider',
 };
 
 export const ATTR_IDS: readonly AttrId[] = ['quality', 'speed', 'composure', 'mentoring'];
@@ -27,14 +27,15 @@ export const ROLE_WEIGHTS: Record<Role, Record<AttrId, number>> = {
   host: { quality: 0.5, speed: 0.15, composure: 0.3, mentoring: 0.05 },
   dishwasher: { quality: 0.1, speed: 0.6, composure: 0.3, mentoring: 0 },
   manager: { quality: 0.25, speed: 0.1, composure: 0.3, mentoring: 0.35 },
+  rider: { quality: 0.1, speed: 0.6, composure: 0.3, mentoring: 0 },
 };
 
 /** Areas share coaching and the team growth bonus (staff-management.md 3.1). */
-export type Area = 'kitchen' | 'floor' | 'back' | 'office';
+export type Area = 'kitchen' | 'floor' | 'back' | 'office' | 'delivery';
 export const ROLE_AREA: Record<Role, Area> = {
-  chef: 'kitchen', cook: 'kitchen', server: 'floor', host: 'floor', dishwasher: 'back', manager: 'office',
+  chef: 'kitchen', cook: 'kitchen', server: 'floor', host: 'floor', dishwasher: 'back', manager: 'office', rider: 'delivery',
 };
-export const AREA_NAMES: Record<Area, string> = { kitchen: 'Kitchen', floor: 'Floor', back: 'Back', office: 'Office' };
+export const AREA_NAMES: Record<Area, string> = { kitchen: 'Kitchen', floor: 'Floor', back: 'Back', office: 'Office', delivery: 'Delivery' };
 
 export const TALENTS: Record<TalentId, Talent> = {
   speedy: { id: 'speedy', name: 'Speedy', effect: '+15% work speed' },

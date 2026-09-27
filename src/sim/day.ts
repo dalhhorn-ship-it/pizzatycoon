@@ -12,9 +12,10 @@ import { economyOf } from './economy';
 import { stateLocation } from './location';
 import { Rng } from './rng';
 import { hasTalent, onRota } from './staff';
-import { awarenessGain, discountFor, hasLoyalty, mktFor, runSpendToday } from './marketing';
+import { awarenessGain, discountFor, hasLoyalty, mktDelivery, mktFor, runSpendToday } from './marketing';
+import { catchment, deliveryCompetition, deliveryLive, deliveryMinutes, deliveryReachMult, deliveryWeeklyCosts, nextDrep, ridersToday, riderWages, timeScore } from './delivery';
 import { playerCompetition } from './rivals';
-import { type DayReport, type GameState, type MarketDay, type PnL, profitOf, type Recipe, type Review, type SegmentReport, type ServiceReport } from './state';
+import { type DayReport, type DeliveryDay, type GameState, type MarketDay, type PnL, profitOf, type Recipe, type Review, type SegmentReport, type ServiceReport } from './state';
 
 export interface DayOptions {
   /** Daily randomness on demand (plus or minus a few percent). Off for balance tests. */
@@ -271,6 +272,45 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     });
   }
 
+  // ---- Delivery orders wanted (competition.md 6.3) ----
+  const dlv = deliveryLive(state) ? state.delivery ?? null : null;
+  const riders = dlv ? ridersToday(state) : null;
+  const dt = T.delivery;
+  const dWanted: Record<Service, number> = { lunch: 0, dinner: 0 };
+  const dAccepted: Record<Service, number> = { lunch: 0, dinner: 0 };
+  const dDelivered: Record<Service, number> = { lunch: 0, dinner: 0 };
+  const dTime: Record<Service, number> = { lunch: 0, dinner: 0 };
+  const dSeg: { id: SegmentId; w: number; rD: number; choice: Choice }[] = [];
+  let dOrderValue = 0;
+  let dFoodPerOrder = 0;
+  if (dlv && riders) {
+    const markup = dlv.markup;
+    const soft = onMenu.filter((r) => r.id === 'softDrink');
+    let sum = 0;
+    for (const p of segPre) {
+      const seg = SEGMENTS[p.id];
+      const rD = (p.choice.avgPrice * (1 + markup)) / p.choice.avgFair;
+      const priceMult = clamp(Math.pow(rD, -seg.elasticity), T.demand.priceMultMin, T.demand.priceMultMax);
+      const budgetMult = clamp(Math.pow((seg.budget * district.wealth) / (p.choice.avgPrice * (1 + markup)), T.demand.budgetExponent), T.demand.budgetMultMin, T.demand.budgetMultMax);
+      const w = district.shares[p.id] * (dt.affinity[p.id] ?? 1) * priceMult * budgetMult * p.qualityMult;
+      if (w <= 0) continue;
+      sum += w;
+      dSeg.push({ id: p.id, w, rD, choice: p.choice });
+      const drink = chooseDishes(soft, a, p.id);
+      const dessert = segs.find((x) => x.id === p.id)?.sides.dessert ?? null;
+      dOrderValue += w * (dt.mainsPerOrder * p.choice.avgPrice * (1 + markup) + dt.drinksPerOrder * (drink?.avgPrice ?? 0) + dt.dessertsPerOrder * (dessert?.avgPrice ?? 0));
+      dFoodPerOrder += w * (dt.mainsPerOrder * p.choice.avgCost + dt.drinksPerOrder * (drink?.avgCost ?? 0) + dt.dessertsPerOrder * (dessert?.avgCost ?? 0));
+    }
+    if (sum > 0) {
+      dOrderValue /= sum;
+      dFoodPerOrder /= sum;
+      const orders = catchment(district.district.id, district.footTraffic) * dt.orderRate * sum * deliveryReachMult(dlv, state.day) * weekdayMult *
+        mktDelivery(campaigns, state.day, district.shares) * (1 - 0.5 * deliveryCompetition(state, district.district.id, dlv.drep)) * economyOf(state).demand;
+      dWanted.lunch = orders * dt.lunchShare;
+      dWanted.dinner = orders * (1 - dt.lunchShare);
+    }
+  }
+
   // ---- Capacity and service per sitting ----
   const services: ServiceReport[] = [];
   const served: Record<SegmentId, Record<Service, number>> = {} as never;
@@ -310,7 +350,27 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const capWanted = pre.lunch.pizzaCap + pre.dinner.pizzaCap;
     const coldStage = ovenShare > 0 && capWanted > 0 ? (stations.coldCap * pre[sv].pizzaCap) / capWanted / ovenShare / (hours * T.service.utilisation[sv]) : 999;
     const kitchenPerHour = Math.min(ovenCoversPerHour, prepPerHour, coldPerHour);
-    const perHour = Math.min(kitchenPerHour, seatPerHour);
+    // One kitchen, two front doors (competition.md 6.4): the app gets what the throttle leaves, and an overloaded line is shared.
+    const U = T.service.utilisation[sv];
+    let kitchenForDine = kitchenPerHour;
+    let dServedPH = 0;
+    if (dlv && dWanted[sv] > 0) {
+      const perOrder = dt.mainsPerOrder * dt.work;
+      const need = (dWanted[sv] / (hours * U)) * perOrder;
+      const dineNeed = Math.min(demand / (hours * U), seatPerHour);
+      const ridersOk = dlv.mode === 'platform' || (riders?.onShift ?? 0) > 0;
+      const allow = !ridersOk ? 0 : dlv.throttle === null ? need : Math.max(0, Math.min(need, dlv.throttle * kitchenPerHour - dineNeed));
+      const total = dineNeed + allow;
+      if (total <= kitchenPerHour) dServedPH = allow;
+      else {
+        const share = kitchenPerHour / total;
+        kitchenForDine = dineNeed * share;
+        dServedPH = allow * share;
+      }
+      dAccepted[sv] = (allow * hours * U) / perOrder;
+      dDelivered[sv] = (dServedPH * hours * U) / perOrder;
+    }
+    const perHour = Math.min(kitchenForDine, seatPerHour);
     const serviceCap = perHour * hours * T.service.utilisation[sv];
     const capacity = Math.min(serviceCap, plateCap);
     const rho = capacity > 0 ? demand / capacity : 99;
@@ -343,8 +403,9 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const servedPerHour = servedTotal / (hours * T.service.utilisation[sv]);
     // Running out of dough turns guests away; it does not queue tickets on the line.
     const line = Math.min(ovenCoversPerHour, prepPerHour);
-    const kitchenRho = line > 0 ? servedPerHour / line : 1;
+    const kitchenRho = line > 0 ? (servedPerHour + dServedPH) / line : 1;
     ticket[sv] = k.cookTime + T.satisfaction.ticketQueueShare * queueDelay(Math.min(kitchenRho, T.service.queueRhoCap));
+    if (dlv && riders && dDelivered[sv] > 0) dTime[sv] = deliveryMinutes(k.cookTime, kitchenRho, dDelivered[sv] / (hours * U), riders, dlv.mode);
     totalWalk += walk;
     const servedAfter = segs.reduce((x, s) => x + (served[s.id]?.[sv] ?? 0), 0);
     services.push({
@@ -353,6 +414,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
       stages: {
         prep: prepPerHour, oven: Number.isFinite(ovenCoversPerHour) ? ovenCoversPerHour : k.ovenPerHour, seats: seatPerHour, plates: plateCap / (hours * T.service.utilisation[sv]),
         cold: Number.isFinite(coldStage) ? coldStage : 999,
+        ...(dlv ? { delivery: dServedPH / dt.work } : {}),
       },
       demandPerHour: demand / (hours * T.service.utilisation[sv]),
     });
@@ -366,6 +428,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   let covers = 0;
   let satWeighted = 0;
   const dishSales: Record<string, number> = {};
+  const foodBy: Partial<Record<SegmentId, number>> = {};
   for (const s of segs) {
     const seg = SEGMENTS[s.id];
     const n = (served[s.id]?.lunch ?? 0) + (served[s.id]?.dinner ?? 0);
@@ -377,6 +440,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
       0,
       1,
     );
+    foodBy[s.id] = food;
     const value = valueScore(s.r, seg.elasticity);
     let wait = 0;
     for (const sv of SERVICES) {
@@ -461,6 +525,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     pnl.marketing = (pnl.marketing ?? 0) + runs;
     pnl.marketingPrepaid = runs;
   }
+  const delivery = dlv && riders ? settleDelivery() : undefined;
   pnl.profit = profitOf(pnl);
   const market: MarketDay = {
     cEff: competition.cEff, A: pull,
@@ -473,9 +538,57 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     dishSales, satisfaction, reviews, repBefore: state.rep, repAfter: rep, pnl,
     followingBefore: state.following, followingAfter: follow.after, followingTarget: follow.target,
     cashBefore: state.cash, cashAfter: state.cash, weeklyPayments: 0,
-    tips: [...followingTip(follow.after, follow.target, services), ...tipsFor(services, a, pnl, segmentReports)].slice(0, 3),
+    tips: [...deliveryTip(delivery, services), ...followingTip(follow.after, follow.target, services), ...tipsFor(services, a, pnl, segmentReports)].slice(0, 3),
     market,
+    ...(delivery ? { delivery } : {}),
   };
+
+  /** Delivery money, time and DRep for the day (competition.md 6.5 to 6.7). */
+  function settleDelivery(): DeliveryDay | undefined {
+    if (!dlv || !riders) return undefined;
+    const sumW = dSeg.reduce((x, d) => x + d.w, 0) || 1;
+    const wanted = dWanted.lunch + dWanted.dinner;
+    const accepted = dAccepted.lunch + dAccepted.dinner;
+    const delivered = dDelivered.lunch + dDelivered.dinner;
+    const travel = dt.travel + (dlv.mode === 'platform' ? 0 : 0.0006 * (riders.quality - 50));
+    const pack = dlv.packaging === 'eco' ? dt.ecoPackaging : 1;
+    const food = clamp((dSeg.reduce((x, d) => x + d.w * (foodBy[d.id] ?? 0.5), 0) / sumW) * travel * pack, 0, 1);
+    const value = dSeg.reduce((x, d) => x + d.w * valueScore(d.rD, SEGMENTS[d.id].elasticity), 0) / sumW;
+    const time = delivered > 0 ? SERVICES.reduce((x, sv) => x + (dDelivered[sv] / delivered) * timeScore(dTime[sv]), 0) : 0;
+    const S = 100 * (0.45 * food + 0.35 * time + 0.2 * value);
+    const next = nextDrep(dlv, S, accepted, accepted - delivered, wanted, wanted - accepted, economyOf(state).reputation);
+    const orderValue = dOrderValue;
+    const sales = delivered * (orderValue + (dlv.mode === 'platform' ? 0 : dt.fee));
+    const commission = dt.commission[dlv.mode] * orderValue * delivered;
+    const foodCost = delivered * dFoodPerOrder * economyOf(state).ingredients;
+    const packaging = delivered * dt.mainsPerOrder * dt.packaging[dlv.packaging];
+    const other = delivered * dt.utilitiesPerOrder + deliveryWeeklyCosts(dlv) / 7;
+    pnl.deliverySales = sales;
+    pnl.ingredients += foodCost;
+    pnl.deliveryCosts = commission + packaging + other;
+    for (const d of dSeg) {
+      const n = (delivered * d.w * dt.mainsPerOrder) / sumW;
+      for (const p of d.choice.probs) dishSales[p.recipe.id] = (dishSales[p.recipe.id] ?? 0) + n * p.p;
+    }
+    const mainsOut = delivered * dt.mainsPerOrder;
+    return {
+      wanted, accepted, refused: wanted - accepted, cancelled: accepted - delivered, delivered, time: { ...dTime },
+      drepBefore: dlv.drep, drepAfter: next.drep, topRated: next.topRated, topRatedDays: next.topRatedDays,
+      profit: sales - foodCost - pnl.deliveryCosts - riderWages(state.staff) / 7,
+      kitchenShare: mainsOut + covers > 0 ? mainsOut / (mainsOut + covers) : 0,
+      satisfaction: S, scores: { food, time, value }, sales, commission, food: foodCost, packaging, other, orderValue,
+    };
+  }
+}
+
+/** A line for the advisor when deliveries run late or cannot go out (competition.md 6.6). */
+function deliveryTip(d: DeliveryDay | undefined, services: ServiceReport[]): string[] {
+  if (!d) return [];
+  if (d.wanted > 1 && d.accepted < 0.5) return ['Delivery orders came in but nobody could take them out: put riders with a vehicle on the rota, or switch to the Scoot riders.'];
+  const late = (['dinner', 'lunch'] as const).find((sv) => d.time[sv] > T.delivery.promise + 5);
+  if (!late) return [];
+  const rho = services.find((s) => s.service === late)?.rho ?? 0;
+  return [`Deliveries took ${Math.round(d.time[late])} minutes at ${late}: your kitchen was at ${Math.round(Math.min(1, rho) * 100)}%. A lower throttle or more kitchen keeps them under ${T.delivery.promise}.`];
 }
 
 /** Share of full demand that comes in: curious walk-ins plus locals who know the place (balance.md 4.3). */

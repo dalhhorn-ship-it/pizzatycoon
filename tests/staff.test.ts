@@ -121,7 +121,7 @@ describe('market (AC-202 to AC-206)', () => {
     for (const c of apprentices) {
       expect(ovr(c)).toBeGreaterThanOrEqual(25 - 2);
       expect(ovr(c)).toBeLessThanOrEqual(40 + 2);
-      expect(c.salary).toBeCloseTo(0.6 * { chef: 900, cook: 550, server: 450, host: 420, dishwasher: 380, manager: 1100 }[c.role], 2);
+      expect(c.salary).toBeCloseTo(0.6 * ({ chef: 900, cook: 550, server: 450, host: 420, dishwasher: 380, manager: 1100 } as Record<string, number>)[c.role]!, 2);
     }
   });
 

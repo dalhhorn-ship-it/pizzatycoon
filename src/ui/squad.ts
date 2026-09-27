@@ -34,7 +34,7 @@ const act = (ctx: PanelCtx, cmd: Command, ok?: string): boolean => {
   return !err;
 };
 
-const AREAS: Area[] = ['kitchen', 'floor', 'back', 'office'];
+const AREAS: Area[] = ['kitchen', 'floor', 'back', 'office', 'delivery'];
 const mean = (xs: number[]): number => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
 /** The restaurant the Squad screen shows: the one the player runs, or a managed one. */
@@ -409,7 +409,7 @@ function candidateCard(ctx: PanelCtx, state: GameState, c: Staff, showCompare: b
 }
 
 function marketSection(ctx: PanelCtx, state: GameState): HTMLElement {
-  const roles: (Role | 'all' | 'apprentice')[] = ['all', ...HIREABLE_ROLES, 'apprentice'];
+  const roles: (Role | 'all' | 'apprentice')[] = ['all', ...HIREABLE_ROLES, ...(state.candidates.some((c) => c.role === 'rider') ? ['rider' as Role] : []), 'apprentice'];
   const pool = state.candidates
     .filter((c) => (ui.role === 'all' ? true : ui.role === 'apprentice' ? !!c.apprentice : c.role === ui.role))
     .filter((c) => ui.tier === 'all' || tierOf(ovr(c)) === ui.tier)
@@ -488,7 +488,9 @@ export function squadPanel(ctx: PanelCtx): HTMLElement {
     : null;
   const rows = AREAS.map((area) => {
     const people = w.staff.filter((s) => ROLE_AREA[s.role] === area).sort((a, b) => ovr(b) - ovr(a));
-    const hireRole: Role = area === 'kitchen' ? 'cook' : area === 'floor' ? 'server' : area === 'back' ? 'dishwasher' : 'manager';
+    // Riders only matter once the restaurant delivers (competition.md 6.8).
+    if (area === 'delivery' && !people.length && !state.candidates.some((c) => c.role === 'rider')) return null;
+    const hireRole: Role = area === 'kitchen' ? 'cook' : area === 'floor' ? 'server' : area === 'back' ? 'dishwasher' : area === 'delivery' ? 'rider' : 'manager';
     return h('div', { class: 'area' },
       h('div', { class: 'area-h' }, AREA_NAMES[area]),
       h('div', { class: 'area-cards' },

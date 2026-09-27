@@ -170,6 +170,17 @@ export interface DeliveryDay {
   profit: number;
   kitchenShare: number;
   topRated: boolean;
+  topRatedDays?: number;
+  /** Delivery satisfaction and its parts (6.6). */
+  satisfaction?: number;
+  scores?: { food: number; time: number; value: number };
+  /** Money (6.7): sales include the fee in own rider modes; other is utilities, web shop and vehicles. */
+  sales?: number;
+  commission?: number;
+  food?: number;
+  packaging?: number;
+  other?: number;
+  orderValue?: number;
 }
 
 /** One line of the mood breakdown on the player card (staff-management.md 5). */
@@ -257,7 +268,7 @@ export interface ServiceReport {
   ticketTime: number;
   /** Service pipeline in covers per hour (kitchen-builder.md 6). */
   /** Guests per hour each stage handles; cold is the fridges' dough for the day spread over the service. */
-  stages: { prep: number; oven: number; seats: number; plates: number; cold?: number };
+  stages: { prep: number; oven: number; seats: number; plates: number; cold?: number; delivery?: number };
   /** Demand per hour of effective service time. */
   demandPerHour: number;
 }

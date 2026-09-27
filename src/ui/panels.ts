@@ -1,5 +1,6 @@
 // Side panels: menu, kitchen, room, staff, money. Each renders from state and dispatches commands.
 
+import { deliveryCard } from './delivery';
 import { DISTRICTS } from '../data/districts';
 import { VENUES } from '../data/venues';
 import { EQUIPMENT } from '../data/equipment';
@@ -248,7 +249,7 @@ const GROUPS: [string, (it: EquipmentItem) => boolean][] = [
   ['Ovens', (it) => it.role === 'oven'],
   ['Prep', (it) => it.role === 'counter' || it.role === 'sheeter' || it.role === 'proving'],
   ['Cold', (it) => it.role === 'cold'],
-  ['Wash, plates and pass', (it) => it.role === 'sink' || it.role === 'dishMachine' || it.role === 'pass' || it.role === 'handwash' || it.role === 'storage'],
+  ['Wash, plates and pass', (it) => it.role === 'sink' || it.role === 'dishMachine' || it.role === 'pass' || it.role === 'handwash' || it.role === 'storage' || it.role === 'packing'],
 ];
 
 function itemStats(it: EquipmentItem): string {
@@ -616,6 +617,7 @@ export function moneyPanel(ctx: PanelCtx, extra: HTMLElement): HTMLElement {
     : state.rank === 'owner' ? `Restaurateur: serve ${p.restaurateurServed} guests and reach reputation ${p.restaurateurRep}` : 'Chains arrive in v1.0';
   const pnlRows = (x: NonNullable<typeof last>['pnl']): HTMLElement[] => [
     h('span', null, 'Money in (sales)'), h('b', null, money(x.sales)),
+    ...(x.deliverySales ? [h('span', null, 'Delivery sales'), h('b', null, money(x.deliverySales))] : []),
     h('span', null, 'Ingredients'), h('b', null, money(-x.ingredients)),
     h('span', null, 'Waste'), h('b', null, money(-x.waste)),
     h('span', null, 'Staff'), h('b', null, money(-x.staff)),
@@ -623,6 +625,7 @@ export function moneyPanel(ctx: PanelCtx, extra: HTMLElement): HTMLElement {
     h('span', null, 'Utilities and upkeep'), h('b', null, money(-(x.utilities + x.upkeep))),
     h('span', null, 'Loan interest'), h('b', null, money(-x.interest)),
     ...(x.marketing ? [h('span', null, 'Marketing'), h('b', null, money(-x.marketing))] : []),
+    ...(x.deliveryCosts ? [h('span', null, 'Delivery: commission, packaging, vehicles'), h('b', null, money(-x.deliveryCosts))] : []),
     h('span', { class: 'total' }, 'Profit'), h('b', { class: `total ${x.profit >= 0 ? 'good' : 'bad'}` }, money(x.profit)),
   ];
   return h('div', { class: 'stack' },
@@ -632,6 +635,7 @@ export function moneyPanel(ctx: PanelCtx, extra: HTMLElement): HTMLElement {
       h('div', { class: 'spread' }, h('span', null, 'Cash'), h('span', { class: `big ${state.cash < 0 ? 'bad' : ''}` }, money(state.cash))),
       h('div', { class: 'small muted' }, `Weekly bills on Sunday night: wages ${money(a.weeklySalaries)}, rent ${money(a.weeklyRent)} (${where}), loan ${money(payment)}. Upkeep ${money(a.kitchen.maintenancePerWeek)}/week is paid daily.`),
       state.cash < 0 ? h('div', { class: 'warn small' }, 'Cash is below zero. Payments continue; after 7 days the bank advisor pauses your loan payments. Pizza D never ends your game.') : null),
+    deliveryCard(ctx),
     last ? h('div', { class: 'card' }, h('h3', null, `Day ${last.day}`), h('div', { class: 'pnl' }, ...pnlRows(last.pnl))) : null,
     recent.length ? h('div', { class: 'card' }, h('h3', null, 'Profit, last 14 days'),
       h('div', { class: 'bars' }, ...recent.map((d) => h('div', { class: d.pnl.profit < 0 ? 'neg' : '', title: `Day ${d.day}: ${money(d.pnl.profit)}`, style: `height:${(Math.abs(d.pnl.profit) / maxAbs) * 100}%` })))) : null,

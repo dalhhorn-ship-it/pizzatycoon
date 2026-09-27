@@ -24,6 +24,7 @@ import { formArrow, moraleFace, needsAttention, openPlayerCard, squadPanel, staf
 import { ROLE_NAMES } from '../data/staff';
 import type { TeamLine } from '../sim/state';
 import { lossLine } from '../sim/market';
+import { deliveryLine, deliveryWeek } from './delivery';
 import { type Nav, openMarketing, rivalsPanel, weekCompetitionCard } from './rivals';
 
 type Tab = 'menu' | 'kitchen' | 'room' | 'staff' | 'rivals' | 'money';
@@ -530,6 +531,7 @@ export class App {
             h('span', { class: 'small muted' }, `Sales ${money(r.pnl.sales)} · reputation ${signed(repDelta, 1)}`))),
       dayCapacityLine(r),
       r.open && lossLine(state, r) ? h('div', { class: 'small' }, lossLine(state, r)) : null,
+      deliveryLine(r.delivery),
       r.open ? h('div', { class: 'small muted' },
         `Word of mouth: ${Math.round(r.followingBefore * 100)}% → ${Math.round(r.followingAfter * 100)}% of locals know you. ` +
         `At today's satisfaction the following heads for ${Math.round(r.followingTarget * 100)}%.`) : null,
@@ -584,6 +586,7 @@ export class App {
       weekKitchenCard(reports, this.game.state as GameState),
       weekTeamCard(reports, this.game.state as GameState, (id) => openPlayerCard(this.ctx(), id)),
       branchWeek(reports),
+      deliveryWeek(reports.map((r) => r.delivery)),
       weekCompetitionCard(reports, this.game.state as GameState, this.ctx(), { ...this.nav(), tab: (t) => { close(); this.nav().tab(t); } }),
       last.tips.length ? h('div', { class: 'card' }, h('h3', null, 'Your advisor'), ...last.tips.map((t) => h('div', { class: 'small' }, t))) : null,
       bills ? h('div', { class: 'small muted' }, `Sunday bills paid: ${money(bills)} for wages, rent and loan.`) : null,

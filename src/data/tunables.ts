@@ -198,6 +198,8 @@ export const T = {
     platformRide: 14,
     bikeRide: 16,
     scooterRide: 12,
+    /** Orders a rider takes per trip (batching); 2 matches the rider counts of competition.md 6.9. */
+    ordersPerTrip: 2,
     commission: { platform: 0.3, marketplace: 0.14, own: 0 },
     reach: { platform: 1, marketplace: 1, own: 0.4 },
     fee: 2.5,

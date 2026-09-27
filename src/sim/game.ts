@@ -1,5 +1,6 @@
 // Commands in, state and events out (solution-design.md 5.1). Never mutates its input.
 
+import { applyDeliveryDay, deliveryMissing, hasPacking, MODE_NAMES, newDelivery } from './delivery';
 import { DISTRICTS, PREMISES } from '../data/districts';
 import { ADDONS, type AddonItem, UPGRADE_PATHS } from '../data/addons';
 import { EQUIPMENT } from '../data/equipment';
@@ -29,7 +30,7 @@ import { rivalSettingsOf } from './economy';
 import { campaignCost, newCampaign, renewCampaigns, slotsUsed, streakOnRestart } from './marketing';
 import { applyRivalToggle, inReach, ownRestaurants, playerCompetition, rivalAt, runRivalsDay, seedRivals } from './rivals';
 import { stateLocation } from './location';
-import { dailyCash, type DayReport, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION, type StaffPolicy } from './state';
+import { dailyCash, type DayReport, type DeliveryMode, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION, type StaffPolicy } from './state';
 import {
   bookCourse, dayRun, deliverAgency, ensureEveryRole as fillRoles, firstMarket, HIREABLE_ROLES, hiredFromMarket, managerWeek, policyOf,
   recordDeparture, refreshMarket, teamDay, weekNumber,
@@ -79,6 +80,11 @@ export type Command =
   | { type: 'holdVenue'; venueId: string }
   /** Mystery diner at a rival (7.3). */
   | { type: 'mysteryDiner'; rivalId: number }
+  | { type: 'startDelivery'; mode: DeliveryMode }
+  | { type: 'setDelivery'; mode?: DeliveryMode; markup?: number; packaging?: 'basic' | 'eco'; throttle?: number | null }
+  | { type: 'stopDelivery' }
+  | { type: 'buyVehicle'; kind: 'bike' | 'scooter' }
+  | { type: 'sellVehicle'; kind: 'bike' | 'scooter' }
   | { type: 'takeLoan'; amount: number }
   | { type: 'repayLoan'; amount: number }
   | { type: 'setUnlockAll'; on: boolean }
@@ -839,6 +845,47 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       events.push({ kind: 'info', text: `${v.name} is held for you until day ${state.venueHold.untilDay}. The fee comes off the deposit if you take it.` });
       break;
     }
+    case 'startDelivery': {
+      const missing = deliveryMissing(state);
+      if (missing.length) return fail(input, `Delivery needs you to ${missing.join(' and ')}.`);
+      if (!hasPacking(state)) return fail(input, 'Place a packing station in the kitchen first.');
+      if (state.delivery?.on) return fail(input, 'Delivery is already running.');
+      state.delivery = state.delivery ? { ...state.delivery, on: true, mode: cmd.mode } : newDelivery(state.day, cmd.mode);
+      events.push({ kind: 'info', text: `Delivery starts today: ${MODE_NAMES[cmd.mode]}.` });
+      break;
+    }
+    case 'setDelivery': {
+      const d = state.delivery;
+      if (!d) return fail(input, 'Delivery has not started here.');
+      if (cmd.mode) d.mode = cmd.mode;
+      if (cmd.markup !== undefined) d.markup = Math.min(0.2, Math.max(0, Math.round(cmd.markup * 100) / 100));
+      if (cmd.packaging) d.packaging = cmd.packaging;
+      if (cmd.throttle !== undefined) d.throttle = cmd.throttle === null ? null : Math.min(1, Math.max(0.7, cmd.throttle));
+      break;
+    }
+    case 'stopDelivery': {
+      if (!state.delivery?.on) return fail(input, 'Delivery is not running.');
+      state.delivery.on = false;
+      events.push({ kind: 'info', text: 'Delivery paused. Your delivery rating stays as it is.' });
+      break;
+    }
+    case 'buyVehicle': {
+      const d = state.delivery;
+      if (!d) return fail(input, 'Start delivery first.');
+      const v = T.delivery[cmd.kind];
+      const price = buyPrice(state, v.price);
+      if (state.cash < price) return fail(input, `A ${cmd.kind} costs $${price}.`);
+      state.cash -= price;
+      d.vehicles[cmd.kind] += 1;
+      break;
+    }
+    case 'sellVehicle': {
+      const d = state.delivery;
+      if (!d || d.vehicles[cmd.kind] < 1) return fail(input, `There is no ${cmd.kind} to sell.`);
+      d.vehicles[cmd.kind] -= 1;
+      state.cash += Math.round(buyPrice(state, T.delivery[cmd.kind].price) * 0.8);
+      break;
+    }
     case 'mysteryDiner': {
       const r = state.rivals?.find((x) => x.id === cmd.rivalId && x.closedDay === undefined);
       if (!r) return fail(input, 'That rival is not open.');
@@ -1142,6 +1189,7 @@ function runDay(state: GameState, opts: DayOptions): Result {
 
   state.rep = report.repAfter;
   state.following = report.followingAfter;
+  applyDeliveryDay(state.delivery, report.delivery);
   state.totalServed += report.covers;
   if (report.open) state.daysOpen += 1;
 

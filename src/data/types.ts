@@ -117,7 +117,7 @@ export interface RecipeTemplate {
 }
 
 export type EquipmentFamily = 'basic' | 'volume' | 'quality' | 'artisan' | 'hybrid';
-export type EquipmentRole = 'oven' | 'counter' | 'sheeter' | 'pass' | 'dishMachine' | 'proving' | 'cold' | 'sink' | 'handwash' | 'storage';
+export type EquipmentRole = 'oven' | 'counter' | 'sheeter' | 'pass' | 'dishMachine' | 'proving' | 'cold' | 'sink' | 'handwash' | 'storage' | 'packing';
 
 export type Unlock =
   | { kind: 'start' }
@@ -180,7 +180,7 @@ export interface FurnitureItem {
   color: string;
 }
 
-export type Role = 'chef' | 'cook' | 'server' | 'host' | 'dishwasher' | 'manager';
+export type Role = 'chef' | 'cook' | 'server' | 'host' | 'dishwasher' | 'manager' | 'rider';
 
 /** The four key attributes of a staff member, 1 to 99 (staff-management.md 2). */
 export type AttrId = 'quality' | 'speed' | 'composure' | 'mentoring';

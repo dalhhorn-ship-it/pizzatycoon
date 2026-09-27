@@ -11,6 +11,7 @@ import { type Analysis, type AreaLoad, analyse, personalPressure, stationsOf } f
 import { buyPrice } from './economy';
 import { bestSpot, kitchenDims, layoutProblem } from './kitchen';
 import { type DayOptions, simulateDay } from './day';
+import { deliveryUnlocked } from './delivery';
 import { Rng } from './rng';
 import {
   coachRate, courseGains, courseProblem, type DaySignals, effAttr, formOf, growthAttr, hasPersonality, interestProblem, isOff,
@@ -631,7 +632,9 @@ export const HIREABLE_ROLES: readonly Role[] = ['chef', 'cook', 'server', 'host'
 
 /** Adds a candidate for every role missing from the market. */
 export function ensureEveryRole(state: GameState, bestRep: number): void {
-  for (const role of HIREABLE_ROLES) {
+  // A rider joins the market once any restaurant may deliver (competition.md 6.8).
+  const riders = deliveryUnlocked(state) || (state.branches ?? []).some((b) => deliveryUnlocked(b));
+  for (const role of riders ? [...HIREABLE_ROLES, 'rider' as Role] : HIREABLE_ROLES) {
     if (state.candidates.some((x) => x.role === role)) continue;
     const rng = Rng.stream(state.seed, state.day, `refill-${state.nextUid}`);
     state.candidates.push(makeCandidate(rng, state.nextUid++, role, state.day, bestRep, { tier: bestRep >= T.market.goldRep ? undefined : 'bronze' }));
