@@ -107,6 +107,8 @@ All formulas are **starting tuning assumptions** for prototyping. Every constant
 
 ### 5.1 City and property
 
+> **M0.5 update:** `competition.md` grows the city map from 24 to 72 venues and fills it with live rival pizzerias (six archetypes that compete on price, quality, marketing or a mix) that occupy venues, announce viewings 7 days ahead, expand into small chains, struggle and close; new rivals can enter later. The player can hold a free venue for 28 days. Rival count, skill, start capital and new entrants are set in a new Competition group of the settings menu. Where it conflicts with this section, the addendum wins.
+
 * **Loop:** long term (where to open) and the very first decision of the game.
 * **Verbs:** browse districts, compare properties, lease, buy (v1.0), close or move.
 * **Rules:**
@@ -260,6 +262,8 @@ ambience (0..100) = clamp( 25 + 5 * (decor points per 10 dining tiles)
 
 ### 5.7 Guests, demand, service and turnover
 
+> **M0.5 update:** `competition.md` replaces the static `C_eff` with a per segment value: background competition (half the district number plus the venue delta) plus live pressure from each rival in reach (0.10 x proximity x relative attractiveness, clamped 0.25 to 2.5) plus 0.2 per other own restaurant in the district, capped at 0.9 as before. Marketing campaigns multiply demand per segment (`mkt_s`, up to 1.5). Food delivery (from Rep 60) adds orders that share the oven and prep line with the dining room, with its own delivery time and delivery reputation. With live rivals off the formula here is unchanged. Where it conflicts with this section, the addendum wins.
+
 * **Loop:** moment to moment and service day. The heart of the simulation.
 * **Verbs:** set opening hours, assign server sections (v1.0), comp a dessert, open or close tables, inspect anyone.
 * **Customer segments (starting values):**
@@ -400,6 +404,8 @@ area manager (v2.0)  = oversees up to 4 locations; their managers act at m + 1; 
 
 ### 5.10 Reputation
 
+> **M0.5 update:** marketing arrives early as ten campaigns with an audience choice and an audience match score (`competition.md` 5); the foodie press night can move Rep by +2 or -1. Delivery has its own delivery reputation (DRep) that does not change this Rep. Where it conflicts with this section, the addendum wins.
+
 ```
 Rep (0..100), new location starts at 30 (at 40 if chain brand Rep >= 60)
 daily update: Rep = Rep + 0.05 * (review_score_today - Rep)
@@ -431,6 +437,8 @@ star display = Rep / 20, one decimal
 
 ### 5.12 Chain
 
+> **M0.5 update:** cannibalisation (0.2 per other own restaurant in the district) is implemented as part of the live competition formula in `competition.md` 2.1; local radio lifts every restaurant the player owns; the week report gives each managed restaurant a compact competition summary. Where it conflicts with this section, the addendum wins.
+
 * **Rules:**
   * v1.0: up to 6 locations in city 1. v2.0: second city.
   * Opening a location requires Rep 50 at an existing location. Locations the player is not viewing run under their restaurant manager; without one they run in **caretaker mode** (last settings repeated, profit modifier -20%, only standing orders).
@@ -442,6 +450,8 @@ star display = Rep / 20, one decimal
 * **Feedback:** chain map with location cards (stars, strategy badge, weekly profit, manager face), comparison table, chain P&L.
 
 ### 5.13 Progression, milestones and optional rival
+
+> **M0.5 update:** the static neutral competition described below is replaced by live rivals (`competition.md` 3), on by default and switchable off in settings. They keep the spirit of this section: no sabotage, no price below 0.75 of fair, no endless price wars. Nonna Bianca appears as an Honest Trattoria; her Pizza Festival stays at v2.0 (F-93).
 
 * **Career ranks:** Cook, Owner, Restaurateur, Chain Founder, Pizza Icon, reached through milestones ("Serve 500 guests", "Reach 3.5 stars", "Hire a chef", "Open a second location", "Earn $10,000 profit in one week").
 * **Unlocks** come from milestones and reputation, never payment: ingredients, tiers from new suppliers, equipment, furniture sets, districts, loan tiers.
