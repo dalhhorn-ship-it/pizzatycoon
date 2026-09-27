@@ -33,8 +33,22 @@ jobs:
       - name: Balance table
         run: npm run balance
 
+  # The main screens in a real browser (scripts/smoke.mjs).
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright-core install --with-deps chromium
+      - run: npm run build
+      - run: npm run smoke
+
   deploy:
-    needs: [check, balance]
+    needs: [check, balance, smoke]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     env:

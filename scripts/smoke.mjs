@@ -121,10 +121,25 @@ await step('the game survives a reload', async () => {
   if (day(before) !== day(after)) throw new Error(`day ${day(before)} became ${day(after)}`);
 });
 
-await step('a new player starts on the city map', async () => {
-  await page.evaluate(() => localStorage.clear());
+await step('a new system introduces itself once', async () => {
+  await page.evaluate(() => localStorage.removeItem('pizzad:intro:rivals'));
   await page.reload();
-  await page.getByText(/Porto Verde|Choose|venue/i).first().waitFor({ timeout: 10000 });
+  await page.getByText('Rivals and marketing').waitFor({ timeout: 10000 });
+  await page.getByRole('button', { name: 'Later' }).click();
+  await page.reload();
+  await page.getByText(/Day \d+/).first().waitFor({ timeout: 10000 });
+  await page.waitForTimeout(500);
+  if (await page.getByText('Rivals and marketing').isVisible()) throw new Error('the intro came back');
+});
+
+await step('a new player starts on the city map', async () => {
+  // A fresh browser: the game autosaves on unload, so clearing storage in the same page does not start over.
+  const fresh = await browser.newContext({ viewport: { width: 1180, height: 820 }, serviceWorkers: 'block' });
+  const p2 = await fresh.newPage();
+  p2.on('pageerror', (e) => errors.push(String(e)));
+  await p2.goto(BASE);
+  await p2.getByText('Welcome to Porto Verde').waitFor({ timeout: 10000 });
+  await fresh.close();
 });
 
 await browser.close();
