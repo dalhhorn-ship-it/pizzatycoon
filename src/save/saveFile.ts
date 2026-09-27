@@ -6,7 +6,10 @@ import { EQUIPMENT } from '../data/equipment';
 import { T } from '../data/tunables';
 import { VENUES, venueFor } from '../data/venues';
 import { ensureEveryRole, withRecipeBook } from '../sim/game';
+import { bestRep } from '../sim/chain';
 import { autoLayout, kitchenDims, layoutProblem } from '../sim/kitchen';
+import { migrateStaff } from '../sim/staff';
+import { refreshMarket } from '../sim/team';
 
 export interface SaveSummary {
   day: number;
@@ -58,6 +61,16 @@ const MIGRATIONS: Record<number, (state: Record<string, unknown>) => Record<stri
     const s = state as { districtId: string; premisesId: string; venueId?: string | null };
     s.venueId = venueFor(s.districtId, s.premisesId);
     return s;
+  },
+  // v5 to v6: staff become a squad with four attributes (staff-management.md 10). The market starts fresh.
+  5: (state) => {
+    const s = state as unknown as GameState;
+    const old = (xs: unknown[]): Record<string, unknown>[] => xs as Record<string, unknown>[];
+    s.staff = old(s.staff).map((x) => migrateStaff(x, s.day));
+    for (const b of s.branches ?? []) b.staff = old(b.staff).map((x) => migrateStaff(x, s.day));
+    s.candidates = [];
+    refreshMarket(s, bestRep(s), s.day);
+    return state;
   },
 };
 

@@ -74,19 +74,27 @@ The sim keeps its formulas; the single `skill` input is replaced by the attribut
 
 ### 2.3 Composure: performance under pressure
 
-Pressure is the service's **load ratio** `rho = demand / capacity`, which `day.ts` already computes per service. It is read before any composure effect, so there is no feedback loop.
+Pressure is the **load on the person's own area** in that service, measured from the day's stages (built: first review). A queue at the door is not the kitchen's problem:
 
 ```
-excess     = clamp(rho - 0.8, 0, 0.6)
+kitchen load = seated guests per hour / min(prep, oven) per hour
+floor load   = guests who want in per hour / seats per hour
+back load    = plates the kitchen sends per hour / plates washed per hour
+```
+
+A first pass of the day at neutral composure measures these loads; the day then runs with them. They are read before any composure effect, so there is no feedback loop.
+
+```
+excess     = clamp(load - 0.8, 0, 0.6)
 if CMP < 50: pressure = 1 - 0.50 x excess x (50 - CMP) / 50     (worst 0.70)
 if CMP >= 50: pressure = 1 + 0.25 x excess x (CMP - 50) / 50    (best 1.15)
-pressure_s = pressure            applied to that person's speed
-pressure_q = 1 + (pressure - 1) / 2   applied to that person's quality contribution
+pressure_s = pressure                     applied to that person's speed
+pressure_q = 1 + min(0, pressure - 1) / 2  applied to that person's quality contribution
 ```
 
-Example at rho 1.2 (a packed Friday dinner): CMP 20 gives speed x0.88; CMP 50 x1.00; CMP 90 x1.08. At rho 0.8 or below composure has no effect.
+Example at load 1.2 (a packed Friday dinner): CMP 20 gives speed x0.88 and quality x0.94; CMP 50 x1.00; CMP 90 speed x1.08, quality unchanged. Calm keeps standards up but does not raise them. At load 0.8 or below composure has no effect.
 
-**Why this matters for strategy:** volume restaurants run at high rho, so they need calm, fast staff; a luxury room runs well below capacity, so composure is cheap there and Quality is what counts. Staff builds reinforce the three strategies of prd.md 6.2 instead of adding a fourth.
+**Why this matters for strategy:** a volume kitchen runs flat out, so calm cooks earn money there; a luxury kitchen has room to breathe, so composure is cheap there and Quality is what counts. Staff builds reinforce the three strategies of prd.md 6.2 instead of adding a fourth.
 
 ### 2.4 Talents and personality
 
@@ -117,15 +125,15 @@ The trainee is off the rota for the course days (salary still paid). One course 
 
 | id | Course | Raises | Roles | Price | Days off | Base gain | Unlock |
 |---|---|---|---|---|---|---|---|
-| doughSkills | Dough and Knife Skills | QUA | chef, cook | $450 | 2 | +6 | Start |
-| lineDrills | Line Speed Drills | SPD | chef, cook, dishwasher | $350 | 1 | +6 | Start |
-| tableService | Table Service Course | QUA | server, host | $350 | 1 | +6 | Start |
-| floorFlow | Floor Flow Workshop | SPD | server, host | $300 | 1 | +6 | Start |
-| rushBootcamp | Rush Hour Bootcamp | CMP | all | $400 | 2 | +7 | Day 8 |
-| trainTrainer | Train the Trainer | MEN | all | $500 | 2 | +8 | Serve 500 |
-| sommelier | Sommelier Basics | QUA | server | $700 | 3 | +8, and +3% wine sales per sommelier trained (cap +6%) | Rep 45 |
-| napoliMaster | Napoli Masterclass | QUA | chef, cook | $1,400 | 4 | +12 | Rep 55 |
-| leadership | Leadership for Managers | MEN and CMP | manager | $1,200 | 3 | +6 each | Rank Owner |
+| doughSkills | Dough and Knife Skills | QUA | chef, cook | $300 | 1 | +10 | Start |
+| lineDrills | Line Speed Drills | SPD | chef, cook, dishwasher | $250 | 1 | +10 | Start |
+| tableService | Table Service Course | QUA | server, host | $250 | 1 | +10 | Start |
+| floorFlow | Floor Flow Workshop | SPD | server, host | $220 | 1 | +10 | Start |
+| rushBootcamp | Rush Hour Bootcamp (evening workshop) | CMP | all | $260 | 0 | +12 | Day 8 |
+| trainTrainer | Train the Trainer | MEN | all | $350 | 1 | +12 | Serve 500 |
+| sommelier | Sommelier Basics | QUA | server | $600 | 2 | +12, and +3% wine sales per sommelier trained (cap +6%) | Rep 45 |
+| napoliMaster | Napoli Masterclass | QUA | chef, cook | $550 | 2 | +16 | Rep 55 |
+| leadership | Leadership for Managers | MEN and CMP | manager | $900 | 2 | +10 each | Rank Owner |
 
 ```
 gain = round(base_gain x headroom x learn x mood)
@@ -135,7 +143,9 @@ mood     = 0.7 if morale below 40, else 1.0
 attributes never exceed 99
 ```
 
-Examples: a cook OVR 50, POT 70, Dough and Knife Skills: +6 QUA. The same cook at OVR 66: headroom 0.25, +2 (rounded from 1.5). An Eager Learner at OVR 50: +8 (7.5 rounded half up).
+Examples: a cook OVR 50, POT 70, Dough and Knife Skills: +10 QUA. The same cook at OVR 66: headroom 0.25, +3 (2.5 rounded half up). An Eager Learner at OVR 50: +13 (12.5 rounded half up).
+
+**Tuning note (build):** the first draft (+6 for $450 and 2 days off) paid back in 15 to 270 weeks in the balance run, because one person's six points move a whole kitchen very little and a cook away costs covers. Gains and prices above are the retuned values; `npm run balance` prints the payback table (3.8 to 10 weeks today).
 
 **The training preview** (before paying) shows: gain per attribute, new OVR, the days off on a mini calendar with the rota impact ("Dinner prep will be the limit on Tue and Wed: about -$90"), the salary the person will expect at the next review, and an estimated payback in weeks from the existing `compare()` impact model.
 
@@ -357,7 +367,7 @@ Old saves:
 ## 11. Balance and dominant strategy checks
 
 * **Reference builds unchanged:** the three builds of `balance.md` 3.1 load with migrated staff (CMP 50, Easy Going) and give identical numbers (AC-222).
-* **New check, strategy fit:** the volume build with its cooks at CMP 80 must gain more profit per day than the luxury build with the same CMP change; the luxury build with cooks at QUA +20 must gain more than the volume build with the same QUA change (AC-223). If not, raise the pressure coefficient 0.50 first.
+* **New check, strategy fit:** the volume build with its cooks at CMP 80 must gain more profit per day than the luxury build with the same change; cooks going from QUA 50 to 70 must lift luxury satisfaction more than volume satisfaction (AC-223). Same day profit is the wrong yardstick for Quality in luxury: that room is already full at fixed prices, so better food pays through satisfaction, reputation and prices.
 * **Training payback band:** each course, taken by the role it targets in its reference build, pays back in 3 to 10 weeks including the rota cost of days off. Outside the band, retune the price within plus or minus 40%.
 * **Everyone at 99?** No: POT caps growth (headroom 0.25 past POT), salaries follow OVR, and course cooldown is 14 days. An all elite team costs more than it earns below Rep 60.
 * **Always hire Loyal and Easy Going?** They are rare (weight 4 of 104 each) and only visible after an interview; Easy Going also dampens positive drivers.

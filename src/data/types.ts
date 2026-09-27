@@ -172,10 +172,28 @@ export interface FurnitureItem {
 
 export type Role = 'chef' | 'cook' | 'server' | 'host' | 'dishwasher' | 'manager';
 
-export type TraitId = 'speedy' | 'perfectionist' | 'charmer' | 'steady' | 'mentor' | 'nightOwl' | 'frugal' | 'crowdPleaser';
+/** The four key attributes of a staff member, 1 to 99 (staff-management.md 2). */
+export type AttrId = 'quality' | 'speed' | 'composure' | 'mentoring';
 
-export interface Trait {
-  id: TraitId;
+/** A fixed performance perk; at most one per person (staff-management.md 2.4). */
+export type TalentId = 'speedy' | 'perfectionist' | 'charmer' | 'nightOwl' | 'frugal' | 'crowdPleaser' | 'eagerLearner' | 'bigGame';
+
+/** What makes a person happy or unhappy (staff-management.md 5.2). */
+export type PersonalityId =
+  | 'thrillSeeker' | 'calmSoul' | 'craftsperson' | 'racer' | 'gloryHunter' | 'moneyMinded'
+  | 'ambitious' | 'teamPlayer' | 'steady' | 'loyal' | 'easyGoing' | 'hothead';
+
+export interface Talent {
+  id: TalentId;
   name: string;
   effect: string;
+}
+
+export interface Personality {
+  id: PersonalityId;
+  name: string;
+  /** Plain words: what they react to. */
+  effect: string;
+  /** Relative chance on the market. */
+  weight: number;
 }

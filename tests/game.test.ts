@@ -133,7 +133,8 @@ describe('fast forward a week', () => {
   test('stops early when someone hands in notice', () => {
     const s = withStarterKit(newGame(42, 'canal', 'cosy'));
     const cook = s.staff.find((x) => x.role === 'cook')!;
-    cook.traits = [];
+    cook.talent = null;
+    cook.personality = [];
     cook.morale = 0;
     cook.lowMoraleDays = 6;
     const ev = apply(s, { type: 'runWeek' }).events.find((e) => e.kind === 'weekCompleted');

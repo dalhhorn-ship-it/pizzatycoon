@@ -15,7 +15,7 @@ Playable greybox with the full economy of `01-product/balance.md`:
 * Menu complexity: a wide or fancy menu slows the prep line and lengthens ticket times unless the cooks are skilled; primi and secondi spare the oven but load the prep line
 * Kitchen equipment in volume, quality, artisan and basic families with unlocks, throughput and quality effects
 * Dining room build mode (tables, booths, decor, lighting, ambience)
-* Staff with skill, potential, traits, morale and salary; hiring board with a measurable impact preview
+* The Squad (`01-product/staff-management.md`): four attributes (Quality, Speed, Composure, Mentoring) and an OVR per person, composure under pressure, courses and coaching, a city wide staff market with scouting, apprentices and an agency, personalities that react to how busy, fast and good the restaurant is, rival offers, pay reviews, and each person's value against a standard hire in the day and week reports; restaurant managers run the team by policy
 * Day simulation for lunch and dinner: demand by customer segment, dish choice, kitchen and seat capacity, turnover, satisfaction, reviews, reputation
 * Daily and weekly finance, starter loan, safety net (no game over)
 * City map of Porto Verde: 7 neighbourhoods and 24 rentable venues with demographic cards, foot traffic, rent and floor area in m², plus moving between venues (`01-product/city-map.md`)

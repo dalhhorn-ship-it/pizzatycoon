@@ -8,8 +8,7 @@ import { ROOM_TOUCH_IDS, ROOM_TOUCHES, type RoomTouch, type TouchSpot } from '..
 import { FURNITURE } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
 import { isBar, isMain, menuSection, PRIMO_BASES, WINE_IDS } from '../data/recipes';
-import { ROLE_NAMES, TRAITS } from '../data/staff';
-import type { EquipmentItem, MainKind, Role } from '../data/types';
+import type { EquipmentItem, MainKind } from '../data/types';
 import { ADDONS, addonEffectText, UPGRADE_PATHS } from '../data/addons';
 import { T } from '../data/tunables';
 import { analyse, repPriceMult, roomStats } from '../sim/analysis';
@@ -17,8 +16,9 @@ import { wineListScore } from '../sim/day';
 import { addonProblem, type Command, fireSafetyUnlocked, isUnlocked, seatLimit, loanPayment, RANK_NAMES, suppliersFor, tiersFor, unlockText } from '../sim/game';
 import { buyPrice, sellPrice } from '../sim/economy';
 import { kitchenDims, layoutProblem } from '../sim/kitchen';
-import type { GameState, OwnedEquipment, Recipe, Staff } from '../sim/state';
-import { locationName, managerEffect, managerOf } from '../sim/chain';
+import type { GameState, OwnedEquipment, Recipe } from '../sim/state';
+import { locationName, managerOf } from '../sim/chain';
+import { ovr } from '../sim/staff';
 import { h, meter, money, signed, toast } from './dom';
 import type { Floor } from './floor';
 import { compare } from './impact';
@@ -254,14 +254,14 @@ function itemStats(it: EquipmentItem): string {
   const stats: string[] = [];
   if (it.role === 'oven') {
     const perHour = ((it.slots ?? 0) * 60) / (12 * (it.bakeMult ?? 1)) * (it.family === 'volume' ? 0.9 + 0.02 * 5 : 0.7 + 0.06 * 5);
-    stats.push(`${perHour.toFixed(0)} pizzas/h at skill 5`);
+    stats.push(`${perHour.toFixed(0)} pizzas/h with Speed 50 cooks`);
   }
   if (it.role === 'counter') stats.push(`prep station${it.prepMult && it.prepMult !== 1 ? ` x${it.prepMult}` : ''}`);
   if (it.role === 'sheeter') stats.push(`x${it.prepMult} prep at the station it touches`);
   if (it.cold) stats.push('keeps dough cold');
   if (it.effectMult) stats.push(it.role === 'pass' ? `serving x${it.effectMult}` : `dishwashing x${it.effectMult}`);
   if (it.qualityMod) stats.push(`quality ${signed(it.qualityMod)}`);
-  if (it.skillNeeded) stats.push(`needs cook skill ${it.skillNeeded}`);
+  if (it.skillNeeded) stats.push(`needs cooks with Quality ${it.skillNeeded * 10}`);
   stats.push(`${it.w}x${it.h} tiles`);
   if (it.maintenance) stats.push(`${money(it.maintenance)}/week upkeep`);
   return stats.join(' · ');
@@ -382,7 +382,7 @@ export function kitchenPanel(ctx: PanelCtx, view: KitchenView): HTMLElement {
         h('span', null, 'Prep'), h('b', null, `${k.prepPerHour.toFixed(1)} dishes/h`),
         h('span', null, 'Prep stations'), h('b', null, `${k.staffedCounters} of ${k.counters} staffed`),
         h('span', null, 'Bake and walk'), h('b', null, `${k.cookTime.toFixed(1)} min`),
-        h('span', null, 'Kitchen skill'), h('b', null, `${k.kitchenSkillK.toFixed(0)} (cooks ${k.avgSkill.toFixed(1)})`),
+        h('span', null, 'Kitchen skill'), h('b', null, `${k.kitchenSkillK.toFixed(0)} (cooks' Quality ${Math.round(k.avgSkill * 10)})`),
         h('span', null, 'Equipment quality'), h('b', null, signed(k.equipmentE, 1)),
         h('span', null, 'Kitchen flow'), h('b', { class: penalties ? 'warn' : 'good' }, penalties ? `${penalties} slow spot${penalties > 1 ? 's' : ''}` : 'Smooth')),
       h('div', { class: 'small muted' }, bottlenecks.length ? `Last service limits: ${bottlenecks.join(', ')}` : 'No bottleneck at the last service.')),
@@ -566,56 +566,6 @@ function fireSafetyCard(ctx: PanelCtx): HTMLElement {
     }));
 }
 
-// ---------- Staff ----------
-
-/** What a restaurant manager does while the player runs another restaurant (prd.md 5.9). */
-function managerNote(s: Staff): HTMLElement {
-  const e = managerEffect(s);
-  const pct = (x: number): string => `${x >= 1 ? '+' : '−'}${Math.abs(Math.round((x - 1) * 100))}%`;
-  return h('div', { class: 'small muted' },
-    `Runs this restaurant while you open or run another one. At skill ${s.skill}: guests ${pct(e.demand)}, waste ${pct(e.waste)} compared with you running it yourself. ` +
-    'While you are here they have nothing to do, but you need one before you can leave.');
-}
-
-export function staffPanel(ctx: PanelCtx): HTMLElement {
-  const { state } = ctx;
-  const order: Role[] = ['manager', 'chef', 'cook', 'server', 'host', 'dishwasher'];
-  const team = [...state.staff].sort((a, b) => order.indexOf(a.role) - order.indexOf(b.role));
-  const traitChips = (ids: string[]): HTMLElement =>
-    h('div', { class: 'chips' }, ...ids.map((id) => h('span', { class: 'chip', title: TRAITS[id as keyof typeof TRAITS]?.effect }, `${TRAITS[id as keyof typeof TRAITS]?.name}: ${TRAITS[id as keyof typeof TRAITS]?.effect}`)));
-  const weekly = state.staff.reduce((x, s) => x + s.salary, 0);
-  return h('div', { class: 'stack' },
-    h('div', { class: 'spread' }, h('h2', null, 'Team'), h('span', { class: 'small muted' }, `${state.staff.length} people · ${money(weekly)}/week`)),
-    ...team.map((s) => h('div', { class: 'card' },
-      h('h3', null, h('span', null, s.name), h('span', { class: 'small muted' }, `${ROLE_NAMES[s.role]}${s.fame ? ` ${'★'.repeat(s.fame)}` : ''}`)),
-      h('div', { class: 'kv' },
-        h('span', null, 'Skill'), h('b', null, `${s.skill} (can reach ${s.potential})`),
-        h('span', null, 'Salary'), h('b', null, `${money(s.salary)}/week`),
-        h('span', null, 'Morale'), h('b', { class: s.morale < 40 ? 'bad' : '' }, s.morale.toFixed(0))),
-      meter(s.morale, 100, s.morale < 40 ? 'hot' : ''),
-      traitChips(s.traits),
-      s.role === 'manager' ? managerNote(s) : null,
-      s.leavingOnDay ? h('div', { class: 'warn small' }, `Leaving on day ${s.leavingOnDay} unless things improve.`) : null,
-      h('div', { class: 'row' },
-        h('button', { class: 'small', onclick: () => act(ctx, { type: 'giveRaise', staffId: s.id }, `${s.name} is delighted`) }, `Raise 10% (+${money(s.salary * 0.1)})`),
-        h('button', { class: 'small ghost', onclick: () => { if (confirm(`Let ${s.name} go with two weeks' pay (${money(s.salary * 2)})?`)) act(ctx, { type: 'fire', staffId: s.id }); } }, 'Let go')))),
-    h('h2', null, 'Hiring board'),
-    h('div', { class: 'small muted' }, 'New candidates arrive every Monday. The impact line runs your restaurant for a week with them on the team.'),
-    ...state.candidates.map((c) => {
-      const hyp = structuredClone(state);
-      hyp.staff.push(c);
-      const d = compare(state, hyp);
-      return h('div', { class: 'card' },
-        h('h3', null, h('span', null, c.name), h('span', { class: 'small muted' }, `${ROLE_NAMES[c.role]}${c.fame ? ` ${'★'.repeat(c.fame)} famous` : ''}`)),
-        h('div', { class: 'kv' },
-          h('span', null, 'Skill'), h('b', null, `${c.skill} (potential ${c.potential})`),
-          h('span', null, 'Salary'), h('b', null, `${money(c.salary)}/week`)),
-        traitChips(c.traits),
-        c.role === 'manager' ? managerNote(c) : impactLine(d),
-        h('button', { class: 'primary small', onclick: () => act(ctx, { type: 'hire', candidateId: c.id }) }, 'Hire'));
-    }));
-}
-
 // ---------- Restaurants (prd.md 5.9, 5.12) ----------
 
 function restaurantsCard(ctx: PanelCtx): HTMLElement | null {
@@ -636,7 +586,7 @@ function restaurantsCard(ctx: PanelCtx): HTMLElement | null {
       return h('div', { class: 'line' },
         h('div', null,
           h('div', null, h('b', null, locationName(b))),
-          h('div', { class: 'small muted' }, `${m ? `${m.name}, skill ${m.skill}` : 'No manager: caretaker mode'} · reputation ${b.rep.toFixed(0)} · locals ${Math.round(b.following * 100)}% · ${lastProfit(b.history)}`)),
+          h('div', { class: 'small muted' }, `${m ? `${m.name}, OVR ${ovr(m)}` : 'No manager: caretaker mode'} · reputation ${b.rep.toFixed(0)} · locals ${Math.round(b.following * 100)}% · ${lastProfit(b.history)}`)),
         h('button', { class: 'small', disabled: !hasManager, title: hasManager ? '' : 'Hire a manager for this restaurant first', onclick: () => act(ctx, { type: 'switchRestaurant', locationId: b.id }) }, 'Go and run it'));
     }),
     hasManager ? null : h('div', { class: 'small muted' }, `To go and run another restaurant, first hire a manager for ${locationName(state)}.`));

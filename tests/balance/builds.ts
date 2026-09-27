@@ -2,9 +2,9 @@
 
 import { FURNITURE } from '../../src/data/furniture';
 import { INGREDIENTS, SUPPLIERS } from '../../src/data/ingredients';
-import { ROLE_BASE_SALARY } from '../../src/data/staff';
 import type { Category, Role, TierId } from '../../src/data/types';
-import { analyse, occupiedTiles, roomStats, salaryFor } from '../../src/sim/analysis';
+import { analyse, occupiedTiles, roomStats } from '../../src/sim/analysis';
+import { staffFromSkill } from '../../src/sim/staff';
 import { simulateDay } from '../../src/sim/day';
 import { newGame, tiersFor } from '../../src/sim/game';
 import { autoLayout } from '../../src/sim/kitchen';
@@ -140,10 +140,7 @@ export function buildState(build: BuildId, districtId: string, mainPrice?: numbe
   const { placed, unplaced } = autoLayout([...spec.equipment, 'doughFridge', 'sink'].map((itemId, i) => ({ uid: 5000 + i, itemId })), s.premisesId);
   if (unplaced.length) throw new Error(`${build}: kitchen auto layout could not place ${unplaced.map((u) => u.itemId).join(', ')}`);
   s.equipment = placed;
-  s.staff = spec.staff.map(([role, skill, fame], i) => ({
-    id: 6000 + i, name: `${role} ${i}`, role, skill, potential: skill, fame, traits: [], morale: 50,
-    salary: salaryFor(role, skill, fame, ROLE_BASE_SALARY[role]), shiftsWorked: 0, lowMoraleDays: 0, leavingOnDay: null,
-  }));
+  s.staff = spec.staff.map(([role, skill, fame], i) => staffFromSkill(6000 + i, `${role} ${i}`, role, skill, { fame, morale: 50 }));
   for (const r of s.recipes) {
     r.onMenu = r.kind === 'pizza' ? spec.menu.includes(r.id) : ['softDrink', 'houseWine', 'garlicBread', 'tiramisu'].includes(r.id);
     if (r.kind === 'pizza') r.price = mainPrice ?? spec.mainPrice;

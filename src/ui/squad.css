@@ -1,0 +1,112 @@
+/* The Squad (staff-management.md 9): player cards in tier colours, lineup by area, ratings strip, report team lines. */
+:root {
+  --tier-bronze: #b0703a;
+  --tier-bronze-bg: #f1dcc4;
+  --tier-silver: #7d8a96;
+  --tier-silver-bg: #e6eaee;
+  --tier-gold: #c28f12;
+  --tier-gold-bg: #f7e7b4;
+  --tier-elite: #6b3fa0;
+  --tier-elite-bg: #e9dcf6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --tier-bronze-bg: #3e2a1b;
+    --tier-silver-bg: #2d3237;
+    --tier-gold-bg: #3d3113;
+    --tier-elite-bg: #2f2140;
+    --tier-bronze: #d9965a;
+    --tier-silver: #aebbc7;
+    --tier-gold: #f0bf52;
+    --tier-elite: #b48ae6;
+  }
+}
+:root[data-theme='dark'] {
+  --tier-bronze-bg: #3e2a1b;
+  --tier-silver-bg: #2d3237;
+  --tier-gold-bg: #3d3113;
+  --tier-elite-bg: #2f2140;
+  --tier-bronze: #d9965a;
+  --tier-silver: #aebbc7;
+  --tier-gold: #f0bf52;
+  --tier-elite: #b48ae6;
+}
+
+.seg.wrap { flex-wrap: wrap; }
+
+.ratings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.rating { display: grid; justify-items: center; padding: 6px 4px; background: var(--lcd); border: 2px solid var(--edge); color: var(--lcd-label); text-align: center; }
+.rating b { font-family: var(--pixel); font-size: 22px; color: var(--lcd-ink); font-variant-numeric: tabular-nums; }
+.rating span { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.rating.glow { outline: 3px solid var(--gold); box-shadow: 0 0 10px var(--gold); }
+
+.area { display: grid; gap: 6px; }
+.area-h { font-family: var(--pixel); font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px dotted var(--line); }
+.area-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+
+.pcard { display: grid; gap: 4px; text-align: left; padding: 8px; min-height: 44px; border: 2px solid var(--edge); background: var(--field); box-shadow: var(--bevel), var(--drop); font-size: 14px; }
+.pcard.bronze { background: var(--tier-bronze-bg); border-color: var(--tier-bronze); }
+.pcard.silver { background: var(--tier-silver-bg); border-color: var(--tier-silver); }
+.pcard.gold { background: var(--tier-gold-bg); border-color: var(--tier-gold); }
+.pcard.elite { background: var(--tier-elite-bg); border-color: var(--tier-elite); }
+.pcard.empty { place-content: center; text-align: center; color: var(--muted); border-style: dashed; background: transparent; box-shadow: none; }
+.pc-top { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center; }
+.pc-top .ovr { font-family: var(--pixel); font-size: 26px; font-weight: 700; line-height: 1; }
+.pc-role { font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--muted); }
+.pc-role .fame { color: var(--gold); }
+.pc-name { font-weight: 700; }
+.pc-bars { display: grid; gap: 2px; }
+
+.abar { display: grid; grid-template-columns: 34px minmax(0, 1fr) 58px; gap: 6px; align-items: center; font-size: 12px; }
+.abar .al { font-weight: 700; color: var(--muted); }
+.abar .at { height: 8px; background: var(--panel-2); border: 1px solid var(--line); overflow: hidden; }
+.abar .af { display: block; height: 100%; }
+.abar .af.low { background: var(--bad); }
+.abar .af.ok { background: var(--warn); }
+.abar .af.good { background: var(--good); }
+.abar .af.gold { background: var(--gold); }
+.abar b { text-align: right; font-variant-numeric: tabular-nums; }
+
+.form { font-size: 12px; }
+.form.f1 { color: var(--good); }
+.form.f-1 { color: var(--bad); }
+.form.f0 { color: var(--muted); }
+
+.pc-badge { display: inline-grid; justify-items: center; min-width: 64px; padding: 4px 8px; border: 2px solid var(--edge); }
+.pc-badge b { font-family: var(--pixel); font-size: 26px; line-height: 1; }
+.pc-badge span { font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.pc-badge.bronze { background: var(--tier-bronze-bg); border-color: var(--tier-bronze); }
+.pc-badge.silver { background: var(--tier-silver-bg); border-color: var(--tier-silver); }
+.pc-badge.gold { background: var(--tier-gold-bg); border-color: var(--tier-gold); }
+.pc-badge.elite { background: var(--tier-elite-bg); border-color: var(--tier-elite); }
+
+.pc-head { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 12px; align-items: center; }
+.diamond { width: 170px; height: 170px; overflow: visible; }
+.pc-head .abar { grid-template-columns: 84px minmax(0, 1fr) 36px; font-size: 13px; }
+.diamond .grid { fill: none; stroke: var(--line); stroke-width: 1; }
+.diamond .shape { fill: color-mix(in srgb, var(--accent) 35%, transparent); stroke: var(--accent); stroke-width: 2; }
+.diamond text { font-size: 10px; font-weight: 700; fill: var(--ink); }
+.chip.talent { background: var(--tier-gold-bg); color: var(--ink); border-color: var(--tier-gold); }
+.chip.persona { background: var(--tier-elite-bg); color: var(--ink); border-color: var(--tier-elite); }
+.bars.spark { height: 48px; }
+
+.mcard.bronze > h3:first-child { background: var(--tier-bronze); }
+.mcard.silver > h3:first-child { background: var(--tier-silver); }
+.mcard.gold > h3:first-child { background: var(--tier-gold); }
+.mcard.elite > h3:first-child { background: var(--tier-elite); }
+
+.teamline { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; width: 100%; text-align: left; padding: 6px 8px; min-height: 44px; background: var(--field); border: 2px solid var(--line); border-left-width: 6px; box-shadow: none; }
+.teamline.up { border-left-color: var(--good); }
+.teamline.down { border-left-color: var(--bad); }
+.teamline .tl-reason { grid-column: 1 / -1; color: var(--muted); }
+.potw { padding: 6px 10px; background: var(--tier-gold-bg); border: 2px solid var(--tier-gold); }
+.teamtable { display: grid; gap: 2px; }
+.tt-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 56px 120px 72px; gap: 6px; align-items: center; width: 100%; text-align: left; padding: 4px 6px; min-height: 44px; background: var(--field); border: 1px solid var(--line); box-shadow: none; }
+.tt-row .tt-reason { grid-column: 1 / -1; }
+
+@media (max-width: 600px) {
+  .pc-head { grid-template-columns: 1fr; justify-items: center; }
+  .ratings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tt-row { grid-template-columns: minmax(0, 1fr) 48px 72px; }
+  .tt-row > :nth-child(3) { display: none; }
+}

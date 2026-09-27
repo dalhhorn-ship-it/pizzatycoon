@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import { EQUIPMENT } from '../src/data/equipment';
 import { T } from '../src/data/tunables';
-import { analyse, harmonyOf, salaryFor, tasteMatch } from '../src/sim/analysis';
+import { analyse, harmonyOf, tasteMatch } from '../src/sim/analysis';
+import { salaryFor } from '../src/sim/staff';
 import { attachRate, queueDelay, simulateDay, valueScore } from '../src/sim/day';
 import { loanPayment, newGame, withStarterKit } from '../src/sim/game';
 
@@ -28,9 +29,10 @@ describe('formulas match balance.md', () => {
   });
 
   test('salary (1.10)', () => {
-    expect(salaryFor('cook', 4, 0, 550)).toBeCloseTo(484, 2);
-    expect(salaryFor('chef', 8, 1, 900)).toBeCloseTo(1530, 2);
-    expect(salaryFor('dishwasher', 4, 0, 380)).toBeCloseTo(334.4, 2);
+    // OVR = 10 x the old skill gives the old salaries (staff-management.md 2.2).
+    expect(salaryFor('cook', 40, 0)).toBeCloseTo(484, 2);
+    expect(salaryFor('chef', 80, 1)).toBeCloseTo(1530, 2);
+    expect(salaryFor('dishwasher', 40, 0)).toBeCloseTo(334.4, 2);
   });
 
   test('starter loan payment is $303.26 a week (1.12)', () => {
@@ -69,7 +71,10 @@ describe('formulas match balance.md', () => {
 describe('golden starter day (balance.md 2)', () => {
   const s = withStarterKit(newGame(1, 'canal', 'cosy'));
   s.day = 4; // Thursday
-  for (const st of s.staff) st.traits = [];
+  for (const st of s.staff) {
+    st.talent = null;
+    st.personality = [];
+  }
   const a = analyse(s);
   const r = simulateDay(s, a, { noise: false });
 

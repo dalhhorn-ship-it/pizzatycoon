@@ -8,18 +8,26 @@ import { ROOM_TOUCHES } from '../data/roomTouches';
 import { FURNITURE } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
 import { menuSection, PIZZA_BASE, PRIMO_BASES, RECIPE_BOOK } from '../data/recipes';
-import { FIRST_NAMES, LAST_NAMES, ROLE_BASE_SALARY, TRAITS } from '../data/staff';
-import type { EquipmentItem, MainKind, RankId, Role, TierId, TraitId, Unlock } from '../data/types';
+import { ROLE_NAMES } from '../data/staff';
+import { COURSES } from '../data/training';
+import type { AttrId, EquipmentItem, MainKind, RankId, Role, TierId, Unlock } from '../data/types';
 import { T } from '../data/tunables';
 import { VENUES, venueFor } from '../data/venues';
-import { analyse, occupiedTiles, salaryFor } from './analysis';
-import { type DayOptions, simulateDay } from './day';
+import { occupiedTiles } from './analysis';
+import type { DayOptions } from './day';
 import { buyPrice, clampEconomy, type Economy, economyOf, sellPrice, startFollowing } from './economy';
 import { autoLayout, bestSpot, kitchenDims, layoutProblem, rectOf } from './kitchen';
 import { locationFacts } from './location';
 import { applyLocation, bestRep, extractLocation, locationName, managerOf, ownedVenues, runBranchDay } from './chain';
 import { Rng } from './rng';
-import { type DayReport, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION, type Staff } from './state';
+import { coachProblem, hasPersonality, interestProblem, ovr, salaryFor, staffFromSkill } from './staff';
+import { type DayReport, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION, type StaffPolicy } from './state';
+import {
+  bookCourse, dayRun, deliverAgency, ensureEveryRole as fillRoles, firstMarket, HIREABLE_ROLES, hiredFromMarket, managerWeek, policyOf,
+  recordDeparture, refreshMarket, teamDay, weekNumber,
+} from './team';
+
+export { HIREABLE_ROLES };
 
 export type Command =
   | { type: 'setTier'; recipeId: string; ingredientId: string; tier: TierId }
@@ -41,9 +49,21 @@ export type Command =
   | { type: 'removeAddon'; uid: number; addonId: string }
   | { type: 'upgradeStation'; uid: number; toItemId: string }
   | { type: 'movePremises'; districtId: string; premisesId: string }
-  | { type: 'hire'; candidateId: number }
-  | { type: 'fire'; staffId: number }
-  | { type: 'giveRaise'; staffId: number }
+  /** Hire at the asking salary, or offer 10% below (staff-management.md 4.4). */
+  | { type: 'hire'; candidateId: number; low?: boolean }
+  | { type: 'interview'; candidateId: number }
+  | { type: 'agency'; role: Role; plus?: boolean }
+  | { type: 'fire'; staffId: number; locationId?: number }
+  | { type: 'giveRaise'; staffId: number; locationId?: number }
+  | { type: 'train'; staffId: number; courseId: string; locationId?: number }
+  | { type: 'coach'; coachId: number; traineeId: number; attr: AttrId; locationId?: number }
+  | { type: 'stopCoaching'; coachId: number; locationId?: number }
+  | { type: 'promote'; staffId: number; role: Role; locationId?: number }
+  | { type: 'daysOff'; staffId: number; locationId?: number }
+  | { type: 'answerReview'; staffId: number; accept: boolean; locationId?: number }
+  | { type: 'answerOffer'; staffId: number; match: boolean; locationId?: number }
+  | { type: 'setStaffPolicy'; policy: Partial<StaffPolicy>; locationId?: number }
+  | { type: 'setDelegateStaff'; on: boolean }
   | { type: 'takeLoan'; amount: number }
   | { type: 'repayLoan'; amount: number }
   | { type: 'setUnlockAll'; on: boolean }
@@ -62,7 +82,7 @@ export type Command =
   | { type: 'runWeek' };
 
 export interface GameEvent {
-  kind: 'dayCompleted' | 'weekCompleted' | 'unlocked' | 'rankUp' | 'restructure' | 'staffLeft' | 'staffNotice' | 'info';
+  kind: 'dayCompleted' | 'weekCompleted' | 'unlocked' | 'rankUp' | 'restructure' | 'staffLeft' | 'staffNotice' | 'staffReview' | 'staffOffer' | 'info';
   text: string;
   report?: DayReport;
   /** weekCompleted: every day that ran, and why it stopped early (null when all 7 ran). */
@@ -150,74 +170,9 @@ export function unlockText(unlock: Unlock): string {
   }
 }
 
-function makeStaff(id: number, name: string, role: Role, skill: number, potential: number, fame: number, traits: TraitId[]): Staff {
-  return {
-    id, name, role, skill, potential, fame, traits, morale: T.staff.moraleStart,
-    salary: salaryFor(role, skill, fame, ROLE_BASE_SALARY[role]), shiftsWorked: 0, lowMoraleDays: 0, leavingOnDay: null,
-  };
-}
-
-/** Every role the player can hire; the hiring board always has at least one candidate for each. */
-export const HIREABLE_ROLES: readonly Role[] = ['chef', 'cook', 'server', 'host', 'dishwasher', 'manager'];
-
-/** One candidate of a given role. Managers have their own skill range and traits (prd.md 5.9). */
-function makeCandidate(rng: Rng, id: number, role: Role, fixedSkill?: number): Staff {
-  if (role === 'manager') {
-    const [lo, hi] = T.manager.candidateSkill;
-    const skill = rng.int(lo, hi);
-    const trait = rng.pick(['steady', 'frugal', 'charmer', 'mentor'] as TraitId[]);
-    return makeStaff(id, `${rng.pick(FIRST_NAMES)} ${rng.pick(LAST_NAMES)}`, 'manager', skill, Math.min(10, skill + rng.int(0, 2)), 0, [trait]);
-  }
-  const traitIds = Object.keys(TRAITS) as TraitId[];
-  const skill = fixedSkill ?? rng.int(role === 'chef' ? 5 : 2, role === 'chef' ? 9 : 7);
-  const potential = Math.min(10, skill + rng.int(0, 3));
-  const t1 = rng.pick(traitIds);
-  let t2 = rng.pick(traitIds);
-  if (t2 === t1) t2 = rng.pick(traitIds);
-  const traits = t1 === t2 ? [t1] : [t1, t2];
-  return makeStaff(id, `${rng.pick(FIRST_NAMES)} ${rng.pick(LAST_NAMES)}`, role, skill, potential, 0, traits);
-}
-
-/** Adds a candidate for every role missing from the board (after a hire, or for a save from before this rule). */
+/** Adds a candidate for every role missing from the market (after a hire, or for an older save). */
 export function ensureEveryRole(state: GameState): void {
-  for (const role of HIREABLE_ROLES) {
-    if (state.candidates.some((x) => x.role === role)) continue;
-    state.candidates.push(makeCandidate(Rng.stream(state.seed, state.day, `refill-${state.nextUid}`), state.nextUid++, role));
-  }
-}
-
-function generateCandidates(state: GameState): Staff[] {
-  const rng = Rng.stream(state.seed, state.day, 'hiring');
-  const roles: Role[] = ['cook', 'cook', 'server', 'server', 'chef', 'host', 'dishwasher'];
-  const traitIds = Object.keys(TRAITS) as TraitId[];
-  const out: Staff[] = [];
-  let fameUsed = false;
-  // fresh-start.md 4: the day 1 board always offers 2 cooks, 2 servers and a dishwasher of skill 2 to 4.
-  const firstBoard: Role[] = state.day === 1 ? ['cook', 'cook', 'server', 'server', 'dishwasher'] : [];
-  for (let i = 0; i < T.staff.candidatesPerWeek; i++) {
-    const fixed = firstBoard[i];
-    const role = fixed ?? rng.pick(roles);
-    const skill = fixed ? rng.int(2, 4) : rng.int(role === 'chef' ? 5 : 2, role === 'chef' ? 9 : 7);
-    const potential = Math.min(10, skill + rng.int(0, 3));
-    let fame = 0;
-    if (!fameUsed && state.rep >= T.staff.fameCandidateRep && skill >= 7 && rng.chance(0.5)) {
-      fame = 1;
-      fameUsed = true;
-    }
-    const t1 = rng.pick(traitIds);
-    let t2 = rng.pick(traitIds);
-    if (t2 === t1) t2 = rng.pick(traitIds);
-    const traits = t1 === t2 ? [t1] : [t1, t2];
-    const name = `${rng.pick(FIRST_NAMES)} ${rng.pick(LAST_NAMES)}`;
-    out.push(makeStaff(state.nextUid + i, name, role, skill, potential, fame, traits));
-  }
-  // Every role is always on the board (founder request): fill in any role the draw missed, managers included.
-  // Own stream, so the random part of the board is unchanged.
-  const fill = Rng.stream(state.seed, state.day, 'fill');
-  for (const role of HIREABLE_ROLES) {
-    if (!out.some((c) => c.role === role)) out.push(makeCandidate(fill, state.nextUid + out.length, role));
-  }
-  return out;
+  fillRoles(state, bestRep(state));
 }
 
 export function loanPayment(loan: GameState['loan']): number {
@@ -281,8 +236,7 @@ export function newGame(seed: number, districtId: string, premisesId = 'hole', e
     nextUid: 1, daysBelowZero: 0, daysOpen: 0, fireSafety: [], roomTouches: [], history: [], locationId: 1, branches: [], unlockAll: false,
   };
   if (economy) state.economy = clampEconomy(economy);
-  state.candidates = generateCandidates(state);
-  state.nextUid += state.candidates.length;
+  firstMarket(state);
   return state;
 }
 
@@ -314,11 +268,11 @@ export function withStarterKit(state: GameState): GameState {
     { itemId: 'doughFridge', x: kd.W - 1, y: kd.H - 1, rot: 0 as const },
   ].map((e) => ({ uid: uid++, ...e }));
   s.staff = [
-    makeStaff(uid++, 'Giulia Rossi', 'cook', 5, 7, 0, ['steady']),
-    makeStaff(uid++, 'Marco Bakker', 'cook', 4, 7, 0, ['crowdPleaser']),
-    makeStaff(uid++, 'Sofia Moreau', 'server', 5, 7, 0, ['charmer']),
-    makeStaff(uid++, 'Luca Silva', 'server', 4, 6, 0, ['nightOwl']),
-    makeStaff(uid++, 'Kofi Mensah', 'dishwasher', 4, 6, 0, ['steady']),
+    staffFromSkill(uid++, 'Giulia Rossi', 'cook', 5, { potential: 7, personality: ['steady'] }),
+    staffFromSkill(uid++, 'Marco Bakker', 'cook', 4, { potential: 7, talent: 'crowdPleaser' }),
+    staffFromSkill(uid++, 'Sofia Moreau', 'server', 5, { potential: 7, talent: 'charmer' }),
+    staffFromSkill(uid++, 'Luca Silva', 'server', 4, { potential: 6, talent: 'nightOwl' }),
+    staffFromSkill(uid++, 'Kofi Mensah', 'dishwasher', 4, { potential: 6, personality: ['steady'] }),
   ];
   // The reference kitchen is drawn for the cosy shop; bigger kitchens move the pass, so tidy it there.
   if (layoutProblem(s.equipment, kitchenDims(s.premisesId))) s.equipment = autoLayout(s.equipment, s.premisesId).placed;
@@ -379,7 +333,31 @@ export function addonProblem(state: GameState, e: OwnedEquipment, addon: AddonIt
 
 const fail = (state: GameState, error: string): Result => ({ state, events: [], error });
 
+/** Staff commands can target a managed restaurant (Override, staff-management.md 1.1): run them there. */
+function atLocation(input: GameState, cmd: Command & { locationId?: number }, opts: DayOptions): Result | null {
+  if (cmd.locationId === undefined || cmd.locationId === input.locationId) return null;
+  const target = input.branches.find((b) => b.id === cmd.locationId);
+  if (!target) return fail(input, 'You do not own that restaurant.');
+  const state = structuredClone(input);
+  const here = extractLocation(state);
+  state.branches = state.branches.map((b) => (b.id === target.id ? here : b));
+  applyLocation(state, structuredClone(target));
+  const r = apply(state, { ...cmd, locationId: undefined } as Command, opts);
+  if (r.error) return fail(input, r.error);
+  const out = r.state;
+  const there = extractLocation(out);
+  const back = out.branches.find((b) => b.id === here.id);
+  if (!back) return fail(input, 'Lost track of your restaurant.');
+  out.branches = out.branches.map((b) => (b.id === here.id ? there : b));
+  applyLocation(out, back);
+  return { state: out, events: r.events };
+}
+
 export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise: true }): Result {
+  if ('locationId' in cmd && cmd.type !== 'switchRestaurant') {
+    const there = atLocation(input, cmd, opts);
+    if (there) return there;
+  }
   const state = structuredClone(input);
   const events: GameEvent[] = [];
   const premises = PREMISES[state.premisesId];
@@ -613,28 +591,157 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
     case 'hire': {
       const c = state.candidates.find((x) => x.id === cmd.candidateId);
       if (!c) return fail(input, 'That candidate is no longer available.');
+      const interest = interestProblem(c, bestRep(state));
+      if (interest) return fail(input, `${c.name}: ${interest}.`);
       state.candidates = state.candidates.filter((x) => x.id !== cmd.candidateId);
-      state.staff.push(c);
+      let salary = c.salary;
+      if (cmd.low) {
+        const m = T.market;
+        const chance = hasPersonality(c, 'moneyMinded') ? m.lowOfferChanceMoney : m.lowOfferChance;
+        if (!Rng.stream(state.seed, state.day, `offer-${c.id}`).chance(chance)) {
+          events.push({ kind: 'info', text: `${c.name} turned down your offer and took another job.` });
+          ensureEveryRole(state);
+          return { state, events };
+        }
+        salary = Math.round(c.salary * m.lowOffer * 100) / 100;
+      }
+      state.staff.push(hiredFromMarket(c, state.day, salary));
       events.push({ kind: 'info', text: `${c.name} joins the team.` });
       // Hired the last one of that role: someone new applies straight away, so every role stays hireable.
       ensureEveryRole(state);
       break;
     }
+    case 'interview': {
+      const c = state.candidates.find((x) => x.id === cmd.candidateId);
+      if (!c) return fail(input, 'That candidate is no longer available.');
+      if (c.scouted) return fail(input, `You already interviewed ${c.name}.`);
+      const week = weekNumber(state.day);
+      const used = state.interviews?.week === week ? state.interviews.used : 0;
+      const price = used >= T.market.freeInterviews ? T.market.interviewPrice : 0;
+      if (price && state.cash < price) return fail(input, `An interview costs $${price}.`);
+      state.cash -= price;
+      state.interviews = { week, used: used + 1 };
+      c.scouted = true;
+      break;
+    }
+    case 'agency': {
+      const m = T.market;
+      const price = cmd.plus ? m.agencyPricePlus : m.agencyPrice;
+      if (state.cash < price) return fail(input, `The agency charges $${price}.`);
+      state.cash -= price;
+      state.agencyOrders = [...(state.agencyOrders ?? []), { role: cmd.role, min: cmd.plus ? 70 : 60, readyDay: state.day + m.agencyDays }];
+      events.push({ kind: 'info', text: `The agency is looking for ${ROLE_NAMES[cmd.role].toLowerCase()}s. Three candidates arrive in ${m.agencyDays} days.` });
+      break;
+    }
     case 'fire': {
       const s = state.staff.find((x) => x.id === cmd.staffId);
       if (!s) return fail(input, 'Not found.');
-      state.cash -= s.salary * T.staff.severanceWeeks;
+      state.cash -= s.apprentice ? 0 : s.salary * T.staff.severanceWeeks;
       state.staff = state.staff.filter((x) => x.id !== cmd.staffId);
-      events.push({ kind: 'info', text: `${s.name} leaves with two weeks' pay.` });
+      for (const c of state.staff) if (c.coaching?.traineeId === s.id) c.coaching = null;
+      recordDeparture(state, true);
+      events.push({ kind: 'info', text: s.apprentice ? `${s.name} leaves.` : `${s.name} leaves with two weeks' pay.` });
       break;
     }
     case 'giveRaise': {
       const s = state.staff.find((x) => x.id === cmd.staffId);
       if (!s) return fail(input, 'Not found.');
       s.salary = Math.round(s.salary * (1 + T.staff.raiseFraction) * 100) / 100;
-      s.morale = Math.min(100, s.morale + T.staff.raiseMorale);
+      s.morale = Math.min(100, s.morale + (hasPersonality(s, 'moneyMinded') ? T.mood.moneyMindedRaise : T.staff.raiseMorale));
       s.leavingOnDay = null;
       s.lowMoraleDays = 0;
+      break;
+    }
+    case 'train': {
+      const s = state.staff.find((x) => x.id === cmd.staffId);
+      if (!s) return fail(input, 'Not found.');
+      const error = bookCourse(state, s, cmd.courseId, bestRep(state));
+      if (error) return fail(input, error);
+      events.push({ kind: 'info', text: `${s.name} is off to ${COURSES[cmd.courseId]?.name} for ${COURSES[cmd.courseId]?.daysOff} days.` });
+      break;
+    }
+    case 'coach': {
+      const coach = state.staff.find((x) => x.id === cmd.coachId);
+      const trainee = state.staff.find((x) => x.id === cmd.traineeId);
+      if (!coach || !trainee) return fail(input, 'Not found.');
+      const problem = coachProblem(coach, trainee);
+      if (problem) return fail(input, problem);
+      if (state.staff.some((x) => x.id !== coach.id && x.coaching?.traineeId === trainee.id)) return fail(input, `${trainee.name} already has a coach.`);
+      if (trainee.attrs[cmd.attr] >= Math.min(99, trainee.potential)) return fail(input, `${trainee.name} has reached their potential in that.`);
+      coach.coaching = { traineeId: trainee.id, attr: cmd.attr };
+      break;
+    }
+    case 'stopCoaching': {
+      const coach = state.staff.find((x) => x.id === cmd.coachId);
+      if (!coach?.coaching) return fail(input, 'Not coaching.');
+      coach.coaching = null;
+      break;
+    }
+    case 'promote': {
+      const s = state.staff.find((x) => x.id === cmd.staffId);
+      if (!s) return fail(input, 'Not found.');
+      const t = T.staff;
+      if (cmd.role === 'chef') {
+        if (s.role !== 'cook') return fail(input, 'Only a cook can become chef.');
+        if (ovr(s) < t.promoteChefOvr) return fail(input, `A cook needs OVR ${t.promoteChefOvr} to become chef (now ${ovr(s)}).`);
+      } else if (cmd.role === 'manager') {
+        if (s.role !== 'chef' && s.role !== 'server') return fail(input, 'A chef or a server can become restaurant manager.');
+        if (s.attrs.mentoring < t.promoteManagerMen) return fail(input, `Needs Mentoring ${t.promoteManagerMen} to manage (now ${s.attrs.mentoring}).`);
+      } else return fail(input, 'Promotions are cook to chef, and chef or server to manager.');
+      s.role = cmd.role;
+      s.salary = Math.max(s.salary, salaryFor(cmd.role, ovr(s), s.fame));
+      s.promotedDay = state.day;
+      s.coaching = null;
+      s.morale = Math.min(100, s.morale + T.staff.raiseMorale);
+      events.push({ kind: 'info', text: `${s.name} is now ${cmd.role === 'chef' ? 'chef' : 'restaurant manager'} (OVR ${ovr(s)}).` });
+      break;
+    }
+    case 'daysOff': {
+      const s = state.staff.find((x) => x.id === cmd.staffId);
+      if (!s) return fail(input, 'Not found.');
+      if (s.offUntil !== null || s.course) return fail(input, `${s.name} is already away.`);
+      s.offUntil = state.day + T.staff.daysOff;
+      s.morale = Math.min(100, s.morale + T.staff.daysOffMorale);
+      s.leavingOnDay = null;
+      s.lowMoraleDays = 0;
+      events.push({ kind: 'info', text: `${s.name} takes ${T.staff.daysOff} days off.` });
+      break;
+    }
+    case 'answerReview': {
+      const s = state.staff.find((x) => x.id === cmd.staffId);
+      if (!s?.review) return fail(input, 'No pay review waiting.');
+      if (cmd.accept) {
+        s.salary = Math.max(s.salary, s.review.ask);
+        s.morale = Math.min(100, s.morale + (hasPersonality(s, 'moneyMinded') ? T.mood.moneyMindedRaise : T.staff.raiseMorale));
+      }
+      s.review = null;
+      s.nextReviewDay = state.day + 7 * T.market.reviewWeeks;
+      break;
+    }
+    case 'answerOffer': {
+      const s = state.staff.find((x) => x.id === cmd.staffId);
+      if (!s?.offer) return fail(input, 'No offer waiting.');
+      if (cmd.match) {
+        s.salary = Math.max(s.salary, s.offer.salary);
+        s.morale = Math.min(100, s.morale + T.staff.raiseMorale);
+        s.offer = null;
+      } else {
+        state.staff = state.staff.filter((x) => x.id !== s.id);
+        for (const c of state.staff) if (c.coaching?.traineeId === s.id) c.coaching = null;
+        recordDeparture(state, false);
+        events.push({ kind: 'info', text: `${s.name} leaves for ${s.offer.rival}.` });
+      }
+      break;
+    }
+    case 'setStaffPolicy': {
+      const next = { ...policyOf(state), ...cmd.policy };
+      if (!T.delegation.budgets.includes(next.budget)) return fail(input, 'Pick one of the training budgets.');
+      state.staffPolicy = next;
+      break;
+    }
+    case 'setDelegateStaff': {
+      if (cmd.on && !managerOf(state.staff)) return fail(input, 'Hire a restaurant manager first.');
+      state.delegateStaff = cmd.on;
       break;
     }
     case 'takeLoan': {
@@ -857,7 +964,7 @@ export function fireSafetyUnlocked(state: GameState): boolean {
 // ---------- Fast forward ----------
 
 /** Events that end a fast forward early so the player can react. */
-const WEEK_STOPS: readonly GameEvent['kind'][] = ['staffNotice', 'staffLeft', 'restructure'];
+const WEEK_STOPS: readonly GameEvent['kind'][] = ['staffNotice', 'staffLeft', 'staffOffer', 'restructure'];
 
 function runWeek(state: GameState, opts: DayOptions): Result {
   const reports: DayReport[] = [];
@@ -889,8 +996,7 @@ function runDay(state: GameState, opts: DayOptions): Result {
   const events: GameEvent[] = [];
   const unlockedBefore = unlockedIds(state);
   const rankBefore = state.rank;
-  const a = analyse(state);
-  const report = simulateDay(state, a, opts);
+  const { a, report } = dayRun(state, opts);
   const p = report.pnl;
 
   // Daily cash: sales in, ingredients (bought just in time in M0), utilities and upkeep out.
@@ -912,6 +1018,7 @@ function runDay(state: GameState, opts: DayOptions): Result {
   // The other restaurants, run by their managers, share the same cash (prd.md 5.12).
   const branchDays = state.branches.map((b) => runBranchDay(state, b, report.weekday, opts));
   if (branchDays.length) report.branches = branchDays.map((x) => x.day);
+  for (const d of branchDays) events.push(...d.events);
   weekly += branchDays.reduce((x, d) => x + d.weekly, 0);
   report.weeklyPayments = weekly;
   report.cashAfter = state.cash;
@@ -921,41 +1028,16 @@ function runDay(state: GameState, opts: DayOptions): Result {
   state.totalServed += report.covers;
   if (report.open) state.daysOpen += 1;
 
-  // Staff: morale drift, growth, notices (prd.md 5.8).
-  const understaffed = a.service.loadMult < 1;
-  const rng = Rng.stream(state.seed, state.day, 'staff');
-  for (const s of [...state.staff]) {
-    const drift = Math.sign(T.staff.moraleTarget - s.morale) * Math.min(T.staff.moraleDrift, Math.abs(T.staff.moraleTarget - s.morale));
-    s.morale += drift + (understaffed && s.role === 'server' ? T.staff.understaffedMorale : 0);
-    if (s.traits.includes('steady')) s.morale = Math.max(T.staff.steadyFloor, s.morale);
-    s.morale = Math.max(0, Math.min(100, s.morale));
-    if (report.open) s.shiftsWorked += 1;
-    if (s.shiftsWorked > 0 && s.shiftsWorked % T.staff.shiftsPerSkill === 0 && s.skill < s.potential) {
-      s.skill += 1;
-      events.push({ kind: 'info', text: `${s.name} has grown into a skill ${s.skill} ${s.role}.` });
-    }
-    if (s.morale < T.staff.noticeMorale) s.lowMoraleDays += 1;
-    else s.lowMoraleDays = 0;
-    if (s.leavingOnDay === null && s.lowMoraleDays >= T.staff.noticeDays) {
-      s.leavingOnDay = state.day + T.staff.noticeDays;
-      events.push({ kind: 'staffNotice', text: `${s.name} has handed in notice. A raise could change their mind.` });
-    }
-    if (s.leavingOnDay !== null && state.day >= s.leavingOnDay) {
-      state.staff = state.staff.filter((x) => x.id !== s.id);
-      events.push({ kind: 'staffLeft', text: `${s.name} has left.` });
-    }
+  // The team (staff-management.md): growth, coaching, courses, mood, reviews, offers, contributions.
+  const team = teamDay(state, report, a, { ...opts, managed: false, contrib: true, bestRep: bestRep(state) });
+  events.push(...team.events);
+  if (team.team.length) report.team = team.team;
+  if (team.mood.length) report.mood = team.mood;
+  if (report.weekday === 6 && state.delegateStaff) {
+    const week = managerWeek(state);
+    if (week) events.push({ kind: 'info', text: `${week.line} ${week.proposal}` });
   }
-  if (state.day % T.staff.mentorDays === 0) {
-    for (const m of state.staff.filter((s) => s.traits.includes('mentor'))) {
-      const mentee = state.staff
-        .filter((s) => s.role === m.role && s.id !== m.id && s.skill < s.potential)
-        .sort((x, y) => x.skill - y.skill || rng.next() - 0.5)[0];
-      if (mentee) {
-        mentee.skill += 1;
-        events.push({ kind: 'info', text: `${m.name} mentored ${mentee.name} (+1 skill).` });
-      }
-    }
-  }
+  events.push(...deliverAgency(state, bestRep(state)));
 
   // Safety net (prd.md 5.11): never a game over.
   if (state.cash < 0) {
@@ -973,10 +1055,7 @@ function runDay(state: GameState, opts: DayOptions): Result {
 
   state.history = [...state.history, report].slice(-56);
   state.day += 1;
-  if (report.weekday === 6) {
-    state.candidates = generateCandidates(state);
-    state.nextUid += state.candidates.length;
-  }
+  if (report.weekday === 6) refreshMarket(state, bestRep(state), state.day);
 
   const unlockedAfter = unlockedIds(state);
   for (const id of unlockedAfter) {

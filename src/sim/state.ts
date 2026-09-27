@@ -1,6 +1,6 @@
-import type { DishKind, RankId, Role, SegmentId, Service, TierId, TraitId } from '../data/types';
+import type { AttrId, DishKind, PersonalityId, RankId, Role, SegmentId, Service, TalentId, TierId } from '../data/types';
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export interface RecipeLine {
   ingredientId: string;
@@ -46,19 +46,64 @@ export interface InstalledAddon {
   paid: number;
 }
 
+export type Attrs = Record<AttrId, number>;
+
+/** One line of the mood breakdown on the player card (staff-management.md 5). */
+export interface MoodDriver {
+  label: string;
+  value: number;
+}
+
 export interface Staff {
   id: number;
   name: string;
   role: Role;
-  skill: number;
+  /** Quality, Speed, Composure, Mentoring, 1 to 99 (staff-management.md 2). */
+  attrs: Attrs;
+  /** OVR ceiling, 30 to 95. */
   potential: number;
   fame: number;
-  traits: TraitId[];
+  talent: TalentId | null;
+  personality: PersonalityId[];
   morale: number;
   salary: number;
   shiftsWorked: number;
   lowMoraleDays: number;
   leavingOnDay: number | null;
+  /** Day they joined (or appeared on the market, for candidates). */
+  hiredDay: number;
+  /** Fractional attribute points on their way: natural growth and coaching. */
+  growthXp: number;
+  /** Coaching progress per attribute (a coach, or the manager at a managed restaurant). */
+  coachXp: Partial<Attrs>;
+  /** Last day any attribute grew. */
+  lastDevelopedDay: number | null;
+  /** Coaching a teammate: who and what (on the coach). */
+  coaching: { traineeId: number; attr: AttrId } | null;
+  /** On a course: off the rota until endsDay, gains applied then. */
+  course: { id: string; endsDay: number; gains: Partial<Attrs> } | null;
+  /** Days off (a break): off the rota until this day. */
+  offUntil: number | null;
+  lastCourseDay: number | null;
+  certs: string[];
+  nextReviewDay: number;
+  /** A contract review waiting for an answer: they ask this salary. */
+  review: { ask: number; untilDay: number } | null;
+  /** A rival's offer (staff-management.md 6.2). */
+  offer: { rival: string; salary: number; leavesOnDay: number } | null;
+  /** Consecutive days in the high (+) or low (-) morale band; form follows it. */
+  formDays: number;
+  /** Where morale is heading and why, as of the last day. */
+  moodTarget: number;
+  moodDrivers: MoodDriver[];
+  /** Contribution in $ per day for the last 14 open days (staff-management.md 7). */
+  contrib: number[];
+  /** Last promotion day (Ambitious). */
+  promotedDay: number | null;
+  /** Market only: interviewed, scouting offsets per attribute, apprentice. */
+  scouted?: boolean;
+  scout?: Attrs;
+  apprentice?: boolean;
 }
 
 export interface Loan {
@@ -137,12 +182,48 @@ export interface DayReport {
   tips: string[];
   /** The player's other restaurants on the same day (chain). */
   branches?: BranchDay[];
+  /** Each staff member's day against a standard replacement (staff-management.md 7). */
+  team?: TeamLine[];
+  /** At most two mood lines a day. */
+  mood?: string[];
+}
+
+export interface TeamLine {
+  id: number;
+  name: string;
+  role: Role;
+  ovr: number;
+  ovrBefore: number;
+  morale: number;
+  moraleBefore: number;
+  form: -1 | 0 | 1;
+  /** Profit per day against a standard replacement. */
+  value: number;
+  reason: string;
+}
+
+/** How the manager runs the team at a restaurant (staff-management.md 8.1). */
+export interface StaffPolicy {
+  budget: number;
+  pay: 'tight' | 'fair' | 'generous';
+  focus: 'strategy' | 'value' | 'youth';
+  replace: boolean;
+}
+
+/** What the manager did with the team this week (8.3). */
+export interface ManagerLog {
+  trained: number;
+  hired: number;
+  letGo: number;
+  raises: number;
+  spent: number;
+  moraleStart: number;
 }
 
 /** Everything that belongs to one restaurant. The one the player runs lives at the top of GameState. */
 export const LOCATION_KEYS = [
   'districtId', 'premisesId', 'venueId', 'deposit', 'rep', 'following', 'recipes', 'furniture', 'equipment', 'staff',
-  'daysOpen', 'fireSafety', 'roomTouches', 'history',
+  'daysOpen', 'fireSafety', 'roomTouches', 'history', 'departures', 'staffPolicy', 'delegateStaff', 'managerLog',
 ] as const;
 export type LocationKey = (typeof LOCATION_KEYS)[number];
 export type Location = Pick<GameState, LocationKey> & { id: number };
@@ -156,6 +237,9 @@ export interface BranchDay {
   profit: number;
   manager: string | null;
   managerSkill: number;
+  /** Weekly line on what the manager did with the team (Sundays). */
+  staffLine?: string;
+  proposal?: string;
 }
 
 export interface GameState {
@@ -194,6 +278,17 @@ export interface GameState {
   /** The other restaurants the player owns, run by their managers (prd.md 5.9, 5.12). */
   branches: Location[];
   unlockAll: boolean;
+  /** Recent departures at this restaurant (mood: team driver). */
+  departures?: { day: number; letGo: boolean }[];
+  /** How the manager runs the team; used at managed restaurants or when delegated. */
+  staffPolicy?: StaffPolicy;
+  /** "Let my manager handle the team" at the restaurant the player runs. */
+  delegateStaff?: boolean;
+  managerLog?: ManagerLog;
+  /** Interviews used this week (free ones first). */
+  interviews?: { week: number; used: number };
+  /** Recruitment agency orders waiting to arrive. */
+  agencyOrders?: { role: Role; min: number; readyDay: number }[];
   /** Difficulty multipliers from the settings menu; missing means Normal. */
   economy?: import('./economy').Economy;
 }

@@ -1,6 +1,7 @@
 import './ui/styles.css';
 import './ui/kitchen.css';
 import './ui/city.css';
+import './ui/squad.css';
 import { Controller } from './game/controller';
 import { App } from './ui/app';
 

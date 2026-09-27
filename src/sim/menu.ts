@@ -36,6 +36,6 @@ export function menuComplexity(recipes: readonly Recipe[], avgKitchenSkill: numb
 
 export function stateMenuComplexity(state: GameState): MenuComplexity {
   const cooks = state.staff.filter((s) => s.role === 'chef' || s.role === 'cook');
-  const avg = cooks.length ? cooks.reduce((x, c) => x + c.skill, 0) / cooks.length : 5;
+  const avg = cooks.length ? cooks.reduce((x, c) => x + c.attrs.quality / 10, 0) / cooks.length : 5;
   return menuComplexity(state.recipes, avg);
 }

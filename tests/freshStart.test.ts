@@ -1,15 +1,11 @@
 // fresh-start.md 2, 5, 7 (AC-159 to AC-167).
 import { describe, expect, test } from 'vitest';
-import { ROLE_BASE_SALARY } from '../src/data/staff';
 import { T } from '../src/data/tunables';
-import { salaryFor } from '../src/sim/analysis';
+import { ovr, staffFromSkill } from '../src/sim/staff';
 import { apply, type Command, depositFor, newGame } from '../src/sim/game';
 import type { GameState, Staff } from '../src/sim/state';
 
-const hireable = (id: number, role: Staff['role'], skill: number): Staff => ({
-  id, name: `${role} ${id}`, role, skill, potential: skill + 2, fame: 0, traits: [], morale: 50,
-  salary: salaryFor(role, skill, 0, ROLE_BASE_SALARY[role]), shiftsWorked: 0, lowMoraleDays: 0, leavingOnDay: null,
-});
+const hireable = (id: number, role: Staff['role'], skill: number): Staff => staffFromSkill(id, `${role} ${id}`, role, skill, { potential: skill + 2, morale: 50 });
 
 function run(s: GameState, cmds: Command[]): GameState {
   for (const c of cmds) {
@@ -68,8 +64,9 @@ describe('fresh start', () => {
       expect(roles.filter((r) => r === 'cook').length).toBeGreaterThanOrEqual(2);
       expect(roles.filter((r) => r === 'server').length).toBeGreaterThanOrEqual(2);
       expect(roles).toContain('dishwasher');
-      for (const x of c.slice(0, 5)) expect(x.skill).toBeGreaterThanOrEqual(2);
-      for (const x of c.slice(0, 5)) expect(x.skill).toBeLessThanOrEqual(4);
+      // Skill 2 to 4 on the old scale is a bronze card, OVR 25 to 44.
+      for (const x of c.slice(0, 5)) expect(ovr(x)).toBeGreaterThanOrEqual(25);
+      for (const x of c.slice(0, 5)) expect(ovr(x)).toBeLessThanOrEqual(44);
     }
   });
 

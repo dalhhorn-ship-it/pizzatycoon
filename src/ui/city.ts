@@ -1,5 +1,6 @@
 // City map: neighbourhoods, venues, demographic cards and the move flow (01-product/city-map.md 7).
 
+import { ovr } from '../sim/staff';
 import { DISTRICTS } from '../data/districts';
 import { SEGMENTS, SEGMENT_IDS } from '../data/segments';
 import type { SegmentId, Venue } from '../data/types';
@@ -279,7 +280,7 @@ export class CityView {
       const hasManager = !!managerOf(ctx.state.staff);
       return h('div', { class: 'card rentbox' },
         h('h3', null, 'Your restaurant'),
-        h('div', { class: 'small muted' }, m ? `Run by ${m.name}, restaurant manager, skill ${m.skill}. Reputation ${branch.rep.toFixed(0)}.` : CARETAKER_TEXT),
+        h('div', { class: 'small muted' }, m ? `Run by ${m.name}, restaurant manager, OVR ${ovr(m)}. Reputation ${branch.rep.toFixed(0)}.` : CARETAKER_TEXT),
         !hasManager ? h('div', { class: 'small warn' }, `To go and run it, first hire a restaurant manager for ${locationName(ctx.state)} (Staff tab).`) : null,
         h('button', { class: 'primary', disabled: !hasManager, onclick: () => ctx.onSwitch?.(branch.id) }, 'Go and run it'));
     }
@@ -318,7 +319,7 @@ export class CityView {
         ? null
         : h('div', { class: 'small warn' }, `Build your name first: you need reputation ${T.manager.openRep} (${(T.manager.openRep / 20).toFixed(1)} stars) at a restaurant you run before a landlord takes you on for a second one. Now ${Math.floor(rep)}.`),
       manager
-        ? h('div', { class: 'small good' }, `${manager.name} (skill ${manager.skill}) will run ${locationName(state)} while you are here.`)
+        ? h('div', { class: 'small good' }, `${manager.name} (OVR ${ovr(manager)}) will run ${locationName(state)} while you are here.`)
         : h('div', { class: 'small warn' }, `First hire a restaurant manager for ${locationName(state)} in the Staff tab, to keep it running while you are away.`),
       short ? h('div', { class: 'small bad' }, `You need ${money(deposit - state.cash)} more cash.`) : null,
       h('button', { disabled: !repOk || !manager || short, onclick: () => ctx.onOpen?.(v.id) }, 'Open a new restaurant here'));

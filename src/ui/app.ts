@@ -18,10 +18,13 @@ import { Floor } from './floor';
 import { KitchenView } from './kitchenView';
 import { pipelineStrip } from './pipeline';
 import { checklistCard } from './checklist';
-import { kitchenPanel, menuPanel, moneyPanel, type PanelCtx, roomPanel, staffPanel } from './panels';
+import { kitchenPanel, menuPanel, moneyPanel, type PanelCtx, roomPanel } from './panels';
+import { formArrow, moraleFace, needsAttention, openPlayerCard, squadPanel, staffAdvice } from './squad';
+import { ROLE_NAMES } from '../data/staff';
+import type { TeamLine } from '../sim/state';
 
 type Tab = 'menu' | 'kitchen' | 'room' | 'staff' | 'money';
-const TABS: [Tab, string][] = [['menu', 'Menu'], ['kitchen', 'Kitchen'], ['room', 'Room'], ['staff', 'Staff'], ['money', 'Money']];
+const TABS: [Tab, string][] = [['menu', 'Menu'], ['kitchen', 'Kitchen'], ['room', 'Room'], ['staff', 'Squad'], ['money', 'Money']];
 const TAB_KEY = 'pizzad:ui:tab';
 const ECONOMY_KEY = 'pizzad:economy';
 
@@ -35,13 +38,17 @@ function savedEconomy(): Economy | undefined {
   }
 }
 
-/** Week summary for the restaurants run by managers. */
+/** Week summary for the restaurants run by managers, with the manager's line on the team (staff-management.md 8.3). */
 function branchWeek(reports: DayReport[]): HTMLElement | null {
-  const by = new Map<number, { name: string; covers: number; profit: number; manager: string | null }>();
+  const by = new Map<number, { name: string; covers: number; profit: number; manager: string | null; line?: string; proposal?: string }>();
   for (const r of reports) for (const b of r.branches ?? []) {
     const x = by.get(b.id) ?? { name: b.name, covers: 0, profit: 0, manager: b.manager };
     x.covers += b.covers;
     x.profit += b.profit;
+    if (b.staffLine) {
+      x.line = b.staffLine;
+      x.proposal = b.proposal;
+    }
     by.set(b.id, x);
   }
   if (!by.size) return null;
@@ -49,7 +56,68 @@ function branchWeek(reports: DayReport[]): HTMLElement | null {
     h('div', { class: 'kv' }, ...[...by.values()].flatMap((b) => [
       h('span', null, `${b.name}${b.manager ? ` · ${b.manager}` : ' · caretaker'}`),
       h('b', { class: b.profit >= 0 ? 'good' : 'bad' }, `${Math.round(b.covers)} guests · ${money(b.profit)}`),
-    ])));
+    ])),
+    ...[...by.values()].filter((b) => b.line).map((b) => h('details', { class: 'small' },
+      h('summary', null, b.line ?? ''), h('div', { class: 'muted' }, `Proposal: ${b.proposal ?? ''}`))));
+}
+
+const teamRow = (t: TeamLine, onOpen: () => void): HTMLElement =>
+  h('button', { class: `teamline ${t.value >= 0 ? 'up' : 'down'}`, onclick: onOpen },
+    h('span', { class: 'tl-name' }, h('b', null, t.name), h('span', { class: 'muted small' }, ` ${ROLE_NAMES[t.role]} · ${t.ovr}`)),
+    h('b', { class: t.value >= 0 ? 'good' : 'bad' }, `${signed(t.value)} $`),
+    h('span', { class: 'small tl-reason' }, t.reason));
+
+/** Day report: Star of the day, Weak spot and mood lines (staff-management.md 7.2). */
+function dayTeamCard(r: DayReport, open: (id: number) => void): HTMLElement | null {
+  const team = (r.team ?? []).filter((t) => t.reason !== 'On a course' && t.reason !== 'Day off');
+  if (!team.length && !(r.mood ?? []).length) return null;
+  const sorted = [...team].sort((a, b) => b.value - a.value);
+  const star = sorted[0];
+  const weak = sorted.length > 1 ? sorted.at(-1) : undefined;
+  const more = sorted.slice(1, -1);
+  const ups = more.filter((t) => t.value >= 10).slice(0, 2);
+  const downs = more.filter((t) => t.value <= -10).slice(-2);
+  return h('div', { class: 'card' }, h('h3', null, h('span', null, 'Team'), h('span', { class: 'small' }, 'against a standard hire')),
+    star ? h('div', { class: 'small muted' }, '⭐ Star of the day') : null,
+    star ? teamRow(star, () => open(star.id)) : null,
+    ...ups.map((t) => teamRow(t, () => open(t.id))),
+    weak && weak.value < (star?.value ?? 0) ? h('div', { class: 'small muted' }, '🔻 Weak spot') : null,
+    weak && weak.value < (star?.value ?? 0) ? teamRow(weak, () => open(weak.id)) : null,
+    ...downs.filter((t) => t !== weak).map((t) => teamRow(t, () => open(t.id))),
+    ...(r.mood ?? []).map((m) => h('div', { class: 'small' }, `💬 ${m}`)));
+}
+
+/** Week report: Player of the week, the whole team, needs attention and one suggestion (7.3). */
+function weekTeamCard(reports: DayReport[], state: GameState, open: (id: number) => void): HTMLElement | null {
+  const rows = new Map<number, { line: TeamLine; value: number; ovrStart: number; moraleStart: number; reasons: Map<string, number> }>();
+  for (const r of reports) for (const t of r.team ?? []) {
+    const x = rows.get(t.id) ?? { line: t, value: 0, ovrStart: t.ovrBefore, moraleStart: t.moraleBefore, reasons: new Map() };
+    x.line = t;
+    x.value += t.value;
+    x.reasons.set(t.reason, (x.reasons.get(t.reason) ?? 0) + Math.abs(t.value));
+    rows.set(t.id, x);
+  }
+  if (!rows.size) return null;
+  const list = [...rows.values()].sort((a, b) => b.value - a.value);
+  const top = list[0];
+  const attention = needsAttention(state);
+  const advice = staffAdvice(state, new Map(list.map((x) => [x.line.id, x.value])));
+  return h('div', { class: 'card' }, h('h3', null, h('span', null, 'Team this week'), h('span', { class: 'small' }, 'against a standard hire')),
+    top && top.value > 0 ? h('div', { class: 'potw' }, '🏆 Player of the week: ', h('b', null, top.line.name), ` (${signed(top.value)} $)`) : null,
+    h('div', { class: 'teamtable', role: 'table' },
+      ...list.map((x) => {
+        const reason = [...x.reasons.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
+        const s = state.staff.find((y) => y.id === x.line.id);
+        const dOvr = x.line.ovr - x.ovrStart;
+        return h('button', { class: 'tt-row', role: 'row', onclick: () => open(x.line.id) },
+          h('span', { role: 'cell' }, h('b', null, x.line.name), h('span', { class: 'muted small' }, ` ${ROLE_NAMES[x.line.role]}`)),
+          h('span', { role: 'cell', class: 'small' }, `${x.line.ovr}${dOvr ? ` (${signed(dOvr)})` : ''}`),
+          h('span', { role: 'cell', class: 'small' }, `${moraleFace(x.line.morale)} ${Math.round(x.moraleStart)} → ${Math.round(x.line.morale)} `, s ? formArrow(s) : null),
+          h('b', { role: 'cell', class: x.value >= 0 ? 'good' : 'bad' }, `${signed(x.value)} $`),
+          h('span', { role: 'cell', class: 'small muted tt-reason' }, reason));
+      })),
+    attention.length ? h('div', { class: 'stack' }, h('b', { class: 'small' }, 'Needs attention'), ...attention.map((t) => h('div', { class: 'small warn' }, `• ${t}`))) : null,
+    advice ? h('div', { class: 'impact' }, `💡 ${advice}`) : null);
 }
 
 const clockText = (m: number): string => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
@@ -376,7 +444,7 @@ export class App {
       case 'menu': content = menuPanel(ctx); break;
       case 'kitchen': content = kitchenPanel(ctx, this.kitchen); break;
       case 'room': content = roomPanel(ctx); break;
-      case 'staff': content = staffPanel(ctx); break;
+      case 'staff': content = squadPanel(ctx); break;
       case 'money': content = moneyPanel(ctx, h('button', { class: 'small', onclick: () => this.showSettings() }, '⚙ Settings, saves and difficulty')); break;
     }
     this.panel.replaceChildren(content);
@@ -447,12 +515,13 @@ export class App {
         ])),
         h('div', { class: 'small muted' }, `Food arrived in ${r.services.map((sv) => `${Math.round(sv.ticketTime ?? 0)} min at ${sv.service}`).join(', ')}.`),
         h('div', { class: 'small muted' }, `Busiest: ${r.segments.filter((s) => s.served > 0.5).sort((a, b) => b.served - a.served).slice(0, 3).map((s) => `${SEGMENTS[s.segment].name} ${Math.round(s.served)}`).join(', ')}`)) : null,
+      r.open ? dayTeamCard(r, (id) => openPlayerCard(this.ctx(), id)) : null,
       r.tips.length ? h('div', { class: 'card' }, h('h3', null, 'Your advisor'), ...r.tips.map((t) => h('div', { class: 'small' }, t))) : null,
       r.reviews.length ? h('div', { class: 'stack' }, h('h3', null, 'Reviews'),
         ...r.reviews.slice(0, 4).map((rv) => h('div', { class: 'review' }, h('span', { class: 'st' }, '★'.repeat(rv.stars) + '☆'.repeat(5 - rv.stars)), ' ', rv.text, h('span', { class: 'muted small' }, ` (${SEGMENTS[rv.segment].name})`)))) : null,
       r.branches?.length ? h('div', { class: 'card' }, h('h3', null, 'Your other restaurants'),
         h('div', { class: 'kv' }, ...r.branches.flatMap((b) => [
-          h('span', null, `${b.name}${b.manager ? ` · ${b.manager} (skill ${b.managerSkill})` : ' · caretaker'}`),
+          h('span', null, `${b.name}${b.manager ? ` · ${b.manager} (OVR ${b.managerSkill})` : ' · caretaker'}`),
           h('b', { class: !b.open ? 'warn' : b.profit >= 0 ? 'good' : 'bad' }, b.open ? `${Math.round(b.covers)} guests · ${money(b.profit)}` : 'closed'),
         ]))) : null,
       r.weeklyPayments ? h('div', { class: 'small muted' }, `Sunday bills paid: ${money(r.weeklyPayments)} for wages, rent and loan.`) : null,
@@ -488,6 +557,7 @@ export class App {
             h('span', null, `${T.time.weekdayNames[r.weekday]} ${r.day}`),
             h('b', { class: r.open ? (r.pnl.profit >= 0 ? 'good' : 'bad') : 'warn' }, r.open ? `${Math.round(r.covers)} guests · ${money(r.pnl.profit)}` : 'closed'),
           ]))),
+      weekTeamCard(reports, this.game.state as GameState, (id) => openPlayerCard(this.ctx(), id)),
       branchWeek(reports),
       last.tips.length ? h('div', { class: 'card' }, h('h3', null, 'Your advisor'), ...last.tips.map((t) => h('div', { class: 'small' }, t))) : null,
       bills ? h('div', { class: 'small muted' }, `Sunday bills paid: ${money(bills)} for wages, rent and loan.`) : null,

@@ -11,6 +11,7 @@ import { type Analysis, type DishStats, clamp, kitchenStats, tasteMatch } from '
 import { economyOf } from './economy';
 import { stateLocation } from './location';
 import { Rng } from './rng';
+import { hasTalent, onRota } from './staff';
 import type { DayReport, GameState, PnL, Recipe, Review, SegmentReport, ServiceReport } from './state';
 
 export interface DayOptions {
@@ -167,12 +168,15 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   // A wider wine list: more guests order a second glass (balance.md 4.7).
   const wineList = sidesByKind.drink.filter((r) => WINE_IDS.has(r.id));
   attach.drink *= 1 + Math.min(T.attach.wineListCap, T.attach.wineListPerWine * Math.max(0, wineList.length - 1));
+  // Servers who took Sommelier Basics sell more wine (staff-management.md 3.3).
+  if (wineList.length) attach.drink *= 1 + Math.min(T.training.sommelierCap, T.training.sommelierWine * (a.sommeliers ?? 0));
   const wine = wineListScore(wineList, a);
-  const kitchenBy = { lunch: kitchenStats(state, 'lunch'), dinner: kitchenStats(state, 'dinner') };
+  const kitchenBy = { lunch: kitchenStats(state, 'lunch', a.pressure?.lunch), dinner: kitchenStats(state, 'dinner', a.pressure?.dinner) };
   const sideLoad = T.kitchen.prepLoadFactor * (attach.starter + attach.dessert);
 
-  const crowdPleaser = state.staff.some((s) => s.traits.includes('crowdPleaser'));
-  const chefFame = state.staff.filter((s) => s.role === 'chef').reduce((x, s) => x + s.fame, 0);
+  const crew = onRota(state.staff, state.day);
+  const crowdPleaser = crew.some((s) => hasTalent(s, 'crowdPleaser'));
+  const chefFame = crew.filter((s) => s.role === 'chef').reduce((x, s) => x + s.fame, 0);
   const cEff = Math.min(T.demand.competitionCap, district.competition);
   const repMult = T.demand.repMultBase + T.demand.repMultSlope * state.rep;
   const weekdayMult = T.time.weekdayMult[weekday] ?? 1;

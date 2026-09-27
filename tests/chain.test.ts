@@ -1,16 +1,12 @@
 // A second restaurant under a restaurant manager (prd.md 5.9, 5.12).
 import { describe, expect, test } from 'vitest';
-import { ROLE_BASE_SALARY } from '../src/data/staff';
-import { salaryFor } from '../src/sim/analysis';
+import { staffFromSkill } from '../src/sim/staff';
 import { managerEffect } from '../src/sim/chain';
 import { apply, newGameAt, withStarterKit } from '../src/sim/game';
 import { deserialise, serialise } from '../src/save/saveFile';
 import type { GameState, Staff } from '../src/sim/state';
 
-const manager = (id: number, skill: number): Staff => ({
-  id, name: `Manager ${skill}`, role: 'manager', skill, potential: skill, fame: 0, traits: [], morale: 60,
-  salary: salaryFor('manager', skill, 0, ROLE_BASE_SALARY.manager), shiftsWorked: 0, lowMoraleDays: 0, leavingOnDay: null,
-});
+const manager = (id: number, skill: number): Staff => staffFromSkill(id, `Manager ${skill}`, 'manager', skill, { morale: 60 });
 
 /** An established starter restaurant at a real venue, with money in the bank. */
 function established(): GameState {
