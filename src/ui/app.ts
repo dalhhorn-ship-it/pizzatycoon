@@ -20,10 +20,12 @@ import { pipelineStrip } from './pipeline';
 import { checklistCard } from './checklist';
 import { kitchenPanel, menuPanel, moneyPanel, type PanelCtx, roomPanel } from './panels';
 import { dayCapacityLine, weekKitchenCard } from './capacity';
-import { formArrow, moraleFace, needsAttention, openPlayerCard, squadPanel, staffAdvice } from './squad';
+import { formArrow, moraleFace, needsAttention, openPlayerCard, squadPanel } from './squad';
+import { topAdviceCard } from './advice';
 import { ROLE_NAMES } from '../data/staff';
 import type { TeamLine } from '../sim/state';
-import { lossLine } from '../sim/market';
+import { lossLine, rivalsInReach } from '../sim/market';
+import { deliveryUnlocked } from '../sim/delivery';
 import { deliveryLine, deliveryWeek } from './delivery';
 import { openBusinessReview } from './review';
 import { type Nav, openMarketing, rivalsPanel, weekCompetitionCard } from './rivals';
@@ -93,6 +95,13 @@ function dayTeamCard(r: DayReport, open: (id: number) => void): HTMLElement | nu
 }
 
 /** Week report: Player of the week, the whole team, needs attention and one suggestion (7.3). */
+/** Each person's value over the week, for the advice ranking. */
+function teamWeekValue(reports: readonly DayReport[]): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const r of reports) for (const t of r.team ?? []) out.set(t.id, (out.get(t.id) ?? 0) + t.value);
+  return out;
+}
+
 function weekTeamCard(reports: DayReport[], state: GameState, open: (id: number) => void): HTMLElement | null {
   const rows = new Map<number, { line: TeamLine; value: number; ovrStart: number; moraleStart: number; reasons: Map<string, number> }>();
   for (const r of reports) for (const t of r.team ?? []) {
@@ -106,7 +115,6 @@ function weekTeamCard(reports: DayReport[], state: GameState, open: (id: number)
   const list = [...rows.values()].sort((a, b) => b.value - a.value);
   const top = list[0];
   const attention = needsAttention(state);
-  const advice = staffAdvice(state, new Map(list.map((x) => [x.line.id, x.value])));
   return h('div', { class: 'card' }, h('h3', null, h('span', null, 'Team this week'), h('span', { class: 'small' }, '$ for the week, against a standard hire')),
     top && top.value > 0 ? h('div', { class: 'potw' }, '🏆 Player of the week: ', h('b', null, top.line.name), ` (${signed(top.value)} $)`) : null,
     h('div', { class: 'teamtable', role: 'table' },
@@ -121,8 +129,7 @@ function weekTeamCard(reports: DayReport[], state: GameState, open: (id: number)
           h('b', { role: 'cell', class: x.value >= 0 ? 'good' : 'bad' }, `${signed(x.value)} $`),
           h('span', { role: 'cell', class: 'small muted tt-reason' }, reason));
       })),
-    attention.length ? h('div', { class: 'stack' }, h('b', { class: 'small' }, 'Needs attention'), ...attention.map((t) => h('div', { class: 'small warn' }, `• ${t}`))) : null,
-    advice ? h('div', { class: 'impact' }, `💡 ${advice}`) : null);
+    attention.length ? h('div', { class: 'stack' }, h('b', { class: 'small' }, 'Needs attention'), ...attention.map((t) => h('div', { class: 'small warn' }, `• ${t}`))) : null);
 }
 
 const clockText = (m: number): string => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
@@ -434,10 +441,40 @@ export class App {
   }
 
   private renderTabs(): void {
-    this.tabs.replaceChildren(...TABS.map(([id, label]) => h('button', {
+    const s = this.game.state as GameState | null;
+    // Staged reveal (cleanup sprint 5): the Rivals tab arrives with the first rival in reach or the first campaigns.
+    const rivalsReady = !!s && (s.day >= 8 || rivalsInReach(s).length > 0 || s.campaigns.length > 0);
+    if (!rivalsReady && this.tab === 'rivals') this.tab = 'menu';
+    // One intro at a time, and never while service plays.
+    const intro = !s || this.floor.playing ? false : (rivalsReady && this.introOnce('rivals', 'Rivals and marketing', rivalsInReach(s).length
+      ? `${rivalsInReach(s).length === 1 ? 'A rival pizzeria is' : `${rivalsInReach(s).length} rival pizzerias are`} close enough to take your guests. The Rivals tab shows who, what they compete on and what each costs you, and your coach suggests an answer.`
+      : 'Campaigns are open: flyers, social ads and more, each aimed at the crowds who walk past. The Rivals tab holds marketing, your share of the neighbourhood and the coach.', 'Open Rivals', () => this.switchTab('rivals'))) ||
+      (deliveryUnlocked(s) && !s.delivery && this.introOnce('delivery', 'Delivery is unlocked', 'Three stars and four weeks open: you can sell through the delivery app. It uses no seats but the same oven and prep line, and has its own rating. Place a Packing Station, then choose how orders reach the door in the Money tab.', 'Open Money', () => this.switchTab('money'))) ||
+      ((s.kpis?.length ?? 0) >= 1 && this.introOnce('review', 'Your first business review', 'Every Sunday each restaurant gets a row of KPIs: sales, profit, guests, costs, capacity, market share and team. The Money tab shows the week and opens the full review over 6 or 12 weeks.', 'Open Money', () => this.switchTab('money')));
+    void intro;
+    this.tabs.replaceChildren(...TABS.filter(([id]) => id !== 'rivals' || rivalsReady).map(([id, label]) => h('button', {
       class: this.tab === id ? 'active' : '', role: 'tab', 'aria-selected': this.tab === id ? 'true' : 'false',
       onclick: () => this.switchTab(id),
     }, label)));
+  }
+
+  /** A one screen card the first time a system arrives on this device, with one first action. */
+  private introOnce(key: string, title: string, body: string, actionLabel: string, action: () => void): boolean {
+    const flag = `pizzad:intro:${key}`;
+    try {
+      if (localStorage.getItem(flag)) return false;
+      localStorage.setItem(flag, '1');
+    } catch {
+      return false;
+    }
+    let close = (): void => {};
+    close = modal(h('div', { class: 'stack' },
+      h('h2', null, title),
+      h('div', null, body),
+      h('div', { class: 'row', style: 'justify-content:flex-end' },
+        h('button', { onclick: () => close() }, 'Later'),
+        h('button', { class: 'primary', onclick: () => { close(); action(); } }, actionLabel))), { onClose: () => undefined });
+    return true;
   }
 
   private renderBar(): void {
@@ -594,12 +631,12 @@ export class App {
             h('span', null, `${T.time.weekdayNames[r.weekday]} ${r.day}`),
             h('b', { class: r.open ? (r.pnl.profit >= 0 ? 'good' : 'bad') : 'warn' }, r.open ? `${Math.round(r.covers)} guests · ${money(r.pnl.profit)}` : 'closed'),
           ]))),
+      topAdviceCard(reports, this.game.state as GameState, this.ctx(), { ...this.nav(), tab: (t) => { close(); this.nav().tab(t); } }, teamWeekValue(reports)),
       weekKitchenCard(reports, this.game.state as GameState),
       weekTeamCard(reports, this.game.state as GameState, (id) => openPlayerCard(this.ctx(), id)),
       branchWeek(reports),
       deliveryWeek(reports.map((r) => r.delivery)),
-      weekCompetitionCard(reports, this.game.state as GameState, this.ctx(), { ...this.nav(), tab: (t) => { close(); this.nav().tab(t); } }),
-      last.tips.length ? h('div', { class: 'card' }, h('h3', null, 'Your advisor'), ...last.tips.map((t) => h('div', { class: 'small' }, t))) : null,
+      weekCompetitionCard(reports, this.game.state as GameState),
       bills ? h('div', { class: 'small muted' }, `Sunday bills paid: ${money(bills)} for wages, rent and loan.`) : null,
       events.length ? h('div', { class: 'stack' }, ...events.map((e) => h('div', { class: e.kind === 'unlocked' || e.kind === 'rankUp' ? 'good' : e.kind === 'info' ? '' : 'warn' }, e.text))) : null,
       h('div', { class: 'row', style: 'justify-content:flex-end' }, h('button', { class: 'primary', onclick: () => close() }, 'Continue')));

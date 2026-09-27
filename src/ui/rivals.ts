@@ -21,7 +21,7 @@ import type { PanelCtx } from './panels';
 
 /** Where coach answers lead. */
 export interface Nav {
-  tab: (t: 'menu' | 'kitchen' | 'staff' | 'money') => void;
+  tab: (t: 'menu' | 'kitchen' | 'room' | 'staff' | 'money') => void;
   delivery: () => void;
 }
 
@@ -136,7 +136,7 @@ function rivalCard(ctx: PanelCtx, rival: Rival, lost: number): HTMLElement {
 
 // ---------- The coach (7.5) ----------
 
-function previewFor(state: GameState, a: Answer): number | null {
+export function previewFor(state: GameState, a: Answer): number | null {
   const x = a.action;
   if (x.kind === 'price') {
     const hyp = { ...state, recipes: state.recipes.map((r) => (r.onMenu && isMain(r.kind) ? { ...r, price: Math.round(r.price * x.mult * 2) / 2 } : r)) };
@@ -171,7 +171,7 @@ export function coachCard(ctx: PanelCtx, nav: Nav, situations: Situation[] = coa
     }));
 }
 
-function doIt(ctx: PanelCtx, nav: Nav, a: Answer): void {
+export function doIt(ctx: PanelCtx, nav: Nav, a: Answer): void {
   const x = a.action;
   switch (x.kind) {
     case 'price': return confirmPrice(ctx, x.mult);
@@ -284,7 +284,7 @@ export function openMarketing(ctx: PanelCtx, prefill?: { id: CampaignId; audienc
 // ---------- Reports (8) ----------
 
 /** Week report: "Competition this week" (8.2). */
-export function weekCompetitionCard(reports: readonly DayReport[], state: GameState, ctx: PanelCtx, nav: Nav): HTMLElement | null {
+export function weekCompetitionCard(reports: readonly DayReport[], state: GameState): HTMLElement | null {
   const on = rivalSettingsOf(state).on;
   const losses = lossesOver(reports);
   const lostTotal = losses.reduce((a, l) => a + l.total, 0);
@@ -315,8 +315,7 @@ export function weekCompetitionCard(reports: readonly DayReport[], state: GameSt
         ...segs.map((s) => h('span', { role: 'cell', class: l.bySegment[s] >= 0.5 ? 'bad' : 'muted' }, l.bySegment[s] >= 0.5 ? `-${Math.round(l.bySegment[s])}` : '·')),
         h('b', { role: 'cell', class: 'bad' }, `-${Math.round(l.total)}`)))) : null,
     moves.length ? h('div', { class: 'stack', style: 'gap:2px' }, h('b', { class: 'small' }, 'Moves this week'), ...moves.slice(-6).map((n) => h('div', { class: 'small' }, `• ${n.text}`))) : null,
-    campaigns > 0 ? h('div', { class: 'small' }, `Your marketing: ${money(campaigns)} spent, about ${Math.round(extra)} extra guests.`) : null,
-    coachCard(ctx, nav));
+    campaigns > 0 ? h('div', { class: 'small' }, `Your marketing: ${money(campaigns)} spent, about ${Math.round(extra)} extra guests.`) : null);
 }
 
 /** One line for the day report. */

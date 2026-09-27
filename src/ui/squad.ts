@@ -514,8 +514,8 @@ export function needsAttention(state: GameState): string[] {
 }
 
 /** One staff suggestion with the best payback (7.3). */
-export function staffAdvice(state: GameState, weekValue: Map<number, number>): string | null {
-  let best: { text: string; weeks: number } | null = null;
+export function staffAdvice(state: GameState, weekValue: Map<number, number>): { text: string; perWeek: number } | null {
+  let best: { text: string; weeks: number; perWeek: number } | null = null;
   const rep = bestRep(state);
   for (const s of state.staff) {
     if (isOff(s, state.day)) continue;
@@ -530,7 +530,7 @@ export function staffAdvice(state: GameState, weekValue: Map<number, number>): s
       if (d <= 0.5) continue;
       const weeks = c.price / (7 * d);
       if (weeks > 12) continue;
-      if (!best || weeks < best.weeks) best = { text: `${c.name} for ${s.name}: about ${signed(d * 7)} $/week, pays back in ${weeks.toFixed(0)} weeks.`, weeks };
+      if (!best || weeks < best.weeks) best = { text: `${c.name} for ${s.name}: about ${signed(d * 7)} $/week, pays back in ${weeks.toFixed(0)} weeks.`, weeks, perWeek: d * 7 };
     }
   }
   const worst = [...weekValue.entries()].sort((a, b) => a[1] - b[1])[0];
@@ -538,7 +538,7 @@ export function staffAdvice(state: GameState, weekValue: Map<number, number>): s
   if (worst && worstStaff && worst[1] / 7 <= T.delegation.replaceBelow) {
     const n = state.candidates.filter((c) => c.role === worstStaff.role && ovr(c) > ovr(worstStaff) && !interestProblem(c, rep)).length;
     const text = `Replace ${worstStaff.name} (${money(worst[1] / 7)} a day): ${n} better ${ROLE_NAMES[worstStaff.role].toLowerCase()}${n === 1 ? '' : 's'} on the market.`;
-    if (!best || n > 0) return text;
+    if (!best || n > 0) return { text, perWeek: Math.abs(worst[1]) };
   }
-  return best?.text ?? null;
+  return best ? { text: best.text, perWeek: best.perWeek } : null;
 }

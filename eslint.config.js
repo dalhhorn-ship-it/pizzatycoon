@@ -14,6 +14,10 @@ export default tseslint.config(
     },
   },
   {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: { ...globals.node } },
+  },
+  {
     // ADR-002: the simulation core is pure and deterministic.
     files: ['src/sim/**/*.ts', 'src/data/**/*.ts'],
     rules: {

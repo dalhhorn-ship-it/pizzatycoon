@@ -78,6 +78,20 @@ Scope decisions favour Maya and Tom. Priya shapes transparency, Linda shapes acc
 * A full day at 1x is about 6 real minutes; at 4x about 1.5 minutes.
 * 1 week = 7 days, 1 season = 4 weeks, 1 year = 4 seasons = 112 days.
 
+### 4.2a The weekly question (M0.6, cleanup sprint 5)
+
+Every system the game has grown (the Squad, kitchen bottlenecks, the capacity view, rivals, marketing, the coach, delivery, the business review) hangs off one question the player asks each week:
+
+> **What limits me this week: demand or capacity?**
+
+| The limit | What the player sees | The levers |
+|---|---|---|
+| **Demand**: seats and kitchen have room, guests do not come | The Demand and capacity card says "the limit is demand"; low capacity used in the business review; rivals taking guests in the Rivals tab | Price, quality (ingredient tiers, a better chef), local following, a matched marketing campaign, answering a rival |
+| **Capacity**: guests queue and are turned away | "The limit is capacity", guests turned away in the week report, the pipeline shows the slow stage | Stations and equipment, cooks and dishwashers, tables and a host, fire safety for more seats, or higher prices (the queue costs little) |
+| **Spare capacity with demand elsewhere** | A quiet lunch, a kitchen with room at dinner | Delivery sells spare kitchen capacity; lunch campaigns fill the quiet service |
+
+One voice answers it: the week report's **Top 3 this week** ranks every suggestion (kitchen, Squad, market, advisor) by the dollars a week at stake, with one button each. The Money tab's **business review** shows whether last week's answer worked. New systems arrive one at a time (staged reveal): the Rivals tab with the first rival in reach or campaigns on day 8, delivery at two and a half stars, the business review after the first full week, each with a one screen introduction.
+
 ### 4.2 Loops at four time scales
 
 | Scale | Duration | Player verbs | Feedback |

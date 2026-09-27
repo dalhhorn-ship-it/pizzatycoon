@@ -30,9 +30,11 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
     offer(reg);
     reg.addEventListener('updatefound', () => reg.installing?.addEventListener('statechange', () => offer(reg)));
   }).catch(() => undefined);
+  // The first install also takes control (clients.claim); only a change from an existing version reloads.
+  const hadController = !!navigator.serviceWorker.controller;
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloading) return;
+    if (reloading || !hadController) return;
     reloading = true;
     window.location.reload();
   });

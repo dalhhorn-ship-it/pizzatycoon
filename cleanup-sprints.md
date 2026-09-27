@@ -2,6 +2,16 @@
 
 Review of main at `1f567b0` (after M0.5) by three reviewers: architecture and tech debt, QA, and tycoon game design with documentation. This page merges their findings into one backlog and a suggested scope for five cleanup sprints. Effort: **S** under a day, **M** 1 to 3 days, **L** a week or more.
 
+## Status after the five sprints (M0.6)
+
+| Sprint | Done | Deferred or changed |
+|---|---|---|
+| 1 Safety net | B2 news bug; B3 key scope table and test; schema 7 with explicit defaults; history compacted after 7 days (T.history); save errors shown in the HUD; a previous save slot; real schema 5 and 6 saves as fixtures (the schema 6 save plays its next week exactly as before); round trip and determinism tests; the delivery test fixed; unit and balance lanes (units about 8 s) | IndexedDB (localStorage with a previous slot is enough for about 200 KB saves); the explicit `{ world, loc }` context for branches (L) |
+| 2 Speed and structure | runDay from 13.9 ms to about 7 ms in Node (one pass counterfactuals, menu only analysis, a plain data copy that shares stored reports, a direct weekly rival calculation); a trivial command from 2 ms to 0.3 ms; AC-272 benchmark (rivals 1.03 to 1.08 times); no import cycles, with a test; forecast.ts for previews; pure settleDelivery; game.ts split into commands, progress, settle and marketCommands; shared UI helpers; no casts | The target of 6 ms on the middle build alone is met; the two restaurant fixture takes about 7 ms. TD14 (split big UI files) stays "as touched" |
+| 3 Docs tell the truth | Product index; README at M0.6; milestones M0 to M0.6; feature status column; city map renumbered (F-191 to F-199, AC-293 to AC-310); stale ACs fixed; competition, PRD, balance and architecture docs brought up to date; a test that checks quoted tunables; the font served from the site; a service worker update prompt | A checksum in the save file |
+| 4 Balance and proof | Delivery retuned (late refunds, penalties, Top rated 80, order rate, lunch share, affinities); a delivery kitchen with conveyor ovens reaches 41% of the middle build and bad play loses money; rivals unitPressure 0.15 and relMin 0.5; coach, market, managed restaurant and command tests; feature rows for the balance log systems; realistic kitchen crowding (founder feedback: cooks work at stations) | Rivals barely move a full restaurant's profit (98% to 102%); the check needs a player with spare capacity (competition.md 15.2). QA9 rival AI statistics (L) |
+| 5 Less screen | The weekly question in the PRD (4.2a); Top 3 this week as the one advice voice in the week report; one Demand and capacity card (stations folded in); delivery presets (Protect rating, Balanced, Max orders); staged reveal with one intro card at a time; one reputation card in Money; a Playwright smoke suite (`npm run smoke`) | P4 Squad Simple view and P7 mystery diner decision; P8 guided first week (L) |
+
 ## Where we stand
 
 | Area | Verdict | Headline |

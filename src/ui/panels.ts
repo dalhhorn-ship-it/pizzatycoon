@@ -24,7 +24,7 @@ import { ovr } from '../sim/staff';
 import { act, h, meter, money, signed, toast } from './dom';
 import type { Floor } from './floor';
 import { compare } from './impact';
-import { capacityCard, stationsCard } from './capacity';
+import { capacityCard } from './capacity';
 import { pipelineData } from './pipeline';
 import type { KitchenView } from './kitchenView';
 
@@ -389,7 +389,6 @@ export function kitchenPanel(ctx: PanelCtx, view: KitchenView): HTMLElement {
         h('span', null, 'Kitchen flow'), h('b', { class: penalties ? 'warn' : 'good' }, penalties ? `${penalties} slow spot${penalties > 1 ? 's' : ''}` : 'Smooth')),
       h('div', { class: 'small muted' }, bottlenecks.length ? `Last service limits: ${bottlenecks.join(', ')}` : 'No bottleneck at the last service.')),
     capacityCard(state),
-    stationsCard(state),
     guestsNotice(state, k.equipmentE),
     h('div', { class: 'row' },
       h('button', { onclick: () => act(ctx, { type: 'tidyKitchen' }, 'Kitchen tidied into a tight pizza line') }, 'Tidy up layout')),
@@ -646,11 +645,20 @@ export function moneyPanel(ctx: PanelCtx, extra: HTMLElement): HTMLElement {
         h('button', { class: 'small', disabled: state.loan.balance >= T.finance.starterLoanMax, onclick: () => act(ctx, { type: 'takeLoan', amount: T.finance.starterLoanMax }, 'Loan approved') }, 'Borrow the maximum'),
         h('button', { class: 'small', disabled: state.loan.balance <= 0, onclick: () => act(ctx, { type: 'repayLoan', amount: 5000 }) }, 'Repay $5,000'))),
     h('div', { class: 'card' },
-      h('h3', null, `Rank: ${RANK_NAMES[state.rank]}`),
+      h('h3', null, h('span', null, 'Reputation and rank'), h('span', { class: 'small' }, RANK_NAMES[state.rank])),
+      // One card for the three ratings (cleanup sprint 5), each with what moves it.
       h('div', { class: 'kv' },
-        h('span', null, 'Guests served'), h('b', null, Math.round(state.totalServed).toLocaleString()),
-        h('span', null, 'Reputation'), h('b', null, state.rep.toFixed(1)),
+        h('span', null, 'Reputation'), h('b', null, state.rep.toFixed(1))),
+      h('div', { class: 'small muted' }, 'Follows guest satisfaction: food, service, room, value and waiting. Guests who give up waiting cost some.'),
+      h('div', { class: 'kv' },
         h('span', null, 'Local following'), h('b', null, `${Math.round(state.following * 100)}%`)),
+      h('div', { class: 'small muted' }, 'Locals who know you. Grows by word of mouth from happy guests and from campaigns; fades when guests leave unhappy.'),
+      ...(state.delivery ? [
+        h('div', { class: 'kv' }, h('span', null, 'Delivery rating'), h('b', null, state.delivery.drep.toFixed(1))),
+        h('div', { class: 'small muted' }, 'Separate from your reputation: hot food, fair app prices and deliveries under the promise raise it; refused and late orders lower it.'),
+      ] : []),
+      h('div', { class: 'kv' },
+        h('span', null, 'Guests served'), h('b', null, Math.round(state.totalServed).toLocaleString())),
       h('div', { class: 'small muted' }, `Next: ${nextRank}`)),
     extra);
 }

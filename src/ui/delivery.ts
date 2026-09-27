@@ -8,7 +8,12 @@ import { act, h, money, signed, signedMoney, stars } from './dom';
 import type { PanelCtx } from './panels';
 
 const MODES: DeliveryMode[] = ['platform', 'marketplace', 'own'];
-const THROTTLES: (number | null)[] = [0.7, 0.8, 0.9, 1, null];
+/** Three presets instead of a slider (cleanup sprint 5): what each protects, in words. */
+const PRESETS: { throttle: number | null; name: string; blurb: string }[] = [
+  { throttle: 0.7, name: 'Protect rating', blurb: 'The app pauses at 70% kitchen load: fast deliveries, more orders refused.' },
+  { throttle: 0.8, name: 'Balanced', blurb: 'The app pauses at 80% kitchen load: the default.' },
+  { throttle: null, name: 'Max orders', blurb: 'The app never pauses: every order is taken, and a busy kitchen gets slow, late and refunded.' },
+];
 
 /** A busy day (Saturday) with these delivery settings, for the previews. */
 function busyDay(state: GameState, d: Partial<DeliveryState>): { day: DeliveryDay | undefined; profit: number; services: ServiceReport[] } {
@@ -33,12 +38,13 @@ function kitchenLimitLine(b: { day: DeliveryDay | undefined; services: ServiceRe
   return `Your kitchen is the limit: on a Saturday the app wanted ${Math.round(d.wanted)} orders and you could take ${Math.round(d.accepted)}. The ${limit === 'cold' ? 'dough supply' : limit} sets the pace; ${STAGE_FIX[limit]} would take more.`;
 }
 
-const throttleName = (t: number | null): string => (t === null ? 'Off' : `${Math.round(t * 100)}%`);
 
 export function deliveryCard(ctx: PanelCtx): HTMLElement {
   const state = ctx.state;
   const d = state.delivery;
   const missing = deliveryMissing(state);
+  // Staged reveal (cleanup sprint 5): delivery shows up from two and a half stars.
+  if (missing.length && !d && state.rep < 50) return h('div');
   if (missing.length && !d) {
     return h('div', { class: 'card' }, h('h3', null, '🛵 Delivery'),
       h('div', { class: 'small' }, `Delivery: ${missing.join(', ')}.`),
@@ -65,16 +71,16 @@ export function deliveryCard(ctx: PanelCtx): HTMLElement {
   const riderCount = state.staff.filter((s) => s.role === 'rider').length;
   const now = busyDay(state, {});
   const throttleRow = h('div', { class: 'stack', style: 'gap:4px' },
-    h('span', { class: 'small' }, 'Pause the app when the kitchen is this busy'),
-    h('div', { class: 'seg wrap' }, ...THROTTLES.map((t) => {
-      const p = busyDay(state, { throttle: t }).day;
-      const refused = p ? p.refused * (1 - T.delivery.lunchShare) : 0;
+    h('span', { class: 'small' }, 'How busy may the app make your kitchen?'),
+    h('div', { class: 'seg wrap' }, ...PRESETS.map((p) => {
+      const f = busyDay(state, { throttle: p.throttle });
       return h('button', {
-        class: d.throttle === t ? 'on' : '',
-        title: p ? `On a Saturday: about ${Math.round(refused)} orders refused at dinner, deliveries ${Math.round(p.time.dinner)} min` : '',
-        onclick: () => act(ctx, { type: 'setDelivery', throttle: t }),
-      }, throttleName(t));
+        class: d.throttle === p.throttle ? 'on' : '',
+        title: `${p.blurb}${f.day ? ` On a Saturday: ${Math.round(f.day.accepted)} orders taken, ${Math.round(f.day.refused)} refused, ${Math.round(f.day.time.dinner)} min at dinner, ${signedMoney(f.profit - now.profit)} against now.` : ''}`,
+        onclick: () => act(ctx, { type: 'setDelivery', throttle: p.throttle }),
+      }, p.name);
     })),
+    h('div', { class: 'small muted' }, PRESETS.find((p) => p.throttle === d.throttle)?.blurb ?? `The app pauses at ${Math.round((d.throttle ?? 1) * 100)}% kitchen load.`),
     now.day ? h('div', { class: 'small muted' }, `On a Saturday: about ${Math.round(now.day.refused)} orders refused, deliveries ${Math.round(now.day.time.dinner)} min at dinner.`) : null,
     kitchenLimitLine(now) ? h('div', { class: 'small warn' }, kitchenLimitLine(now)) : null);
   const markupRow = h('div', { class: 'row' },
