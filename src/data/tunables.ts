@@ -386,6 +386,7 @@ export const T = {
     replaceBelow: -15,
     replaceDays: 14,
     budgets: [0, 250, 500, 1000] as readonly number[],
+    kitchenBudgets: [0, 500, 1500, 5000] as readonly number[],
     pay: { tight: 0.9, fair: 1, generous: 1.1 },
   },
   reputation: {

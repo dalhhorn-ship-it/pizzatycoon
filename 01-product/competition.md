@@ -4,9 +4,18 @@
 * Owner: Game Product Management
 * Date: 2026-09-27
 * Extends: `prd.md` 5.1 (City), 5.7 (Demand), 5.10 (Reputation and marketing), 5.12 (Chain, cannibalisation), 5.13 (Rival), 6 (Economy); `city-map.md` 4; `staff-management.md` 6.2 (rival offers); `balance.md` 1.4 and 4.3; `src/sim/day.ts`, `src/sim/location.ts`, `src/sim/economy.ts`, `src/sim/chain.ts`
-* Features: F-141 to F-168 in `features.md`. Acceptance criteria: AC-226 to AC-275 in `acceptance-criteria.md`
+* Features: F-141 to F-168 and F-178 in `features.md`. Acceptance criteria: AC-226 to AC-275, AC-286 and AC-287 in `acceptance-criteria.md`
 * Delivers early: F-74 Marketing (v1.0) is replaced by F-152 to F-154; F-87 Cannibalisation (v1.0) is implemented inside F-143. F-93 (Nonna Bianca's festival) stays at v2.0.
 * **All numbers are start values in `T.rivals`, `T.marketing` and `T.delivery` plus the data files `src/data/rivals.ts`, `src/data/campaigns.ts` and `src/data/venues.ts`; AC-273 to AC-275 make `npm run balance` confirm them.**
+
+### Founder decisions (2026-09-27, supersede anything below that conflicts)
+
+1. **Old saves:** no prompt. They load with live rivals off, and the player adds rivals from the Competition group of the settings menu whenever they like (sections 9 and 10).
+2. **Delivery promise and throttle:** the 35 minute promise and the default throttle of 80% kitchen load stay (6.5, 6.4).
+3. **Rivals tab:** a top level Rivals tab, as in 7.1.
+4. **Delivery reputation is a separate thing:** DRep never moves the dining reputation and the dining reputation never moves DRep (6.6).
+5. **Delivery can turn a small kitchen into a gold mine if played well:** a small restaurant with a strong kitchen, good riders and a high DRep earns many times its dining profit; played badly it earns little more than before (6.12, 11).
+6. **Open:** whether rivals should seek out a very successful player. Until decided they keep avoiding strong players, because that is where they earn less (3.4).
 
 ## 1. Goal and the loops it serves
 
@@ -476,7 +485,7 @@ DRep    += min(1, 0.05 x economy.reputation) x (-10 + 1.1 x S_d - DRep)
 
 **Feedback loop, stable by design:** DRep drives delivery demand through `repMult`, so a kitchen that cannot keep up gets slower deliveries, a lower DRep and then fewer orders until demand matches what it can cook. Nothing collapses and there is no game over; the player sees why ("Deliveries took 59 minutes at dinner: your kitchen was at 100%").
 
-**Spillover to the dining room** comes only through the kitchen: longer tickets at dinner lower the dining wait score. DRep itself does not change the dining Rep.
+**Spillover to the dining room** comes only through the kitchen: longer tickets at dinner lower the dining wait score. **DRep is a separate reputation** (founder decision): it never changes the dining Rep, and the dining Rep never changes DRep. A restaurant can be a two star room and a five star delivery kitchen.
 
 ### 6.7 Economics
 
@@ -529,6 +538,25 @@ In the Money tab and reachable from the pipeline panel's Delivery bar:
 * **Settings:** mode (three cards with commission and reach), markup slider 0% to 20% with the preview of orders and profit per day, packaging (basic or insulated eco), throttle ("Pause the app when the kitchen is at 80%": 70% to 100% or Off) with the preview "About 10 orders a dinner refused, deliveries 42 min".
 * **Riders and vehicles** (own modes): riders on shift per service against riders needed (`ceil(peak orders per hour / (0.8 x capacity per rider))`), Hire rider (opens the market filtered), Buy bike or scooter.
 * **Coach line** for delivery, for example "Your kitchen is the limit: a second oven would let you accept about 10 more orders a dinner (about +$120 a day)".
+
+### 6.12 The delivery kitchen: a small restaurant as a gold mine
+
+Founder decision: "It can help to turn a small restaurant kitchen into a gold mine if played well." Delivery demand comes from the catchment (the district plus half of the adjacent ones), not from passers by, seats or the shopfront, so a cheap back street venue with a strong kitchen can sell far beyond its dining room. What playing it well means, and what the game rewards:
+
+* **Size the kitchen for the app, not the room.** A hole in the wall seats 16 but can hold two ovens and three prep stations. Its dining room uses a small share of that kitchen, so almost all of it is free for delivery.
+* **Keep deliveries under the 35 minute promise.** The throttle at 80% keeps tickets short; own riders with scooters cut the ride.
+* **Top rated on Scoot** (new): DRep 85 or more for 14 days in a row earns a badge that multiplies delivery orders by 1.25 and puts the restaurant first in the app. It is lost as soon as DRep falls below 80, and returns only after another 14 days at 85. This is the reward for a delivery kitchen run well, and the thing an overloaded kitchen loses first.
+* **Own riders from about 40 orders a day** (6.9): commission falls from 30% to 14%.
+* **Marketing aimed at students and families** (5.1) fills the app, not the room.
+
+Hand estimate, a hole in the wall in Canal Quarter played well: two deck ovens, a prep fridge and a prep counter, three cooks, four riders with scooters, platform with own riders, DRep 88 and Top rated, one matched campaign: about 90 orders a day at about $28 an order; after food, 14% commission, packaging, riders and vehicles about $1,000 a day before rent and the dining room, against about $150 a day for the same restaurant without delivery. Played badly (throttle off, one oven, platform riders): deliveries take 59 minutes on busy evenings, DRep falls under 40 within four weeks and the gain shrinks to a quarter of that.
+
+| Tunable (`T.delivery`) | Unit | Start | Safe range |
+|---|---|---|---|
+| topRatedDrep | DRep | 85 | 80 to 90 |
+| topRatedLoseBelow | DRep | 80 | 75 to 85 |
+| topRatedDays | days | 14 | 7 to 28 |
+| topRatedBoost | orders multiplier | 1.25 | 1.1 to 1.4 |
 
 ## 7. Competition analytics and the coach
 
@@ -632,17 +660,18 @@ A new group in the settings menu next to the Economy sliders. Stored in `Economy
 * **Turning live rivals off mid game:** every rival closes quietly overnight and the static formula returns. **Turning it on mid game:** the "Rivals at the start" number arrives as entrants spread over the next 28 days (none in the player's districts in the first 14 days), each with the 7 day viewing notice.
 * The settings sheet shows one sentence per option ("Sharp rivals read the market well and rarely waste money on the wrong crowd").
 * Like the start setting, the Competition group is remembered on the device for the next new game.
+* **Old saves** (founder decision) load with live rivals off. The Competition group is where the player adds them, at any time, with the mid game rule above; there is no prompt.
 
 ## 10. Save migration
 
 Schema bump (7 at the time of writing, or the next free number).
 
-* `GameState` gains `rivals: Rival[]`, `venueHolds: { venueId, untilDay } | null`, `marketNews: NewsItem[]` (last 28 days), `rivalsPrompt: boolean`.
+* `GameState` gains `rivals: Rival[]`, `venueHolds: { venueId, untilDay } | null`, `marketNews: NewsItem[]` (last 28 days).
 * `Rival`: `id, name, owner, motto, archetype, skillOffset, cash, founded, closed?, returnsAfter?, locations: RivalLocation[]`. `RivalLocation`: `venueId, opened, tier, priceIndex, rep, following, drep, delivery, campaigns, lastCuts, cutCooldown, rescued, weeksLosing, viewing?: { venueId, signsOn }, history: last 12 weeks of { served by segment, profit }`.
 * `LOCATION_KEYS` gain `campaigns: ActiveCampaign[]`, `delivery: DeliveryState | null` (mode, markup, packaging, throttle, drep, since, vehicles), `marketHistory` (12 weeks of share and lost by segment and rival).
 * `Economy` gains `rivals: RivalSettings`. `Role` gains `rider`.
 * `DayReport` gains `market`, `delivery` and a `marketing` P&L line.
-* **Old saves** load with **live rivals off** and `rivalsPrompt = true`. Their numbers are identical (AC-227) with one intended exception: a player who owns two or more restaurants in the same district now gets the 0.2 cannibalisation per other own restaurant that prd.md 5.12 always specified. On first load the game shows a card: "Porto Verde is growing: new pizzerias want to open. Turn on live competition?" with **Turn on** and **Not now** (settings can change it later). Turn on follows the mid game rule of section 9.
+* **Old saves** load with **live rivals off** and no prompt (founder decision). Their numbers are identical (AC-227) with one intended exception: a player who owns two or more restaurants in the same district now gets the 0.2 cannibalisation per other own restaurant that prd.md 5.12 always specified. The player adds rivals from the Competition group of the settings menu at any time; turning them on follows the mid game rule of section 9.
 * The 48 new venues are free on load; old venue ids are unchanged.
 
 ## 11. Balance and dominant strategy checks
@@ -656,7 +685,7 @@ Schema bump (7 at the time of writing, or the next free number).
 * **Venue blocking?** One hold at a time, 28 days, a week of rent each time.
 * **Rivals too timid?** On Normal, live pressure at the player's home (the `C_live` part) must average 0.10 or more; otherwise the feature is decoration.
 * **Delivery dominance?** With the best delivery setup per build (exhaustive over mode, markup in 5% steps, throttle in 0.1 steps): middle in Canal Quarter gains 10% to 35% profit, volume in University Quarter 15% to 35%, luxury in Old Harbour less than 10%; no build gains more than 40%; and `balance.md` 3.5 still holds (each specialist beats the best middle build at home by 15% or more) with delivery on for everyone (AC-274). First lever: `orderRate`, then the platform commission.
-* **Delivery only?** A restaurant with the minimum dining room and maximum delivery earns less than the same kitchen in the same venue run as a normal restaurant with the reference dining room (the opening checklist still requires a table).
+* **Delivery kitchen gold mine (founder decision, AC-286):** a hole in the wall in Canal Quarter run well as a delivery kitchen (6.12: two ovens, throttle 0.8, own riders with scooters, one matched campaign, 8 weeks) earns at least 4 times its dining only profit and at least 60% of the middle build's home profit, on a fraction of the rent. Played badly (throttle off, one oven, platform riders) its delivery gain after 8 weeks is at most a quarter of the well played gain. The 40% cap on the delivery gain above applies to the three reference builds only, whose big dining rooms already fill their kitchens. The opening checklist still requires a table.
 
 ### 11.1 Tunables
 
@@ -737,7 +766,7 @@ Archetypes, names, mottos, campaign prices, lifts and audiences, and venue value
 | F. Delivery | Unlock, modes, demand, shared kitchen, time, DRep, economics, riders, panel, rival delivery | F-161 to F-166 | 3.5 days |
 | Balance | Checks and tables in `npm run balance` | F-167 | with each slice |
 
-**Cut order if it runs long:** second hand fit out from closed rivals (F-168), rival delivery (F-166; Cd_eff stays at the background 0.3), mystery diner (F-157), holding a venue (F-148), rival chains (F-147; entrants still take venues), the own delivery mode (keep platform and marketplace), fatigue, the tourist guide and lunch club campaigns. **Never cut:** live rivals with the three ways to compete, their visible faces on the map, the audience choice and match meter, the coach, the week report's guests lost per rival and segment, the settings, and delivery's shared kitchen with its separate delivery reputation. Those are the founder's request.
+**Cut order if it runs long:** second hand fit out from closed rivals (F-168), rival delivery (F-166; Cd_eff stays at the background 0.3), mystery diner (F-157), holding a venue (F-148), rival chains (F-147; entrants still take venues), the own delivery mode (keep platform and marketplace), fatigue, the tourist guide and lunch club campaigns. **Never cut:** live rivals with the three ways to compete, their visible faces on the map, the audience choice and match meter, the coach, the Rivals tab, the week report's guests lost per rival and segment, the settings, and delivery's shared kitchen with its separate delivery reputation and the Top rated reward. Those are the founder's request.
 
 ## 14. M0.5 definition of done
 

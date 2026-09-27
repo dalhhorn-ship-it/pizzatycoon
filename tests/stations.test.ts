@@ -6,7 +6,7 @@ import { apply, newGame, withStarterKit } from '../src/sim/game';
 import { autoLayout } from '../src/sim/kitchen';
 import { staffFromSkill } from '../src/sim/staff';
 import type { GameState } from '../src/sim/state';
-import { dayRun } from '../src/sim/team';
+import { contributions, dayRun } from '../src/sim/team';
 import { buildState } from './balance/builds';
 
 /** A big hall with a modest kitchen, like a first large restaurant. */
@@ -130,5 +130,15 @@ describe('capacity', () => {
     expect(w.services).toBe(14);
     expect(Object.values(w.limits).reduce((a, b) => a + b, 0)).toBe(14);
     expect(w.use.lunch).toBeGreaterThan(0);
+  });
+
+  test('a better cook in a room with space earns the reputation their food brings (AC-285)', () => {
+    const s = bigHall([...SMALL, 'handWash', 'doubleSink'], 3, 2);
+    const cook = s.staff.find((x) => x.role === 'cook')!;
+    const d = dayRun(s, { noise: false });
+    expect(capacityOutlook(s)!.limit).toBe('demand');
+    const c = contributions(s, d.a, d.report, { noise: false }, [cook.id])[0]!;
+    expect(c.value).toBeGreaterThan(0);
+    expect(c.reason).toBe('Better food lifted satisfaction');
   });
 });

@@ -736,6 +736,7 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
     case 'setStaffPolicy': {
       const next = { ...policyOf(state), ...cmd.policy };
       if (!T.delegation.budgets.includes(next.budget)) return fail(input, 'Pick one of the training budgets.');
+      if (!T.delegation.kitchenBudgets.includes(next.kitchenBudget)) return fail(input, 'Pick one of the kitchen budgets.');
       state.staffPolicy = next;
       break;
     }

@@ -1,11 +1,12 @@
 # PRD addendum: Kitchen bottlenecks and capacity
 
-* Status: Built (founder requests of 2026-09-27)
+* Status: Built for milestone **M0.4** (founder requests of 2026-09-27)
 * Owner: Game Product Management
 * Date: 2026-09-27
 * Extends: `kitchen-builder.md` (stations, flow, pipeline), `kitchen-upgrades.md`, `staff-management.md` (people on the rota)
 * Code: `src/sim/analysis.ts` (`stationsOf`), `src/sim/day.ts` (cold storage, plate stock), `src/sim/capacity.ts`, `src/ui/capacity.ts`. Tests: `tests/stations.test.ts`
-* Feature and acceptance criteria rows are added after the M0.5 numbering (competition) settles, to avoid clashing IDs.
+* Features: F-169 to F-177 in `features.md`. Acceptance criteria: AC-276 to AC-285 in `acceptance-criteria.md`
+* Founder decision (2026-09-27): "find a way to also develop kitchen bottlenecks": the kitchen is developed like the team, by the player or, when handed over, by the manager within a kitchen budget (section 5).
 
 ## 1. Goal
 
@@ -51,15 +52,33 @@ The volume reference build now includes a Walk in Cooler: 440 covers a day do no
 * **Day report:** one line, "Lunch 23 of 40 possible · Dinner 93 of 160 possible", with the limit when a service was full.
 * **Week report, Kitchen and capacity card:** capacity used at lunch and dinner, guests turned away, how many services each limit held back, the top station issues, and up to two pieces of advice (the main limit and its fix, the worst station issue, or "a demand question, not a kitchen one" when a service used under 70% of capacity).
 
-## 5. Staff value and reputation
+## 5. Developing the kitchen: the player or the manager
+
+Bottlenecks are something to grow out of, week by week, in the same way as the team:
+
+* **The player** reads the Stations card and the week report, and each warning names its fix and price.
+* **The manager**, at a managed restaurant or when the team is handed over, fixes the worst station issue each Sunday, one step a week, within the **kitchen budget** policy ($0, $500, $1,500 or $5,000 a week; default $500). Order of priority:
+
+| Issue | What the manager does |
+|---|---|
+| Ovens not fully tended | Hires a cook from the market (hiring focus and accuracy as for any hire) |
+| Fridges more than 90% used by the last day's pizzas | Buys a Reach in Fridge (or a Dough Fridge before it unlocks) |
+| Clean plates ran out | Buys a Double Sink when a dishwasher stands idle, otherwise Plate Shelving |
+| A dishwasher with no room at the sink | Buys a Double Sink |
+| Cooks queue at the sink | Buys a Hand Wash Station |
+
+* The item goes where the Kitchen Builder's own placement would put it; if nothing fits, nothing is bought. Crowding is never fixed automatically: it needs a decision about which station to give up.
+* The weekly manager line lists what was done ("bought a Hand Wash Station because cooks queue at the sink"); when the fix costs more than the budget, the proposal says so ("The kitchen needs a Reach in Fridge ($1,800): the fridges are nearly out of dough by closing. A bigger kitchen budget would let me buy it.").
+
+## 6. Staff value and reputation
 
 The Team card's value against a standard hire now includes the reputation a person's work earns: satisfaction difference x `reviewSlope` x what one reputation point adds to the day's profit here. Without it, a better cook in a room that is not full looked worthless, because better food pays back through reputation rather than same day covers.
 
-## 6. Balance
+## 7. Balance
 
 * Reference builds: no station issues (`tests/stations.test.ts`), strategy checks of `balance.md` 3.5 pass, course paybacks stay in band.
 * A big hall on a modest kitchen (3 deck ovens, 3 counters, 1 dough fridge, 1 sink, 3 cooks, 3 dishwashers) shows one idle dishwasher, prep 6% slower from the shared sink, and a 200 pizza a day ceiling.
 
-## 7. Save migration
+## 8. Save migration
 
-No save changes: every new field is on equipment data, and old kitchens simply get checked against the new rules. A large restaurant with one fridge may now meet the dough limit on busy days; the reports say so and name the fix.
+A save gains nothing new except the manager's `kitchenBudget` policy (default $500 when missing). Every other new field is on equipment data, and old kitchens simply get checked against the new rules. A large restaurant with one fridge may now meet the dough limit on busy days; the reports say so and name the fix.

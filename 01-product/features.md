@@ -249,7 +249,7 @@
 | F-148 | Hold a venue | Pay 1 week of rent to hold a free venue for 28 days; rivals never view or sign it; fee taken off the deposit if rented within the hold; one hold at a time | LT | Should | M0.5 | F-147 |
 | F-149 | 72 venues | 48 new venues (University 8, Business 7, Linden 4, Market 8, Canal 7, Old Town 8, Old Harbour 6) with premises, rent, traffic, modifiers, tilt, coordinates, two pros and two cons; the 24 existing venues unchanged; at least 2 hole in the wall venues per neighbourhood | LT | Must | M0.5 | F-13 |
 | F-150 | City map rivals layer | Star pins for own restaurants, logo pins ringed by archetype colour with a letter, viewing pins with eye and countdown, To let and held tags; 44 pt targets with clusters, pinch zoom, filters All, Free, Rivals, Mine; venue card lists rivals in reach, per segment competition and a Hold button | LT | Must | M0.5 | F-149, F-142 |
-| F-151 | Competition settings | Settings group: live rivals on or off, rivals at the start 0 to 20, skill Casual to Master, start capital $18,000 to $160,000, new rivals later Off to Often, caps per city and per neighbourhood; Easy, Normal, Hard presets; mid game rules; old saves load with rivals off and a one time prompt | all | Must | M0.5 | F-09, F-141 |
+| F-151 | Competition settings | Settings group: live rivals on or off, rivals at the start 0 to 20, skill Casual to Master, start capital $18,000 to $160,000, new rivals later Off to Often, caps per city and per neighbourhood; Easy, Normal, Hard presets; mid game rules; old saves load with rivals off, and the player adds rivals here at any time (no prompt) | all | Must | M0.5 | F-09, F-141 |
 | F-152 | Marketing campaigns | 10 campaigns (flyers, social ads, student deal, family Sundays, business lunch club, tourist guide, foodie press night, loyalty cards, local radio, promoted delivery listing) with cost scaled by foot traffic, run length, lift, audience weights, delivery lift, awareness and side effects; mkt_s in the demand formula capped at 1.5; audience match 0 to 1; 3 slots; fatigue; Marketing P&L line (replaces F-74) | W | Must | M0.5 | F-53, F-75 |
 | F-153 | Marketing sheet | Active campaigns with days left, extra guests and spend; catalogue cards with audience chips, match meter (Great, OK, Poor), compare() preview of guests, profit and following, full room and poor fit warnings, start and stop | W | Must | M0.5 | F-152, F-42 |
 | F-154 | Rival marketing | Rivals run the same campaigns (not loyalty or radio) on a budget of marketing weight x 0.25 x revenue under the runway rule; audience matched with pBest; campaigns public on cards and in the news feed | W | Must | M0.5 | F-152, F-145 |
@@ -267,6 +267,21 @@
 | F-166 | Rival delivery | Price Fighter, Hype House, Trendy Kitchen and Budget Chain start platform delivery past their Rep threshold; simplified orders capped at 40% of dining capacity; adds to the player's delivery competition | W | Should | M0.5 | F-162, F-145 |
 | F-167 | Competition balance checks and migration | Save migration of competition.md 10; reference builds identical with rivals off; live market sanity, campaign payback, delivery gain per build and dominant strategy checks in `npm run balance`; performance budget | all | Must | M0.5 | F-141 to F-166, F-81 |
 | F-168 | Second hand fit out from closed rivals | The next tenant of a closed rival's venue may buy up to 3 of its stations at 50% | LT | Nice | M0.5 | F-145, F-101 |
+| F-178 | Delivery kitchen and Top rated | DRep 85 for 14 days earns Top rated on Scoot (orders x1.25, first in the app), lost below 80; balance check that a small restaurant run well as a delivery kitchen becomes a gold mine and run badly does not | LT | Must | M0.5 | F-161 to F-165 |
+
+## T. Kitchen bottlenecks and capacity (spec: `kitchen-bottlenecks.md`)
+
+| ID | Feature | Description | Loop | Priority | Milestone | Depends on |
+|---|---|---|---|---|---|---|
+| F-169 | Oven tending | Each oven needs part of a cook (deck 0.5, double deck 0.6, conveyor 0.25, wood fired 1); cooks give 1 each; ovens run at cooks / need, at most 100% | D | Must | M0.4 | F-39, F-125 |
+| F-170 | Wash points and dishwashing slots | Sinks, dish machine and hand wash stations are wash points, 2 cooks each, each extra cook prep 6% slower (cap 30%); sinks and dish machines have room for 2 dishwashers, a double sink 3; the rest stand idle | D | Must | M0.4 | F-39 |
+| F-171 | Kitchen crowding | People on the kitchen floor need 2.25 free tiles each; each person beyond slows everyone 5% (cap 25%) | D | Should | M0.4 | F-101 |
+| F-172 | Cold storage and plate stock | Fridges hold dough for so many pizzas a day (200, prep fridge 80, reach in 350, walk in 700), shared between services; running out turns guests away; new pipeline stage and bottleneck; plate shelving adds 90 clean plates | D | Must | M0.4 | F-104 |
+| F-173 | New stations | Double Sink, Hand Wash Station, Reach in Fridge, Walk in Cooler, Plate Shelving with prices, sizes, upkeep and unlocks; the volume reference build gets a walk in cooler | W | Must | M0.4 | F-169 to F-172 |
+| F-174 | Capacity view with levers | Kitchen tab card: lunch and dinner capacity, served and demand for an average day of the coming week, demand or capacity as the limit with its fix, the last 7 days, and measured levers (price 10% lower or higher, +5 dish quality, +5 reputation) sorted by profit | W | Must | M0.4 | F-172, F-63 |
+| F-175 | Bottleneck feedback | Floor plan badges (tended, idle, cooks queue, dough per day), Stations card with fixes, a capacity line in the day report and a Kitchen and capacity card in the week report with up to two pieces of advice | D | Must | M0.4 | F-174 |
+| F-176 | Manager kitchen budget | Kitchen budget policy ($0 to $5,000 a week); each Sunday the manager fixes the worst station issue one step (hire a cook, buy a fridge, double sink, plate shelving or hand wash station); weekly line and proposal | W | Should | M0.4 | F-138, F-173 |
+| F-177 | Staff value includes earned reputation | Contribution adds satisfaction difference x reviewSlope x the day's profit from one reputation point | D | Should | M0.4 | F-137 |
 
 ## Dependency map (critical path)
 
@@ -285,4 +300,4 @@ v1.0 chain: F-79 Expansion loan + F-69 Manager -> F-83 New locations -> F-85 Off
 
 ## Scope note
 
-168 features is already a lot for a small team. The cut order in prd.md 10.4 applies. Features that carry the two strategies (F-19, F-20, F-38, F-39, F-40, F-53, F-81) are pillars and are not cut.
+178 features is already a lot for a small team. The cut order in prd.md 10.4 applies. Features that carry the two strategies (F-19, F-20, F-38, F-39, F-40, F-53, F-81) are pillars and are not cut.

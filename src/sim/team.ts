@@ -1,13 +1,15 @@
 // The squad day by day (staff-management.md 3, 5, 6, 7, 8): growth, coaching, courses, mood, form, notice,
 // reviews, rival offers, contributions against a standard replacement, the weekly market and the manager.
 
-import { EQUIPMENT } from '../data/equipment';
 import { isMain } from '../data/recipes';
 import { ATTR_IDS, ATTR_SHORT, RIVALS, ROLE_AREA, ROLE_BASE_SALARY, ROLE_NAMES, ROLE_WEIGHTS } from '../data/staff';
 import { COURSES, COURSE_IDS } from '../data/training';
 import type { AttrId, Role, Service, Unlock } from '../data/types';
 import { T } from '../data/tunables';
-import { type Analysis, type AreaLoad, analyse, personalPressure } from './analysis';
+import { EQUIPMENT } from '../data/equipment';
+import { type Analysis, type AreaLoad, analyse, personalPressure, stationsOf } from './analysis';
+import { buyPrice } from './economy';
+import { bestSpot, kitchenDims, layoutProblem } from './kitchen';
 import { type DayOptions, simulateDay } from './day';
 import { Rng } from './rng';
 import {
@@ -22,7 +24,7 @@ export interface TeamEvent {
   text: string;
 }
 
-export const DEFAULT_POLICY: StaffPolicy = { budget: 250, pay: 'fair', focus: 'strategy', replace: false };
+export const DEFAULT_POLICY: StaffPolicy = { budget: 250, pay: 'fair', focus: 'strategy', replace: false, kitchenBudget: 500 };
 export const policyOf = (s: Pick<GameState, 'staffPolicy'>): StaffPolicy => ({ ...DEFAULT_POLICY, ...(s.staffPolicy ?? {}) });
 
 const mean = (xs: number[]): number => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
@@ -89,13 +91,14 @@ export function contributions(state: GameState, a: Analysis, report: DayReport, 
     }
     const alt: GameState = { ...state, staff: state.staff.map((x) => (x.id === s.id ? standardReplacement(s) : x)) };
     const r = dayRun(alt, opts).report;
-    const value = report.pnl.profit - r.pnl.profit + (report.satisfaction - r.satisfaction) * T.reputation.reviewSlope * repPoint;
-    out.push({ id: s.id, value, reason: reasonFor(s, value, report, r, a, state.day, managing) });
+    const earned = (report.satisfaction - r.satisfaction) * T.reputation.reviewSlope * repPoint;
+    const value = report.pnl.profit - r.pnl.profit + earned;
+    out.push({ id: s.id, value, reason: reasonFor(s, value, report, r, a, state.day, managing, earned) });
   }
   return out;
 }
 
-function reasonFor(s: Staff, value: number, actual: DayReport, alt: DayReport, a: Analysis, day: number, managing: boolean): string {
+function reasonFor(s: Staff, value: number, actual: DayReport, alt: DayReport, a: Analysis, day: number, managing: boolean, earned = 0): string {
   const up = value >= 0;
   if (s.role === 'manager' && !managing) return 'Nothing to run while you are here: a cost until you open another restaurant';
   const dinner = personalPressure(s, { service: 'dinner', load: a.pressure.dinner, day });
@@ -113,7 +116,9 @@ function reasonFor(s: Staff, value: number, actual: DayReport, alt: DayReport, a
   }
   if (Math.abs(dWalk) >= 1 && (dWalk > 0) === up) return up ? `Fewer guests walked away (${Math.round(dWalk)})` : `${Math.round(-dWalk)} guests walked away`;
   const dSat = actual.satisfaction - alt.satisfaction;
-  if (Math.abs(dSat) >= 0.3 && (dSat > 0) === up) {
+  // Most of the value is the reputation their work earns: name the food or the service.
+  const reputationLed = Math.abs(earned) >= 0.5 * Math.abs(value) && (earned > 0) === up;
+  if ((Math.abs(dSat) >= 0.3 || reputationLed) && (dSat > 0) === up) {
     const kitchen = s.role === 'chef' || s.role === 'cook';
     return up ? (kitchen ? 'Better food lifted satisfaction' : 'Better service lifted satisfaction') : (kitchen ? 'The food score slipped' : 'The service score slipped');
   }
@@ -535,6 +540,8 @@ function managerDaily(state: GameState, m: Staff, log: ManagerLog, rng: Rng, eve
     log.spent += pick.price;
   }
 
+  managerKitchen(state, m, log, rng, events, bestRep);
+
   // Replace underperformers (8.1).
   if (policy.replace) {
     for (const s of [...state.staff]) {
@@ -551,6 +558,48 @@ function managerDaily(state: GameState, m: Staff, log: ManagerLog, rng: Rng, eve
   }
 }
 
+/** What the manager would buy next for the kitchen, if anything (kitchen-bottlenecks.md 5). */
+export function kitchenNeed(state: GameState, bestRep: number): { itemId?: string; hire?: Role; why: string } | null {
+  const st = stationsOf(state);
+  const unlocked = (id: string): boolean => !!EQUIPMENT[id] && isUnlockedFor(state, EQUIPMENT[id].unlock, bestRep);
+  const last = state.history.at(-1);
+  const pizzas = last?.open ? Object.entries(last.dishSales).filter(([id]) => state.recipes.find((r) => r.id === id)?.kind === 'pizza').reduce((x, [, n]) => x + n, 0) : 0;
+  if (st.tendRatio < 1) return { hire: 'cook', why: `the ovens run at ${Math.round(st.tendRatio * 100)}% for want of a cook` };
+  if (st.coldCap > 0 && pizzas > 0.9 * st.coldCap) return { itemId: unlocked('reachInFridge') ? 'reachInFridge' : 'doughFridge', why: 'the fridges are nearly out of dough by closing' };
+  if (last?.services.some((s) => s.bottleneck === 'plates')) return { itemId: st.idleWashers > 0 && unlocked('doubleSink') ? 'doubleSink' : 'plateShelving', why: 'clean plates ran out' };
+  if (st.idleWashers > 0 && unlocked('doubleSink')) return { itemId: 'doubleSink', why: 'a dishwasher has no room at the sink' };
+  if (st.washStrain > 0) return { itemId: 'handWash', why: 'cooks queue at the sink' };
+  return null;
+}
+
+/** Sunday: the manager fixes the worst station issue within the kitchen budget, one step a week. */
+function managerKitchen(state: GameState, m: Staff, log: ManagerLog, rng: Rng, events: TeamEvent[], bestRep: number): void {
+  const policy = policyOf(state);
+  if (policy.kitchenBudget <= 0) return;
+  const need = kitchenNeed(state, bestRep);
+  if (!need) return;
+  if (need.hire) {
+    const before = state.staff.length;
+    managerHire(state, m, log, rng, need.hire, events, bestRep);
+    if (state.staff.length > before) (log.kitchen ??= []).push(`hired a cook because ${need.why}`);
+    return;
+  }
+  const it = need.itemId ? EQUIPMENT[need.itemId] : undefined;
+  if (!it) return;
+  const cost = buyPrice(state, it.price);
+  if (cost > policy.kitchenBudget || cost > state.cash) return;
+  const dims = kitchenDims(state.premisesId);
+  const uid = state.nextUid;
+  const spot = bestSpot(state.equipment, uid, it.id, dims);
+  if (!spot || layoutProblem([...state.equipment, spot], dims)) return;
+  state.nextUid += 1;
+  state.cash -= cost;
+  state.equipment = [...state.equipment, { ...spot, paid: cost }];
+  (log.kitchen ??= []).push(`bought a ${it.name} because ${need.why}`);
+  log.kitchenSpent = (log.kitchenSpent ?? 0) + cost;
+  events.push({ kind: 'info', text: `${m.name} bought a ${it.name} for $${Math.round(cost)}: ${need.why}.` });
+}
+
 /** The weekly manager line (8.3) and one proposal; resets the log. */
 export function managerWeek(state: GameState): { line: string; proposal: string } | null {
   const m = managerOf(state.staff);
@@ -559,9 +608,14 @@ export function managerWeek(state: GameState): { line: string; proposal: string 
   const morale = mean(state.staff.map((s) => s.morale));
   const policy = policyOf(state);
   const line = `${m.name} (Manager, OVR ${ovr(m)}): trained ${log.trained}, hired ${log.hired}, let go ${log.letGo}, raises ${log.raises}; ` +
-    `team morale ${Math.round(morale)} (${morale - log.moraleStart >= 0 ? '+' : ''}${Math.round(morale - log.moraleStart)}); spent $${Math.round(log.spent)} of $${policy.budget}.`;
+    `team morale ${Math.round(morale)} (${morale - log.moraleStart >= 0 ? '+' : ''}${Math.round(morale - log.moraleStart)}); spent $${Math.round(log.spent)} of $${policy.budget}.` +
+    (log.kitchen?.length ? ` Kitchen: ${log.kitchen.join('; ')}.` : '');
   const underpaid = state.staff.find((s) => s.salary < marketValue(s) * 0.9);
-  const proposal = policy.budget === 0
+  const need = kitchenNeed(state, 0);
+  const needItem = need?.itemId ? EQUIPMENT[need.itemId] : undefined;
+  const proposal = need && needItem && buyPrice(state, needItem.price) > policy.kitchenBudget
+    ? `The kitchen needs a ${needItem.name} ($${Math.round(buyPrice(state, needItem.price))}): ${need.why}. A bigger kitchen budget would let me buy it.`
+    : policy.budget === 0
     ? 'A training budget would let me develop the team.'
     : log.spent >= policy.budget
       ? 'A bigger training budget would let me send more people on courses.'

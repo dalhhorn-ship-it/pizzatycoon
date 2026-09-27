@@ -10,7 +10,7 @@ import {
   ovrFor, pickPersonality, pressureMult, pressureQuality, salaryFor, scoutRange, staffFromSkill, standardReplacement, stepMorale, tierOf,
 } from '../src/sim/staff';
 import type { Attrs, GameState, Staff } from '../src/sim/state';
-import { contributions, dayRun, needsPressure, pickWithAccuracy, teamDay } from '../src/sim/team';
+import { contributions, courseOptions, dayRun, kitchenNeed, needsPressure, pickWithAccuracy, teamDay } from '../src/sim/team';
 import { deserialise, serialise } from '../src/save/saveFile';
 import { buildState, steadyState } from './balance/builds';
 
@@ -555,5 +555,79 @@ describe('commands', () => {
     let s = withStarterKit(newGame(5, 'canal', 'cosy'));
     s = run(s, 3);
     expect(deserialise(serialise(s, 0)).state.staff).toEqual(s.staff);
+  });
+});
+
+describe('managers run the team reasonably well (staff-management.md 8)', () => {
+  /** A cosy restaurant with a mixed team and room to grow; eight weeks either by a typical manager or by a scripted player. */
+  function run(delegate: boolean): { growth: number; morale: number; left: number; spent: number } {
+    let s = withStarterKit(newGame(21, 'canal', 'cosy'));
+    s.cash = 60000;
+    s.rep = 55;
+    s.unlockAll = true;
+    const rng = new Rng(4);
+    for (const x of s.staff) {
+      x.personality = [pickPersonality(rng)];
+      x.potential = 80;
+    }
+    s.staff.push(staffFromSkill(990, 'Nora Park', 'manager', 6));
+    s.staffPolicy = { budget: 500, pay: 'fair', focus: 'strategy', replace: false, kitchenBudget: 0 };
+    s.delegateStaff = delegate;
+    const ids = s.staff.filter((x) => x.role !== 'manager').map((x) => x.id);
+    const ovr0 = ids.reduce((a, id) => a + ovr(s.staff.find((x) => x.id === id)!), 0);
+    const cash0 = s.cash;
+    for (let d = 0; d < 56; d++) {
+      if (!delegate) {
+        // The scripted player: every Sunday the best value courses within $500, fair pay at reviews, days off for a notice.
+        for (const x of s.staff) {
+          if (x.review) s = apply(s, { type: 'answerReview', staffId: x.id, accept: true }).state;
+          if (x.leavingOnDay !== null) s = apply(s, { type: 'daysOff', staffId: x.id }).state;
+        }
+        if ((s.day - 1) % 7 === 6) {
+          let budget = 500;
+          for (let i = 0; i < 6; i++) {
+            const options = s.staff.flatMap((x) => courseOptions(s, x, s.rep).filter((o) => o.price <= budget).map((o) => ({ ...o, id: x.id })))
+              .sort((a, b) => b.score - a.score);
+            const best = options[0];
+            if (!best) break;
+            const r = apply(s, { type: 'train', staffId: best.id, courseId: best.courseId });
+            if (r.error) break;
+            s = r.state;
+            budget -= best.price;
+          }
+        }
+      }
+      s = apply(s, { type: 'runDay' }, { noise: false }).state;
+    }
+    const still = ids.filter((id) => s.staff.some((x) => x.id === id));
+    return {
+      growth: still.reduce((a, id) => a + ovr(s.staff.find((x) => x.id === id)!), 0) - ovr0,
+      morale: s.staff.reduce((a, x) => a + x.morale, 0) / s.staff.length,
+      left: ids.length - still.length,
+      spent: cash0 - s.cash,
+    };
+  }
+
+  test('a typical manager (OVR 60) develops the team at least 75% as well as a player who always picks the best course', () => {
+    const player = run(false);
+    const manager = run(true);
+    expect(player.growth).toBeGreaterThan(0);
+    expect(manager.growth).toBeGreaterThanOrEqual(0.75 * player.growth);
+    expect(manager.morale).toBeGreaterThanOrEqual(60);
+    expect(manager.left).toBe(0);
+  });
+});
+
+describe('managers fix kitchen bottlenecks (kitchen-bottlenecks.md 5)', () => {
+  test('cooks queueing at the sink: the manager buys a hand wash station within the kitchen budget', () => {
+    let s = withStarterKit(newGame(5, 'canal', 'cosy'));
+    s.cash = 20000;
+    s.staff.push(staffFromSkill(990, 'Nora Park', 'manager', 6), staffFromSkill(991, 'Extra Cook', 'cook', 5), staffFromSkill(992, 'Fourth Cook', 'cook', 5));
+    s.delegateStaff = true;
+    s.staffPolicy = { budget: 0, pay: 'fair', focus: 'strategy', replace: false, kitchenBudget: 500 };
+    expect(kitchenNeed(s, s.rep)?.itemId).toBe('handWash');
+    s = apply(s, { type: 'runWeek' }, { noise: false }).state;
+    expect(s.equipment.some((e) => e.itemId === 'handWash')).toBe(true);
+    expect(apply(s, { type: 'setStaffPolicy', policy: { kitchenBudget: 123 } }).error).toMatch(/kitchen budget/);
   });
 });

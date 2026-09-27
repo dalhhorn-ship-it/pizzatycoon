@@ -311,6 +311,7 @@ Placed after "How guests felt":
 | Pay | Tight (90% of market), Fair (100%), Generous (110%) | Fair |
 | Hiring focus | Match the strategy (luxury: QUA; volume: SPD and CMP; middle: OVR), Best value, Grow apprentices | Match the strategy |
 | Replace underperformers | Off, On (let go anyone at -$15 per day or worse for 14 days) | Off |
+| Kitchen budget | $0, $500, $1,500, $5,000 per week: fixes the worst station bottleneck, one step a week (`kitchen-bottlenecks.md` 5) | $500 |
 
 ### 8.2 How well the manager does it
 
@@ -372,7 +373,7 @@ Old saves:
 * **Everyone at 99?** No: POT caps growth (headroom 0.25 past POT), salaries follow OVR, and course cooldown is 14 days. An all elite team costs more than it earns below Rep 60.
 * **Always hire Loyal and Easy Going?** They are rare (weight 4 of 104 each) and only visible after an interview; Easy Going also dampens positive drivers.
 * **Morale tedium risk:** mood reads daily aggregates only, and the day report shows at most two mood lines. A healthy team of mixed personalities in a fitting restaurant should sit at 60 to 75 without any action (AC-220).
-* **Manager too good?** A P 90 manager with a $1,000 budget must not beat an attentive player: over 8 weeks the managed team's average OVR growth is at most 90% of a player who spends the same budget optimally (AC-224).
+* **Managers manage reasonably well** (founder decision 2026-09-27, replaces the earlier "manager too good" cap): a typical manager (OVR 60, P 60) with a $500 training budget develops the team at least 75% as well as a scripted player who always books the best value course with the same budget, keeps team morale at 60 or more and loses nobody over 8 weeks (AC-224). Measured at build: 92 OVR points against the player's 93, morale 69 against 63. Handing the team over is a real option, not a penalty.
 
 | Tunable | Unit | Start | Safe range |
 |---|---|---|---|

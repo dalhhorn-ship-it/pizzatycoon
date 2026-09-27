@@ -209,6 +209,8 @@ export interface StaffPolicy {
   pay: 'tight' | 'fair' | 'generous';
   focus: 'strategy' | 'value' | 'youth';
   replace: boolean;
+  /** Weekly budget for kitchen stations that fix a bottleneck (kitchen-bottlenecks.md 5). */
+  kitchenBudget: number;
 }
 
 /** What the manager did with the team this week (8.3). */
@@ -219,6 +221,9 @@ export interface ManagerLog {
   raises: number;
   spent: number;
   moraleStart: number;
+  /** Kitchen fixes this week, in words, and what they cost. */
+  kitchen?: string[];
+  kitchenSpent?: number;
 }
 
 /** Everything that belongs to one restaurant. The one the player runs lives at the top of GameState. */

@@ -463,6 +463,8 @@ function policyCard(ctx: PanelCtx, state: GameState, w: Where): HTMLElement | nu
       h('div', { class: 'small muted' }, `People skill ${Math.round((m.attrs.mentoring + m.attrs.composure) / 2)}: picks the best option about ${Math.round((T.delegation.accuracyBase + T.delegation.accuracyPerPeople * (m.attrs.mentoring + m.attrs.composure) / 2) * 100)}% of the time, and coaches everyone a little.`),
       h('div', { class: 'small' }, 'Training budget a week'),
       seg(T.delegation.budgets.map((b) => [b, money(b)] as [number, string]), policy.budget, (b) => set({ budget: b })),
+      h('div', { class: 'small' }, 'Kitchen budget a week (fixes station bottlenecks: a hand wash station, a bigger sink, a fridge, a cook for the ovens)'),
+      seg(T.delegation.kitchenBudgets.map((b) => [b, money(b)] as [number, string]), policy.kitchenBudget, (b) => set({ kitchenBudget: b })),
       h('div', { class: 'small' }, 'Pay'),
       seg([['tight', 'Tight (90%)'], ['fair', 'Fair'], ['generous', 'Generous (110%)']] as [StaffPolicy['pay'], string][], policy.pay, (p) => set({ pay: p })),
       h('div', { class: 'small' }, 'Hiring focus'),
