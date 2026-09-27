@@ -5,8 +5,11 @@ import { T } from '../data/tunables';
 import { VENUES } from '../data/venues';
 import type { DayOptions } from './day';
 import { economyOf } from './economy';
+import { stateLocation } from './location';
 import { hasTalent, managerOf, ovr } from './staff';
-import { type BranchDay, type GameState, LOCATION_KEYS, type Location, type Staff } from './state';
+import { type BranchDay, dailyCash, type GameState, LOCATION_KEYS, type Location, profitOf, type Staff } from './state';
+import { renewCampaigns } from './marketing';
+import { venueFacts } from './rivals';
 import { dayRun, managerWeek, teamDay, type TeamEvent } from './team';
 
 export { managerOf };
@@ -66,10 +69,15 @@ export function runBranchDay(state: GameState, b: Location, weekday: number, opt
   const manager = managerOf(b.staff);
   const eff = managerEffect(manager);
   const eco = economyOf(state);
+  // Campaigns at this restaurant renew from the shared cash (competition.md 5.2).
+  const renewed = renewCampaigns(b.campaigns, state.day, b.venueId ? venueFacts(b.venueId) : stateLocation(b), state.cash);
+  b.campaigns = renewed.campaigns;
+  state.cash -= renewed.paid;
   const s: GameState = {
     ...state,
     ...b,
     locationId: b.id,
+    ownList: [{ id: state.locationId, districtId: state.districtId, venueId: state.venueId }, ...state.branches.map((x) => ({ id: x.id, districtId: x.districtId, venueId: x.venueId }))],
     // Its own daily randomness; the loan belongs to the owner, not to the restaurant.
     seed: state.seed + b.id * 7919,
     loan: { ...state.loan, balance: 0 },
@@ -78,8 +86,8 @@ export function runBranchDay(state: GameState, b: Location, weekday: number, opt
   const { a, report } = dayRun(s, opts);
   const p = report.pnl;
   p.waste *= eff.waste;
-  p.profit = p.sales - p.ingredients - p.waste - p.staff - p.rent - p.utilities - p.upkeep - p.interest;
-  state.cash += p.sales - p.ingredients - p.waste - p.utilities - p.upkeep;
+  p.profit = profitOf(p);
+  state.cash += dailyCash(p);
   let weekly = 0;
   if (weekday === 6) {
     weekly = a.weeklySalaries + a.weeklyRent;

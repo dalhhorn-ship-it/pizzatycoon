@@ -1,3 +1,5 @@
+import type { CampaignId } from '../data/campaigns';
+import type { ArchetypeId, RivalTier } from '../data/rivals';
 import type { AttrId, DishKind, PersonalityId, RankId, Role, SegmentId, Service, TalentId, TierId } from '../data/types';
 
 export const SCHEMA_VERSION = 6;
@@ -47,6 +49,128 @@ export interface InstalledAddon {
 }
 
 export type Attrs = Record<AttrId, number>;
+
+// ---------- Competition, marketing and delivery (competition.md) ----------
+
+/** A running campaign at one restaurant (competition.md 5). */
+export interface ActiveCampaign {
+  id: CampaignId;
+  audience: SegmentId[];
+  startDay: number;
+  /** First day it no longer runs. */
+  endsDay: number;
+  /** Renews at the end of each run until stopped. */
+  renew: boolean;
+  /** Weeks in a row this campaign has run (fatigue). */
+  weeksRunning: number;
+  /** Cost of the current run. */
+  spent: number;
+}
+
+export type DeliveryMode = 'platform' | 'marketplace' | 'own';
+
+/** Food delivery at one restaurant (competition.md 6). */
+export interface DeliveryState {
+  on: boolean;
+  mode: DeliveryMode;
+  /** Delivery price markup, 0 to 0.2. */
+  markup: number;
+  packaging: 'basic' | 'eco';
+  /** Pause the app at this kitchen load; null = never. */
+  throttle: number | null;
+  /** Delivery reputation, separate from the dining reputation. */
+  drep: number;
+  since: number;
+  vehicles: { bike: number; scooter: number };
+  /** Days in a row at or above the Top rated threshold, and whether the badge is held. */
+  topRatedDays: number;
+  topRated: boolean;
+}
+
+export interface RivalCampaign {
+  id: CampaignId;
+  audience: SegmentId[];
+  endsDay: number;
+  weeksRunning: number;
+}
+
+export interface RivalLocation {
+  venueId: string;
+  opened: number;
+  tier: RivalTier;
+  priceIndex: number;
+  rep: number;
+  following: number;
+  drep: number;
+  delivery: boolean;
+  campaigns: RivalCampaign[];
+  cutsInRow: number;
+  cutCooldownUntil: number;
+  rescued: boolean;
+  weeksLosing: number;
+  /** Days this week the room was over capacity. */
+  overDays: number;
+  /** This week so far. */
+  week: { served: number; profit: number; sales: number; bySegment: Record<SegmentId, number> };
+  /** The last 12 weeks. */
+  history: { served: number; profit: number; bySegment: Record<SegmentId, number> }[];
+  /** Yesterday, for the rival card. */
+  last: { served: number; profit: number; satisfaction: number; lowest: string; bySegment: Record<SegmentId, number>; deliveryOrders: number };
+}
+
+export interface Rival {
+  id: number;
+  name: string;
+  owner: string;
+  motto: string;
+  archetype: ArchetypeId;
+  skillOffset: number;
+  cash: number;
+  founded: number;
+  closedDay?: number;
+  locations: RivalLocation[];
+  /** A free venue it is viewing before signing (7 days' notice). */
+  viewing?: { venueId: string; signsOn: number };
+  /** Mystery diner report valid until this day. */
+  mysteryUntil?: number;
+  /** First day any of its locations came within reach of a player restaurant. */
+  seenSince?: number;
+}
+
+export interface NewsItem {
+  day: number;
+  text: string;
+  districtId: string;
+  kind: 'opening' | 'viewing' | 'closing' | 'price' | 'tier' | 'campaign' | 'delivery' | 'rescue';
+  rivalId: number;
+}
+
+/** A restaurant's market on one day (competition.md 7.4). */
+export interface MarketDay {
+  /** Competition per segment the day ran with. */
+  cEff: Record<SegmentId, number>;
+  /** The restaurant's attractiveness per segment at the start of the day. */
+  A: Record<SegmentId, number>;
+  served: Record<SegmentId, number>;
+  lost: Record<SegmentId, number>;
+  /** Guests lost per rival id, by segment. */
+  lostByRival: Record<number, Record<SegmentId, number>>;
+}
+
+/** Delivery on one day (competition.md 8.1). */
+export interface DeliveryDay {
+  wanted: number;
+  accepted: number;
+  refused: number;
+  cancelled: number;
+  delivered: number;
+  time: Record<Service, number>;
+  drepBefore: number;
+  drepAfter: number;
+  profit: number;
+  kitchenShare: number;
+  topRated: boolean;
+}
 
 /** One line of the mood breakdown on the player card (staff-management.md 5). */
 export interface MoodDriver {
@@ -155,7 +279,28 @@ export interface PnL {
   utilities: number;
   upkeep: number;
   interest: number;
+  /** Campaign spend charged today and loyalty card discounts (competition.md 5.2). */
+  marketing?: number;
+  /** The part of marketing paid in cash when a campaign run started (not again at the day's settlement). */
+  marketingPrepaid?: number;
+  /** Delivery (competition.md 6.7): sales, and commission, packaging, riders and vehicles, utilities. */
+  deliverySales?: number;
+  deliveryCosts?: number;
   profit: number;
+}
+
+/**
+ * What a day's settlement moves in cash: everything except staff and rent (paid on Sunday), loan interest (paid with the
+ * loan) and campaign runs already paid when they started.
+ */
+export function dailyCash(p: PnL): number {
+  return p.sales + (p.deliverySales ?? 0) - p.ingredients - p.waste - p.utilities - p.upkeep - ((p.marketing ?? 0) - (p.marketingPrepaid ?? 0)) - (p.deliveryCosts ?? 0);
+}
+
+/** Profit from the P&L lines; delivery food cost is inside ingredients. */
+export function profitOf(p: PnL): number {
+  return p.sales + (p.deliverySales ?? 0) - p.ingredients - p.waste - p.staff - p.rent - p.utilities - p.upkeep - p.interest -
+    (p.marketing ?? 0) - (p.deliveryCosts ?? 0);
 }
 
 export interface DayReport {
@@ -185,6 +330,9 @@ export interface DayReport {
   branches?: BranchDay[];
   /** Each staff member's day against a standard replacement (staff-management.md 7). */
   team?: TeamLine[];
+  /** Competition (competition.md 7.4) and delivery (6). */
+  market?: MarketDay;
+  delivery?: DeliveryDay;
   /** At most two mood lines a day. */
   mood?: string[];
 }
@@ -229,7 +377,7 @@ export interface ManagerLog {
 /** Everything that belongs to one restaurant. The one the player runs lives at the top of GameState. */
 export const LOCATION_KEYS = [
   'districtId', 'premisesId', 'venueId', 'deposit', 'rep', 'following', 'recipes', 'furniture', 'equipment', 'staff',
-  'daysOpen', 'fireSafety', 'roomTouches', 'history', 'departures', 'staffPolicy', 'delegateStaff', 'managerLog',
+  'daysOpen', 'fireSafety', 'roomTouches', 'history', 'departures', 'staffPolicy', 'delegateStaff', 'managerLog', 'campaigns', 'delivery',
 ] as const;
 export type LocationKey = (typeof LOCATION_KEYS)[number];
 export type Location = Pick<GameState, LocationKey> & { id: number };
@@ -291,6 +439,20 @@ export interface GameState {
   /** "Let my manager handle the team" at the restaurant the player runs. */
   delegateStaff?: boolean;
   managerLog?: ManagerLog;
+  /** Marketing campaigns at this restaurant (competition.md 5). */
+  campaigns?: ActiveCampaign[];
+  /** Food delivery at this restaurant (competition.md 6). */
+  delivery?: DeliveryState | null;
+  /** Live rival pizzerias in the city (competition.md 3). */
+  rivals?: Rival[];
+  rivalMeta?: { nextId: number; lastEntrantDay: number; lastEntrantByDistrict: Record<string, number>; pendingEntrants: number; pendingFrom: number };
+  marketNews?: NewsItem[];
+  /** A free venue the player holds for 28 days (3.5). */
+  venueHold?: { venueId: string; untilDay: number; fee: number } | null;
+  /** Days the player opened a restaurant, by district: new entrants wait 28 days there. */
+  openedIn?: Record<string, number>;
+  /** Every restaurant the player owns (set for a managed restaurant's day, so cannibalisation sees them all). */
+  ownList?: { id: number; districtId: string; venueId: string | null }[];
   /** Interviews used this week (free ones first). */
   interviews?: { week: number; used: number };
   /** Recruitment agency orders waiting to arrive. */

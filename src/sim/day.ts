@@ -12,11 +12,15 @@ import { economyOf } from './economy';
 import { stateLocation } from './location';
 import { Rng } from './rng';
 import { hasTalent, onRota } from './staff';
-import type { DayReport, GameState, PnL, Recipe, Review, SegmentReport, ServiceReport } from './state';
+import { awarenessGain, discountFor, hasLoyalty, mktFor, runSpendToday } from './marketing';
+import { playerCompetition } from './rivals';
+import { type DayReport, type GameState, type MarketDay, type PnL, profitOf, type Recipe, type Review, type SegmentReport, type ServiceReport } from './state';
 
 export interface DayOptions {
   /** Daily randomness on demand (plus or minus a few percent). Off for balance tests. */
   noise: boolean;
+  /** Live rivals count (default). False runs the day as if no live rival existed: guests lost (competition.md 7.4). */
+  live?: boolean;
 }
 
 const SERVICES: Service[] = ['lunch', 'dinner'];
@@ -177,7 +181,6 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   const crew = onRota(state.staff, state.day);
   const crowdPleaser = crew.some((s) => hasTalent(s, 'crowdPleaser'));
   const chefFame = crew.filter((s) => s.role === 'chef').reduce((x, s) => x + s.fame, 0);
-  const cEff = Math.min(T.demand.competitionCap, district.competition);
   const repMult = T.demand.repMultBase + T.demand.repMultSlope * state.rep;
   const weekdayMult = T.time.weekdayMult[weekday] ?? 1;
   const followMult = followingDemand(state.following);
@@ -198,11 +201,17 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     wastePerCover: number;
   }
   const segs: SegCalc[] = [];
+  // Every segment's pull first (competition.md 2.2), then the competition it meets, then demand.
+  const campaigns = state.campaigns;
+  const pull: Record<SegmentId, number> = Object.fromEntries(SEGMENT_IDS.map((id) => [id, 0])) as Record<SegmentId, number>;
+  const segPre: { id: SegmentId; choice: Choice; r: number; fit: number; priceMult: number; budgetMult: number; qualityMult: number; speedMult: number; discount: number }[] = [];
   for (const id of SEGMENT_IDS) {
     const seg = SEGMENTS[id];
     const choice = chooseDishes(mains, a, id, district.wealth);
     if (!choice) continue;
-    const r = choice.avgPrice / choice.avgFair;
+    // A student deal lowers what students pay for mains: value and price appeal rise, sales fall (competition.md 5.3).
+    const discount = discountFor(campaigns, id, state.day);
+    const r = (choice.avgPrice * (1 - discount)) / choice.avgFair;
     const fit = menuFit(mains, a, id, crowdPleaser);
     const priceMult = clamp(Math.pow(r, -seg.elasticity), T.demand.priceMultMin, T.demand.priceMultMax);
     const budgetMult = clamp(
@@ -218,13 +227,23 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const speedMult = seg.speedAppealAtLunch
       ? clamp(T.demand.speedRef / a.service.serviceTime.lunch, T.demand.speedMultMin, T.demand.speedMultMax)
       : 1;
+    const speedA = seg.speedAppealAtLunch ? district.lunchShare * speedMult + (1 - district.lunchShare) : 1;
+    pull[id] = (district.venue?.trafficMult ?? 1) * district.visibility * repMult * fit * priceMult * budgetMult * qualityMult * speedA * followMult * mktFor(campaigns, id, state.day);
+    segPre.push({ id, choice, r, fit, priceMult, budgetMult, qualityMult, speedMult, discount });
+  }
+  const competition = playerCompetition(state, district, pull, opts.live !== false);
+  for (const { id, choice, r, fit, priceMult, budgetMult, qualityMult, speedMult, discount } of segPre) {
+    const cEff = competition.cEff[id];
     const fameMult = id === 'foodies' ? 1 + T.demand.chefFameFoodieBonus * chefFame : 1;
     const noise = opts.noise ? clamp(1 + 0.06 * rng.normal(), 0.8, 1.2) : 1;
     const base =
       district.footTraffic * district.visibility * district.shares[id] * T.demand.captureBase * repMult * weekdayMult *
       fit * priceMult * budgetMult * qualityMult * fameMult * followMult * (1 + (T.attach.wineDemand[id] ?? 0) * wine) * (1 - T.demand.competitionFactor * cEff) * noise * economyOf(state).demand;
     const sides: Record<string, Choice | null> = {};
-    const demandBy = { lunch: base * district.lunchShare * speedMult, dinner: base * (1 - district.lunchShare) };
+    const demandBy = {
+      lunch: base * district.lunchShare * speedMult * mktFor(campaigns, id, state.day, 'lunch'),
+      dinner: base * (1 - district.lunchShare) * mktFor(campaigns, id, state.day, 'dinner'),
+    };
     const dinnerFrac = demandBy.lunch + demandBy.dinner > 0 ? demandBy.dinner / (demandBy.lunch + demandBy.dinner) : 1;
     const affinity = T.attach.barAffinity[id] ?? 1;
     const sideAttach = { ...attach };
@@ -233,7 +252,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
       const f = affinity * (sv === 'lunch' ? T.attach.barLunch : 1);
       return f * (attach.aperitivo * T.attach.aperitivoMinutes + attach.digestivo * T.attach.digestivoMinutes);
     };
-    let check = choice.avgPrice;
+    let check = choice.avgPrice * (1 - discount);
     let cost = choice.avgCost;
     let waste = choice.wasteCost;
     for (const k of SIDE_KINDS) {
@@ -420,13 +439,34 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   const fame = Math.min(T.staff.fameRepCap, state.staff.reduce((x, s) => x + s.fame, 0) * T.staff.fameRepPerWeek);
   rep = clamp(rep + fame / 7, 0, 100);
 
-  const follow = nextFollowing(state.following, satisfaction, covers, impatient);
+  // Loyalty cards keep regulars (following falls half as fast, target +0.05); campaigns spread the word (competition.md 5.3).
+  const loyal = hasLoyalty(campaigns, state.day);
+  const follow = nextFollowing(state.following, satisfaction, covers, impatient, loyal);
+  follow.after = clamp(follow.after + awarenessGain(campaigns, state.day, follow.after, district.shares), 0, 1);
+  // Foodie press night: the critics come on the first night of the run.
+  const press = (campaigns ?? []).find((c) => c.id === 'foodiePress' && c.startDay === state.day);
+  if (press) {
+    const foodies = segmentReports.find((x) => x.segment === 'foodies');
+    if (foodies && foodies.satisfaction >= 65) rep = clamp(rep + 2, 0, 100);
+    else if (foodies && foodies.satisfaction < 50) rep = clamp(rep - 1, 0, 100);
+  }
 
   const pnl = fixedCosts(state, a, covers);
   pnl.sales = sales;
   pnl.ingredients = ingredients;
   pnl.waste = waste * a.kitchen.wasteMult;
-  pnl.profit = sales - ingredients - pnl.waste - pnl.staff - pnl.rent - pnl.utilities - pnl.upkeep - pnl.interest;
+  if (loyal) pnl.marketing = (pnl.marketing ?? 0) + T.marketing.loyaltyShare * sales;
+  const runs = runSpendToday(campaigns, state.day);
+  if (runs > 0) {
+    pnl.marketing = (pnl.marketing ?? 0) + runs;
+    pnl.marketingPrepaid = runs;
+  }
+  pnl.profit = profitOf(pnl);
+  const market: MarketDay = {
+    cEff: competition.cEff, A: pull,
+    served: Object.fromEntries(SEGMENT_IDS.map((id) => [id, segmentReports.find((x) => x.segment === id)?.served ?? 0])) as Record<SegmentId, number>,
+    lost: Object.fromEntries(SEGMENT_IDS.map((id) => [id, 0])) as Record<SegmentId, number>, lostByRival: {},
+  };
 
   return {
     day: state.day, weekday, open: true, closedReason: null, covers, walkAways: totalWalk, services, segments: segmentReports,
@@ -434,6 +474,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     followingBefore: state.following, followingAfter: follow.after, followingTarget: follow.target,
     cashBefore: state.cash, cashAfter: state.cash, weeklyPayments: 0,
     tips: [...followingTip(follow.after, follow.target, services), ...tipsFor(services, a, pnl, segmentReports)].slice(0, 3),
+    market,
   };
 }
 
@@ -448,11 +489,11 @@ export function followingTarget(satisfaction: number): number {
 }
 
 /** Word of mouth: satisfied guests bring friends, unhappy ones and guests who gave up waiting keep them away. */
-export function nextFollowing(following: number, satisfaction: number, covers: number, impatient: number): { after: number; target: number } {
+export function nextFollowing(following: number, satisfaction: number, covers: number, impatient: number, loyal = false): { after: number; target: number } {
   const f = T.following;
-  const target = followingTarget(satisfaction);
+  const target = Math.min(1, followingTarget(satisfaction) + (loyal ? 0.05 : 0));
   const reach = clamp(covers / f.wordOfMouthGuests, f.wordOfMouthMin, 1);
-  const rate = target > following ? f.growth * reach : f.decline;
+  const rate = target > following ? f.growth * reach : f.decline * (loyal ? 0.5 : 1);
   const arrivals = covers + impatient;
   const gaveUp = arrivals > 0 ? impatient / arrivals : 0;
   return { after: clamp(following + rate * (target - following) - f.walkAwayLoss * gaveUp, 0, 1), target };

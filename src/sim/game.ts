@@ -21,7 +21,15 @@ import { locationFacts } from './location';
 import { applyLocation, bestRep, extractLocation, locationName, managerOf, ownedVenues, runBranchDay } from './chain';
 import { Rng } from './rng';
 import { coachProblem, hasPersonality, interestProblem, ovr, salaryFor, staffFromSkill } from './staff';
-import { type DayReport, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION, type StaffPolicy } from './state';
+import { CAMPAIGNS, type CampaignId } from '../data/campaigns';
+import type { SegmentId } from '../data/types';
+import type { Analysis } from './analysis';
+import { simulateDay } from './day';
+import { rivalSettingsOf } from './economy';
+import { campaignCost, newCampaign, renewCampaigns, slotsUsed, streakOnRestart } from './marketing';
+import { applyRivalToggle, inReach, ownRestaurants, playerCompetition, rivalAt, runRivalsDay, seedRivals } from './rivals';
+import { stateLocation } from './location';
+import { dailyCash, type DayReport, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION, type StaffPolicy } from './state';
 import {
   bookCourse, dayRun, deliverAgency, ensureEveryRole as fillRoles, firstMarket, HIREABLE_ROLES, hiredFromMarket, managerWeek, policyOf,
   recordDeparture, refreshMarket, teamDay, weekNumber,
@@ -64,6 +72,13 @@ export type Command =
   | { type: 'answerOffer'; staffId: number; match: boolean; locationId?: number }
   | { type: 'setStaffPolicy'; policy: Partial<StaffPolicy>; locationId?: number }
   | { type: 'setDelegateStaff'; on: boolean }
+  /** Marketing (competition.md 5). */
+  | { type: 'startCampaign'; campaignId: CampaignId; audience: SegmentId[]; locationId?: number }
+  | { type: 'stopCampaign'; campaignId: CampaignId; locationId?: number }
+  /** Hold a free venue for 28 days so no rival takes it (3.5). */
+  | { type: 'holdVenue'; venueId: string }
+  /** Mystery diner at a rival (7.3). */
+  | { type: 'mysteryDiner'; rivalId: number }
   | { type: 'takeLoan'; amount: number }
   | { type: 'repayLoan'; amount: number }
   | { type: 'setUnlockAll'; on: boolean }
@@ -82,7 +97,7 @@ export type Command =
   | { type: 'runWeek' };
 
 export interface GameEvent {
-  kind: 'dayCompleted' | 'weekCompleted' | 'unlocked' | 'rankUp' | 'restructure' | 'staffLeft' | 'staffNotice' | 'staffReview' | 'staffOffer' | 'info';
+  kind: 'dayCompleted' | 'weekCompleted' | 'unlocked' | 'rankUp' | 'restructure' | 'staffLeft' | 'staffNotice' | 'staffReview' | 'staffOffer' | 'market' | 'info';
   text: string;
   report?: DayReport;
   /** weekCompleted: every day that ran, and why it stopped early (null when all 7 ran). */
@@ -236,6 +251,9 @@ export function newGame(seed: number, districtId: string, premisesId = 'hole', e
     nextUid: 1, daysBelowZero: 0, daysOpen: 0, fireSafety: [], roomTouches: [], history: [], locationId: 1, branches: [], unlockAll: false,
   };
   if (economy) state.economy = clampEconomy(economy);
+  state.openedIn = { [districtId]: 1 };
+  // Live rivals are placed when the game is created, so the welcome map already shows them (competition.md 3.2).
+  if (rivalSettingsOf(state).on) seedRivals(state);
   firstMarket(state);
   return state;
 }
@@ -765,9 +783,65 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
     case 'setUnlockAll':
       state.unlockAll = cmd.on;
       break;
-    case 'setEconomy':
-      state.economy = clampEconomy({ ...economyOf(state), ...cmd.economy });
+    case 'setEconomy': {
+      const wasOn = rivalSettingsOf(state).on;
+      const next = { ...economyOf(state), ...cmd.economy };
+      if (!cmd.economy.rivals && state.economy?.rivals) next.rivals = state.economy.rivals;
+      state.economy = clampEconomy(next);
+      applyRivalToggle(state, wasOn);
       break;
+    }
+    case 'startCampaign': {
+      const c = CAMPAIGNS[cmd.campaignId];
+      if (!c) return fail(input, 'Unknown campaign.');
+      if (c.unlock === 'delivery') {
+        if (!state.delivery?.on || state.delivery.mode === 'own') return fail(input, 'A promoted listing needs delivery on a platform.');
+      } else if (!isUnlocked(state, c.unlock)) return fail(input, `Locked: ${unlockText(c.unlock)}.`);
+      const running = (state.campaigns ?? []).find((x) => x.id === c.id && (x.renew || state.day < x.endsDay));
+      if (running) return fail(input, `${c.name} is already running here.`);
+      if (!c.everyRestaurant && slotsUsed(state.campaigns, state.day) >= T.marketing.maxActive) return fail(input, `${T.marketing.maxActive} campaigns are running here; stop one first.`);
+      const audience = c.audience === 'choose' ? [...new Set(cmd.audience)] : [];
+      if (c.audience === 'choose' && (audience.length < 1 || audience.length > (c.choose ?? 1))) return fail(input, `Pick 1 to ${c.choose ?? 1} crowds to reach.`);
+      const facts = stateLocation(state);
+      const cost = campaignCost(c, facts.footTraffic);
+      if (state.cash < cost) return fail(input, `${c.name} costs $${cost}; you need $${Math.ceil(cost - state.cash)} more.`);
+      state.cash -= cost;
+      const run = newCampaign(c.id, audience, state.day, facts, streakOnRestart(state.campaigns, c.id, state.day));
+      state.campaigns = [...(state.campaigns ?? []).filter((x) => x.id !== c.id), run];
+      // Local radio plays in every restaurant you own, paid once.
+      if (c.everyRestaurant) for (const b of state.branches) b.campaigns = [...(b.campaigns ?? []).filter((x) => x.id !== c.id), { ...run, spent: 0, renew: false }];
+      events.push({ kind: 'info', text: `${c.name} starts today.` });
+      break;
+    }
+    case 'stopCampaign': {
+      const run = (state.campaigns ?? []).find((x) => x.id === cmd.campaignId && x.renew);
+      if (!run) return fail(input, 'That campaign is not renewing.');
+      run.renew = false;
+      break;
+    }
+    case 'holdVenue': {
+      const v = VENUES[cmd.venueId];
+      if (!v) return fail(input, 'Unknown venue.');
+      if (ownedVenues(state).has(v.id)) return fail(input, 'You already run a restaurant here.');
+      if (rivalAt(state, v.id)) return fail(input, 'A rival runs a restaurant there.');
+      if (state.venueHold && state.venueHold.untilDay > state.day) return fail(input, 'You can hold one venue at a time.');
+      const fee = Math.round(locationFacts(v.districtId, v.premisesId, v.id).weeklyRent * economyOf(state).rent);
+      if (state.cash < fee) return fail(input, `Holding costs a week of rent, $${fee}.`);
+      state.cash -= fee;
+      state.venueHold = { venueId: v.id, untilDay: state.day + T.rivals.holdDays, fee };
+      events.push({ kind: 'info', text: `${v.name} is held for you until day ${state.venueHold.untilDay}. The fee comes off the deposit if you take it.` });
+      break;
+    }
+    case 'mysteryDiner': {
+      const r = state.rivals?.find((x) => x.id === cmd.rivalId && x.closedDay === undefined);
+      if (!r) return fail(input, 'That rival is not open.');
+      if ((r.mysteryUntil ?? 0) - T.rivals.mysteryDinerDays + 7 > state.day) return fail(input, 'One mystery diner per rival a week.');
+      if (state.cash < T.rivals.mysteryDinerPrice) return fail(input, `A mystery diner costs $${T.rivals.mysteryDinerPrice}.`);
+      state.cash -= T.rivals.mysteryDinerPrice;
+      r.mysteryUntil = state.day + T.rivals.mysteryDinerDays;
+      events.push({ kind: 'info', text: `Your mystery diner ate at ${r.name}. Their report is on the rival card for 28 days.` });
+      break;
+    }
     case 'freshStart': {
       if (state.cash > T.finance.freshStartThreshold) return fail(input, 'A fresh start is offered when cash falls below -$20,000.');
       const fresh = newGame(state.seed + 1, state.districtId, state.premisesId, state.economy, state.venueId);
@@ -814,13 +888,15 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       const venue = VENUES[cmd.venueId];
       if (!venue) return fail(input, 'Unknown venue.');
       if (ownedVenues(state).has(venue.id)) return fail(input, 'You already run a restaurant here.');
+      if (rivalAt(state, venue.id)) return fail(input, `${rivalAt(state, venue.id)?.name} runs a restaurant there.`);
       const here = locationName(state);
       if (bestRep(state) < T.manager.openRep) {
         return fail(input, `Build your name first: opening another restaurant needs reputation ${T.manager.openRep} at one you run (now ${Math.floor(bestRep(state))}).`);
       }
       if (!managerOf(state.staff)) return fail(input, `Hire a restaurant manager for ${here} first, so it keeps running while you open the new one.`);
+      const held = state.venueHold?.venueId === venue.id && state.venueHold.untilDay > state.day ? state.venueHold.fee : 0;
       const deposit = venueDeposit(venue.id);
-      if (state.cash < deposit) return fail(input, `The deposit is ${money0(deposit)}; you need ${money0(deposit - state.cash)} more.`);
+      if (state.cash < deposit - held) return fail(input, `The deposit is ${money0(deposit - held)}; you need ${money0(deposit - held - state.cash)} more.`);
       state.branches.push(extractLocation(state));
       const id = Math.max(state.locationId, ...state.branches.map((b) => b.id)) + 1;
       // A new restaurant: empty premises and an empty menu. The recipe book (own dishes, tiers, prices) comes along;
@@ -830,7 +906,9 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
         rep: T.reputation.start, following: startFollowing(state), recipes: structuredClone(state.recipes).map((r) => ({ ...r, onMenu: false })),
         furniture: [], equipment: [], staff: [], daysOpen: 0, fireSafety: [], roomTouches: [], history: [],
       });
-      state.cash -= deposit;
+      state.cash -= deposit - held;
+      if (held) state.venueHold = null;
+      state.openedIn = { ...(state.openedIn ?? {}), [venue.districtId]: state.day };
       events.push({ kind: 'info', text: `You signed the lease on ${venue.name}. ${here} carries on under its manager.` });
       break;
     }
@@ -936,12 +1014,16 @@ function rentVenue(input: GameState, venueId: string): Result {
   if (!venue || !quote) return fail(input, 'Unknown venue.');
   if (input.venueId === venueId) return fail(input, 'You already rent this venue.');
   if (ownedVenues(input).has(venueId)) return fail(input, 'You already run a restaurant there.');
+  if (rivalAt(input, venueId)) return fail(input, `${rivalAt(input, venueId)?.name} runs a restaurant there.`);
   if (quote.total > 0 && input.cash < quote.total) return fail(input, `Moving costs $${Math.ceil(quote.total).toLocaleString('en-US')}; you need $${Math.ceil(quote.total - input.cash).toLocaleString('en-US')} more.`);
   const state = structuredClone(input);
   state.furniture = moveDining(state, venue.premisesId).placed;
   state.equipment = moveKitchen(state, venue.premisesId).placed;
-  state.cash -= quote.total;
+  const held = state.venueHold?.venueId === venueId && state.venueHold.untilDay > state.day ? state.venueHold.fee : 0;
+  if (held) state.venueHold = null;
+  state.cash -= quote.total - held;
   state.deposit = quote.newDeposit;
+  state.openedIn = { ...(state.openedIn ?? {}), [venue.districtId]: state.day };
   state.rep = quote.repAfter;
   state.following = quote.followingAfter;
   // A new building: fire safety stays behind and the clock for unlocking it starts again.
@@ -954,6 +1036,28 @@ function rentVenue(input: GameState, venueId: string): Result {
   const sold = [...quote.soldFurniture, ...quote.soldEquipment];
   if (sold.length) events.push({ kind: 'info', text: `Sold what did not fit (${sold.join(', ')}) for $${Math.round(quote.resale).toLocaleString('en-US')}.` });
   return { state, events };
+}
+
+// ---------- Guests lost to rivals (competition.md 7.4) ----------
+
+/** The same day without live rivals: what they took from you, by segment and by rival. A full service loses nothing. */
+function guestsLost(state: GameState, a: Analysis, report: DayReport, opts: DayOptions): void {
+  const m = report.market;
+  if (!m || !rivalSettingsOf(state).on) return;
+  const comp = playerCompetition(state, stateLocation(state), m.A);
+  if (!Object.keys(comp.byRival).length) return;
+  const without = simulateDay(state, a, { ...opts, live: false });
+  for (const seg of without.segments) {
+    const s = seg.segment;
+    const lost = Math.max(0, seg.served - (m.served[s] ?? 0));
+    m.lost[s] = lost;
+    const total = Object.values(comp.byRival).reduce((x, r) => x + (r[s] ?? 0), 0);
+    if (total <= 0 || lost <= 0) continue;
+    for (const [id, r] of Object.entries(comp.byRival)) {
+      const byRival = (m.lostByRival[Number(id)] ??= Object.fromEntries(Object.keys(m.lost).map((k) => [k, 0])) as Record<SegmentId, number>);
+      byRival[s] = (lost * (r[s] ?? 0)) / total;
+    }
+  }
 }
 
 // ---------- Fire safety ----------
@@ -997,11 +1101,16 @@ function runDay(state: GameState, opts: DayOptions): Result {
   const events: GameEvent[] = [];
   const unlockedBefore = unlockedIds(state);
   const rankBefore = state.rank;
+  // Campaigns renew at the start of the day, paid now (competition.md 5.2).
+  const renewed = renewCampaigns(state.campaigns, state.day, stateLocation(state), state.cash);
+  state.campaigns = renewed.campaigns;
+  state.cash -= renewed.paid;
   const { a, report } = dayRun(state, opts);
   const p = report.pnl;
+  if (report.market && report.open) guestsLost(state, a, report, opts);
 
-  // Daily cash: sales in, ingredients (bought just in time in M0), utilities and upkeep out.
-  state.cash += p.sales - p.ingredients - p.waste - p.utilities - p.upkeep;
+  // Daily cash: sales in, ingredients (bought just in time in M0), utilities, upkeep and marketing out.
+  state.cash += dailyCash(p);
   let weekly = 0;
   if (report.weekday === 6) {
     weekly += a.weeklySalaries + a.weeklyRent;
@@ -1055,6 +1164,14 @@ function runDay(state: GameState, opts: DayOptions): Result {
   if (state.rank !== rankBefore) events.push({ kind: 'rankUp', text: `You are now a ${RANK_NAMES[state.rank]}!` });
 
   state.history = [...state.history, report].slice(-56);
+  // The rival pizzerias run their day after yours, with your start of day pull (competition.md 2.3).
+  const newsBefore = (state.marketNews ?? []).length;
+  runRivalsDay(state);
+  const fresh = (state.marketNews ?? []).slice(newsBefore).filter((n) => {
+    const r = state.rivals?.find((x) => x.id === n.rivalId);
+    return !!r && (inReach(state, r) || ownRestaurants(state).some((o) => o.districtId === n.districtId));
+  });
+  if (fresh[0]) events.push({ kind: 'market', text: fresh[0].text });
   state.day += 1;
   if (report.weekday === 6) refreshMarket(state, bestRep(state), state.day);
 

@@ -52,6 +52,17 @@ export const DISTRICTS: Record<string, District> = {
   },
 };
 
+/** Neighbourhoods next to each other: delivery catchment and nearby rivals (competition.md 6.3). */
+export const ADJACENT: Record<string, readonly string[]> = {
+  university: ['business', 'market', 'canal'],
+  business: ['university', 'canal', 'linden'],
+  linden: ['business', 'canal', 'harbour'],
+  market: ['university', 'canal', 'oldtown'],
+  canal: ['university', 'business', 'linden', 'market', 'oldtown', 'harbour'],
+  oldtown: ['market', 'canal', 'harbour'],
+  harbour: ['linden', 'canal', 'oldtown'],
+};
+
 export const PREMISES: Record<string, Premises> = {
   hole: { id: 'hole', name: 'Hole in the wall', diningWidth: 6, diningHeight: 5, kitchenTiles: 24, kitchenWidth: 10, kitchenHeight: 5, visibility: 0.5 },
   cosy: { id: 'cosy', name: 'Cosy corner shop', diningWidth: 10, diningHeight: 8, kitchenTiles: 30, kitchenWidth: 14, kitchenHeight: 6, visibility: 0.75 },
