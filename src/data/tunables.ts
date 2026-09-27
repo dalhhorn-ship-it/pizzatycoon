@@ -122,9 +122,9 @@ export const T = {
   },
   /** Live rivals (competition.md 2, 3, 11.1). */
   rivals: {
-    backgroundShare: 0.5,
-    unitPressure: 0.1,
-    relMin: 0.25,
+    backgroundShare: 0.7,
+    unitPressure: 0.14,
+    relMin: 0.35,
     relMax: 2.5,
     sameStreetUnits: 6,
     sameStreetMult: 1.3,
@@ -141,7 +141,9 @@ export const T = {
     styleBonus: 0.1,
     runwayWeeks: 4,
     rescueAfterWeeks: 4,
-    closeLosingWeeks: 8,
+    closeLosingWeeks: 6,
+    /** Cash of rivals present at the start, as a share of the capital setting (lowest). */
+    seedCashMin: 0.15,
     expansionChance: 0.25,
     expansionRep: 55,
     expansionRunwayWeeks: 8,
@@ -152,7 +154,7 @@ export const T = {
     returnWeeks: 16,
     entrantFollowing: 0.25,
     entrantRep: 30,
-    salaryBase: 520,
+    salaryBase: 600,
     maxShareOfVenues: 0.3,
     tierUpCost: 1500,
     /** Target the leader (founder decision on question 6): how strongly marketing archetypes are drawn to a successful player. */

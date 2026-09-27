@@ -771,3 +771,53 @@ Archetypes, names, mottos, campaign prices, lifts and audiences, and venue value
 ## 14. M0.5 definition of done
 
 AC-226 to AC-275 pass; `npm run balance` prints the live market sanity table, the campaign payback table and the delivery gain per build, and all checks of section 11 pass; the founder can start a Normal game on an iPad, see 10 rival pins on the welcome map, open at Lock Keeper's Cottage, watch Pizza Pronto's viewing notice appear, read in the week report that it took 7 students and 6 families, follow the coach's advice to run Family Sundays, see the families come back in the next report, reach 3 stars, switch on platform delivery, watch the Delivery bar fill the kitchen on a Friday, lower the throttle after a 59 minute delivery warning, and set the Competition settings to Hard with Often entrants and see new viewing notices within a few weeks.
+
+## 15. Implementation notes (as built)
+
+What the build does differently from the text above, and the balance numbers it measures. The tests named here run in `npm test`.
+
+### 15.1 Tuning moved within the safe ranges
+
+| Tunable | Spec start | As built | Why |
+|---|---|---|---|
+| `T.rivals.backgroundShare` | 0.5 | 0.7 | Rivals are usually far less attractive than a good player (`rel` at its floor), so with 0.5 the player met less competition live than with rivals off (C_eff 0.22 against 0.30). |
+| `T.rivals.unitPressure` | 0.10 | 0.14 | Same reason. |
+| `T.rivals.relMin` | 0.25 | 0.35 | A weak rival next door still takes some guests. |
+| `T.rivals.closeLosingWeeks` | 8 | 6 | Closings in 26 weeks. |
+| `T.rivals.salaryBase` | 520 | 600 | Rivals that do not fit their district now lose money, as in the Pizza Pronto example of section 2. |
+| `T.rivals.seedCashMin` (new) | | 0.15 | Rivals present at the start hold 15% to 100% of the capital setting: some are one bad season from closing. |
+| `T.delivery.ordersPerTrip` (new) | 1.3 | 2 | With 1.3 the rider counts of section 6.9 (3 on shift for about 40 orders a day) could not keep deliveries under the promise. |
+
+Other deviations:
+
+* **Turns per seat per day** are calibrated to the player's own reference builds (Price Fighter 2.7, Budget Chain 2.5, Hype House 2.2, Honest Trattoria 2.0, Trendy Kitchen 1.9, Artisan 1.6). The first draft's 2.2 to 4.0 let rivals outearn any real kitchen.
+* **Archetype ranges:** each archetype keeps to a tier range and a price index range (for example a Price Fighter stays between basic and standard, 0.75 to 1.00), so it stays recognisable after months of moves.
+* **Rivals target the leader** is a setting (off on Easy, on for Normal and Hard): marketing minded rivals weigh the player's best district 1.5 times when they choose where to open.
+* **Newcomers** only look at districts where they can afford a free venue.
+* **No schema bump:** every new field is optional, and a missing `economy.rivals` means live rivals off. Old saves load unchanged and add rivals from the settings menu.
+* **Pipeline:** no fifth Delivery bar yet. The delivery panel shows the share of the kitchen used by delivery, and the advisor names the kitchen load when deliveries run late.
+
+### 15.2 Measured balance
+
+Live market (`tests/balance/market.test.ts`: middle build in Canal Quarter, 26 weeks; 8 seeds when tuning):
+
+| Check | Target | Measured |
+|---|---|---|
+| Player C_eff at home | 0.25 to 0.55 | 0.26 to 0.31 |
+| Active rivals at week 26 | 8 to 16 | 8 to 14 |
+| Seeds with a closing and an entrant | 60% or more | 8 of 8 |
+| Median established rival profit | -$50 to +$450 a day | $74 to $189 |
+| Player profit, live against off, Normal | 75% to 110% | 100% to 102% |
+| Easy / Hard | 85% or more / 65% or more | 101% / 90% to 98% |
+
+Delivery (`tests/balance/delivery.test.ts`, platform mode, throttle 0.8):
+
+| Build | Target gain | Measured | Note |
+|---|---|---|---|
+| Volume, University Quarter | 15% to 35% | about 16% | |
+| Middle, Canal Quarter | 10% to 35% | about 2% | **Open.** Its dining room already fills 80% of the kitchen at dinner, so the throttle refuses most orders. The best setup needs a bigger kitchen. |
+| Luxury, Old Town | under 10% | about 16% | **Open.** Only about 5 orders a day, but at $38 a pizza each order earns about $40. |
+| Delivery kitchen, hole in the wall in Canal Quarter, run well | 4 times its dining profit, 60% of the middle build | from -$268 to about +$350 a day, about 25% of the middle build | **Open.** It is demand limited at about 64 orders a day: Top rated needs food quality around 0.8 to reach DRep 85. The money per order matches section 6.9. |
+| The same kitchen run badly (platform, throttle off) | a quarter of the well run gain | similar money, delivery rating about 20 points lower | Throttle off pays today and costs the rating. |
+
+Levers for the open items, in order: `orderRate` (0.004 to 0.006) for the delivery kitchen, a luxury specific delivery affinity, and a coach line that tells a middle build to add an oven before switching delivery on.

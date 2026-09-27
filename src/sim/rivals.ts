@@ -470,6 +470,8 @@ export function seedRivals(state: GameState): void {
       const a = ARCHETYPES[archetype];
       rival.founded = state.day - rng.int(30, 400);
       rival.locations.push(blankLocation(venueId, rival.founded, rivalTierFor(archetype, skill), a.priceIndex, clamp(40 + 3 * skill + rng.int(-5, 5), 0, 100), rng.range(0.7, 0.9)));
+      // Established rivals have spent some of their capital already: some are one bad season from closing.
+      rival.cash = Math.round(settings.capital * rng.range(T.rivals.seedCashMin, 1));
       state.rivals.push(rival);
     }
   }
@@ -489,8 +491,13 @@ function startEntrant(state: GameState, rng: Rng, avoidPlayerDistricts: boolean)
     state.day - (state.openedIn?.[d] ?? -999) >= t.graceDays && state.day - (meta.lastEntrantByDistrict[d] ?? -999) >= t.graceDays &&
     !(avoidPlayerDistricts && playerDistricts.has(d)));
   if (!districts.length) return false;
+  // A newcomer only looks where it can afford a venue (with the start capital and a cosy fit out).
+  const probe: Rival = { id: -1, name: '', owner: '', motto: '', archetype: 'honestTrattoria', skillOffset: 0, cash: settings.capital, founded: state.day, locations: [] };
+  const free = freeVenues(state);
+  const reachable = districts.filter((d) => free.some((v) => VENUES[v]?.districtId === d && affordable(state, probe, v, rivalSkill(state, probe), t.runwayWeeks)));
+  if (!reachable.length) return false;
   const leader = settings.targetLeader ? leaderDistrict(state) : null;
-  const weights = Object.fromEntries(districts.map((d) => [d, (DISTRICTS[d]?.competition ?? 0.3) * (d === leader ? 1.5 : 1)]));
+  const weights = Object.fromEntries(reachable.map((d) => [d, (DISTRICTS[d]?.competition ?? 0.3) * (d === leader ? 1.5 : 1)]));
   const districtId = pickWeighted(rng, weights);
   const facts = locationFacts(districtId, 'cosy', null);
   const archetype = pickWeighted(rng, SPAWN_WEIGHTS[bestFor(facts.shares)]);
