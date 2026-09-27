@@ -19,6 +19,7 @@ import { KitchenView } from './kitchenView';
 import { pipelineStrip } from './pipeline';
 import { checklistCard } from './checklist';
 import { kitchenPanel, menuPanel, moneyPanel, type PanelCtx, roomPanel } from './panels';
+import { dayCapacityLine, weekKitchenCard } from './capacity';
 import { formArrow, moraleFace, needsAttention, openPlayerCard, squadPanel, staffAdvice } from './squad';
 import { ROLE_NAMES } from '../data/staff';
 import type { TeamLine } from '../sim/state';
@@ -102,7 +103,7 @@ function weekTeamCard(reports: DayReport[], state: GameState, open: (id: number)
   const top = list[0];
   const attention = needsAttention(state);
   const advice = staffAdvice(state, new Map(list.map((x) => [x.line.id, x.value])));
-  return h('div', { class: 'card' }, h('h3', null, h('span', null, 'Team this week'), h('span', { class: 'small' }, 'against a standard hire')),
+  return h('div', { class: 'card' }, h('h3', null, h('span', null, 'Team this week'), h('span', { class: 'small' }, '$ for the week, against a standard hire')),
     top && top.value > 0 ? h('div', { class: 'potw' }, '🏆 Player of the week: ', h('b', null, top.line.name), ` (${signed(top.value)} $)`) : null,
     h('div', { class: 'teamtable', role: 'table' },
       ...list.map((x) => {
@@ -506,6 +507,7 @@ export class App {
             h('span', { class: 'small muted' }, `${Math.round(r.walkAways)} turned away · satisfaction ${r.satisfaction.toFixed(0)}`)),
           h('div', { class: 'card' }, h('span', { class: 'muted small' }, 'Profit'), h('span', { class: `big ${r.pnl.profit >= 0 ? 'good' : 'bad'}` }, money(r.pnl.profit)),
             h('span', { class: 'small muted' }, `Sales ${money(r.pnl.sales)} · reputation ${signed(repDelta, 1)}`))),
+      dayCapacityLine(r),
       r.open ? h('div', { class: 'small muted' },
         `Word of mouth: ${Math.round(r.followingBefore * 100)}% → ${Math.round(r.followingAfter * 100)}% of locals know you. ` +
         `At today's satisfaction the following heads for ${Math.round(r.followingTarget * 100)}%.`) : null,
@@ -557,6 +559,7 @@ export class App {
             h('span', null, `${T.time.weekdayNames[r.weekday]} ${r.day}`),
             h('b', { class: r.open ? (r.pnl.profit >= 0 ? 'good' : 'bad') : 'warn' }, r.open ? `${Math.round(r.covers)} guests · ${money(r.pnl.profit)}` : 'closed'),
           ]))),
+      weekKitchenCard(reports, this.game.state as GameState),
       weekTeamCard(reports, this.game.state as GameState, (id) => openPlayerCard(this.ctx(), id)),
       branchWeek(reports),
       last.tips.length ? h('div', { class: 'card' }, h('h3', null, 'Your advisor'), ...last.tips.map((t) => h('div', { class: 'small' }, t))) : null,

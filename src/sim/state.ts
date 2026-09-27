@@ -127,12 +127,13 @@ export interface ServiceReport {
   capacity: number;
   rho: number;
   queueDelay: number;
-  bottleneck: 'seats' | 'oven' | 'prep' | 'plates' | 'none';
+  bottleneck: 'seats' | 'oven' | 'prep' | 'plates' | 'cold' | 'none';
   tableCycle: number;
   /** Minutes from order to plate: cook time plus queueing when the kitchen runs near capacity. */
   ticketTime: number;
   /** Service pipeline in covers per hour (kitchen-builder.md 6). */
-  stages: { prep: number; oven: number; seats: number; plates: number };
+  /** Guests per hour each stage handles; cold is the fridges' dough for the day spread over the service. */
+  stages: { prep: number; oven: number; seats: number; plates: number; cold?: number };
   /** Demand per hour of effective service time. */
   demandPerHour: number;
 }

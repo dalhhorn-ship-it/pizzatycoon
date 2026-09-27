@@ -22,6 +22,7 @@ import { ovr } from '../sim/staff';
 import { h, meter, money, signed, toast } from './dom';
 import type { Floor } from './floor';
 import { compare } from './impact';
+import { capacityCard, stationsCard } from './capacity';
 import { pipelineData } from './pipeline';
 import type { KitchenView } from './kitchenView';
 
@@ -247,7 +248,7 @@ const GROUPS: [string, (it: EquipmentItem) => boolean][] = [
   ['Ovens', (it) => it.role === 'oven'],
   ['Prep', (it) => it.role === 'counter' || it.role === 'sheeter' || it.role === 'proving'],
   ['Cold', (it) => it.role === 'cold'],
-  ['Wash and pass', (it) => it.role === 'sink' || it.role === 'dishMachine' || it.role === 'pass'],
+  ['Wash, plates and pass', (it) => it.role === 'sink' || it.role === 'dishMachine' || it.role === 'pass' || it.role === 'handwash' || it.role === 'storage'],
 ];
 
 function itemStats(it: EquipmentItem): string {
@@ -259,6 +260,11 @@ function itemStats(it: EquipmentItem): string {
   if (it.role === 'counter') stats.push(`prep station${it.prepMult && it.prepMult !== 1 ? ` x${it.prepMult}` : ''}`);
   if (it.role === 'sheeter') stats.push(`x${it.prepMult} prep at the station it touches`);
   if (it.cold) stats.push('keeps dough cold');
+  if (it.coldCap) stats.push(`dough for ${it.coldCap} pizzas a day`);
+  if (it.washers) stats.push(`room for ${it.washers} dishwasher${it.washers > 1 ? 's' : ''}`);
+  if (it.washPoints) stats.push(`${it.washPoints} wash point${it.washPoints > 1 ? 's' : ''} for ${it.washPoints * 2} cooks`);
+  if (it.plateStock) stats.push(`${it.plateStock} more clean plates`);
+  if (it.role === 'oven') stats.push(`needs ${it.tend ?? 0.5} of a cook to tend`);
   if (it.effectMult) stats.push(it.role === 'pass' ? `serving x${it.effectMult}` : `dishwashing x${it.effectMult}`);
   if (it.qualityMod) stats.push(`quality ${signed(it.qualityMod)}`);
   if (it.skillNeeded) stats.push(`needs cooks with Quality ${it.skillNeeded * 10}`);
@@ -386,6 +392,8 @@ export function kitchenPanel(ctx: PanelCtx, view: KitchenView): HTMLElement {
         h('span', null, 'Equipment quality'), h('b', null, signed(k.equipmentE, 1)),
         h('span', null, 'Kitchen flow'), h('b', { class: penalties ? 'warn' : 'good' }, penalties ? `${penalties} slow spot${penalties > 1 ? 's' : ''}` : 'Smooth')),
       h('div', { class: 'small muted' }, bottlenecks.length ? `Last service limits: ${bottlenecks.join(', ')}` : 'No bottleneck at the last service.')),
+    capacityCard(state),
+    stationsCard(state),
     guestsNotice(state, k.equipmentE),
     h('div', { class: 'row' },
       h('button', { onclick: () => act(ctx, { type: 'tidyKitchen' }, 'Kitchen tidied into a tight pizza line') }, 'Tidy up layout')),

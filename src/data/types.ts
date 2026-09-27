@@ -117,7 +117,7 @@ export interface RecipeTemplate {
 }
 
 export type EquipmentFamily = 'basic' | 'volume' | 'quality' | 'artisan' | 'hybrid';
-export type EquipmentRole = 'oven' | 'counter' | 'sheeter' | 'pass' | 'dishMachine' | 'proving' | 'cold' | 'sink';
+export type EquipmentRole = 'oven' | 'counter' | 'sheeter' | 'pass' | 'dishMachine' | 'proving' | 'cold' | 'sink' | 'handwash' | 'storage';
 
 export type Unlock =
   | { kind: 'start' }
@@ -148,6 +148,16 @@ export interface EquipmentItem {
   footprint: number;
   /** Keeps dough cold: gives touching prep counters the cold at hand bonus (kitchen-builder.md 4). */
   cold?: boolean;
+  /** Kitchen bottlenecks (kitchen-bottlenecks.md): how much of a cook an oven needs (default 0.5). */
+  tend?: number;
+  /** Dishwashers who can work at this station at once. */
+  washers?: number;
+  /** Places for cooks to wash hands, tools and pans. */
+  washPoints?: number;
+  /** Dough for this many pizzas a day. */
+  coldCap?: number;
+  /** Extra clean plates in stock. */
+  plateStock?: number;
   maintenance: number;
   unlock: Unlock;
   blurb: string;

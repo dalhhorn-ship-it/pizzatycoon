@@ -14,6 +14,7 @@ Playable greybox with the full economy of `01-product/balance.md`:
 * Room touches: wall, table and ceiling decoration that takes no floor tile
 * Menu complexity: a wide or fancy menu slows the prep line and lengthens ticket times unless the cooks are skilled; primi and secondi spare the oven but load the prep line
 * Kitchen equipment in volume, quality, artisan and basic families with unlocks, throughput and quality effects
+* Kitchen bottlenecks (`01-product/kitchen-bottlenecks.md`): ovens need tending, cooks need wash points, sinks have room for so many dishwashers, fridges hold dough for so many pizzas, a crowded kitchen slows everyone; Double Sink, Hand Wash Station, Reach in Fridge, Walk in Cooler and Plate Shelving; a capacity view per service with the levers that matter, and a kitchen section in the week report
 * Dining room build mode (tables, booths, decor, lighting, ambience)
 * The Squad (`01-product/staff-management.md`): four attributes (Quality, Speed, Composure, Mentoring) and an OVR per person, composure under pressure, courses and coaching, a city wide staff market with scouting, apprentices and an agency, personalities that react to how busy, fast and good the restaurant is, rival offers, pay reviews, and each person's value against a standard hire in the day and week reports; restaurant managers run the team by policy
 * Day simulation for lunch and dinner: demand by customer segment, dish choice, kitchen and seat capacity, turnover, satisfaction, reviews, reputation

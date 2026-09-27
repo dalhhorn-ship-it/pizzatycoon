@@ -260,7 +260,9 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   const queueBy: Record<Service, number> = { lunch: 0, dinner: 0 };
   let totalWalk = 0;
   let impatient = 0;
-  for (const sv of SERVICES) {
+  // Stage capacities per service before cold storage (kitchen-bottlenecks.md).
+  const stations = kitchenBy.dinner.stations;
+  const stageOf = (sv: Service) => {
     const hours = sv === 'lunch' ? T.time.lunchHours : T.time.dinnerHours;
     const demand = segs.reduce((x, s) => x + s.demand[sv], 0);
     const meal = demand > 0 ? segs.reduce((x, s) => x + s.demand[sv] * (SEGMENTS[s.id].mealLength[sv] + s.extraMeal[sv]), 0) / demand : 45;
@@ -274,10 +276,23 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const prepLoad = mix((s) => s.choice.avgWork, 1) + sideLoad;
     const prepPerHour = k.prepPerHour / prepLoad;
     const ovenCoversPerHour = ovenShare > 0 ? k.ovenPerHour / ovenShare : Infinity;
-    const kitchenPerHour = Math.min(ovenCoversPerHour, prepPerHour);
+    const plateCap = (a.service.platesPerHour / T.kitchen.platesPerCover) * hours + stations.plateStock / T.kitchen.platesPerCover;
+    const pre = Math.min(Math.min(ovenCoversPerHour, prepPerHour, seatPerHour) * hours * T.service.utilisation[sv], plateCap);
+    return { hours, demand, cycle, seatPerHour, k, ovenShare, prepPerHour, ovenCoversPerHour, plateCap, pizzas: Math.min(demand, pre) * ovenShare, pizzaCap: pre * ovenShare };
+  };
+  const pre = { lunch: stageOf('lunch'), dinner: stageOf('dinner') };
+  // Dough for the day: the fridges hold stations.coldCap pizzas, shared between services as they would be sold.
+  const pizzasWanted = pre.lunch.pizzas + pre.dinner.pizzas;
+  for (const sv of SERVICES) {
+    const { hours, demand, cycle, seatPerHour, k, ovenShare, prepPerHour, ovenCoversPerHour, plateCap } = pre[sv];
+    const coldPizzas = pizzasWanted > 0 ? (stations.coldCap * pre[sv].pizzas) / pizzasWanted : stations.coldCap / 2;
+    const coldPerHour = ovenShare > 0 ? coldPizzas / ovenShare / (hours * T.service.utilisation[sv]) : Infinity;
+    // For the pipeline: the day's dough spread over the services as the rest of the line could sell it.
+    const capWanted = pre.lunch.pizzaCap + pre.dinner.pizzaCap;
+    const coldStage = ovenShare > 0 && capWanted > 0 ? (stations.coldCap * pre[sv].pizzaCap) / capWanted / ovenShare / (hours * T.service.utilisation[sv]) : 999;
+    const kitchenPerHour = Math.min(ovenCoversPerHour, prepPerHour, coldPerHour);
     const perHour = Math.min(kitchenPerHour, seatPerHour);
     const serviceCap = perHour * hours * T.service.utilisation[sv];
-    const plateCap = (a.service.platesPerHour / T.kitchen.platesPerCover) * hours + T.kitchen.plateStock / T.kitchen.platesPerCover;
     const capacity = Math.min(serviceCap, plateCap);
     const rho = capacity > 0 ? demand / capacity : 99;
     const q = queueDelay(rho);
@@ -288,6 +303,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     if (rho >= 0.85) {
       if (plateCap < serviceCap) bottleneck = 'plates';
       else if (seatPerHour <= kitchenPerHour) bottleneck = 'seats';
+      else if (coldPerHour <= Math.min(ovenCoversPerHour, prepPerHour)) bottleneck = 'cold';
       else bottleneck = ovenCoversPerHour <= prepPerHour ? 'oven' : 'prep';
     }
     let walk = demand - servedTotal;
@@ -306,14 +322,19 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     perceivedWait[sv] = a.service.orderTime[sv] + a.service.serveTime[sv] + q * share;
     // A kitchen running near capacity queues tickets: more or faster stations mean hotter food, sooner.
     const servedPerHour = servedTotal / (hours * T.service.utilisation[sv]);
-    const kitchenRho = kitchenPerHour > 0 ? servedPerHour / kitchenPerHour : 1;
+    // Running out of dough turns guests away; it does not queue tickets on the line.
+    const line = Math.min(ovenCoversPerHour, prepPerHour);
+    const kitchenRho = line > 0 ? servedPerHour / line : 1;
     ticket[sv] = k.cookTime + T.satisfaction.ticketQueueShare * queueDelay(Math.min(kitchenRho, T.service.queueRhoCap));
     totalWalk += walk;
     const servedAfter = segs.reduce((x, s) => x + (served[s.id]?.[sv] ?? 0), 0);
     services.push({
       service: sv, demand, served: servedAfter, walkAways: walk, capacity, rho, queueDelay: q, bottleneck, tableCycle: cycle, ticketTime: ticket[sv],
       // Plates are expressed per effective service hour so every stage compares on the same basis as seats and ovens.
-      stages: { prep: prepPerHour, oven: Number.isFinite(ovenCoversPerHour) ? ovenCoversPerHour : k.ovenPerHour, seats: seatPerHour, plates: plateCap / (hours * T.service.utilisation[sv]) },
+      stages: {
+        prep: prepPerHour, oven: Number.isFinite(ovenCoversPerHour) ? ovenCoversPerHour : k.ovenPerHour, seats: seatPerHour, plates: plateCap / (hours * T.service.utilisation[sv]),
+        cold: Number.isFinite(coldStage) ? coldStage : 999,
+      },
       demandPerHour: demand / (hours * T.service.utilisation[sv]),
     });
   }
@@ -472,7 +493,8 @@ function tipsFor(services: ServiceReport[], a: Analysis, pnl: PnL, segs: Segment
           : `Prep counters were the limit at ${name}. Another counter, a cook or a dough sheeter would help.`,
       );
     }
-    if (s.bottleneck === 'plates') tips.push(`You ran out of clean plates at ${name}. A dishwasher or a dish machine would help.`);
+    if (s.bottleneck === 'plates') tips.push(`You ran out of clean plates at ${name}. A dishwasher, a bigger sink, plate shelving or a dish machine would help.`);
+    if (s.bottleneck === 'cold') tips.push(`The fridges ran out of dough at ${name}. Another fridge or a walk in cooler would help.`);
   }
   if (pnl.sales > 0) {
     const fc = (pnl.ingredients + pnl.waste) / pnl.sales;

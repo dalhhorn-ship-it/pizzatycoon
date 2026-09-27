@@ -47,7 +47,7 @@ export const BUILDS: Record<BuildId, BuildSpec> = {
     sides: { drink: 3, starter: 4.5, dessert: 4 },
     equipment: [
       'conveyorOven', 'conveyorOven', 'conveyorOven', 'prepCounter', 'prepCounter', 'prepCounter', 'prepCounter',
-      'doughSheeter', 'doughSheeter', 'doughSheeter', 'doughSheeter', 'heatLampPass', 'dishMachine',
+      'doughSheeter', 'doughSheeter', 'doughSheeter', 'doughSheeter', 'heatLampPass', 'dishMachine', 'walkInCooler',
     ],
     staff: [
       ['cook', 4, 0], ['cook', 4, 0], ['cook', 4, 0], ['cook', 4, 0],

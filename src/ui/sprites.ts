@@ -997,8 +997,8 @@ export function drawEquipment(g: CanvasRenderingContext2D, itemId: string, x: nu
     case 'dishMachine': return dishMachine(P, W, H, active, t);
     case 'provingCabinet': return provingCabinet(P, W, H, active);
     case 'prepFridge': return prepFridge(P, W, H);
-    case 'sink': return sink(P, W, H);
-    case 'fridge': return fridge(P, W, H);
+    case 'sink': case 'doubleSink': case 'handWash': return sink(P, W, H);
+    case 'fridge': case 'reachInFridge': case 'walkInCooler': return fridge(P, W, H);
     default: return crate(P, W, H);
   }
 }

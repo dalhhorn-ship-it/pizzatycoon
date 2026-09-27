@@ -120,6 +120,20 @@ export const T = {
     plateStock: 90,
     resale: 0.8,
   },
+  /** Station bottlenecks (kitchen-bottlenecks.md). */
+  stations: {
+    /** Ovens a cook tends alongside prep, in tend units (a deck oven needs 0.5). */
+    tendPerCook: 1,
+    defaultTend: 0.5,
+    /** Cooks who share one wash point before they queue for it. */
+    cooksPerWashPoint: 2,
+    washStrainPerCook: 0.06,
+    washStrainCap: 0.3,
+    /** Free kitchen tiles each person on the kitchen floor needs. */
+    tilesPerPerson: 2.25,
+    crowdPerPerson: 0.05,
+    crowdCap: 0.25,
+  },
   /** kitchen-builder.md 4: walking distance on the kitchen grid. */
   kitchenFlow: {
     prepFreeTiles: 2,

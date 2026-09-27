@@ -70,11 +70,16 @@ export interface Contribution {
   reason: string;
 }
 
-/** Profit today with each person against the same day with a standard replacement in their place. */
+/**
+ * Profit today with each person against the same day with a standard replacement in their place, plus the reputation
+ * their work earns: reputation settles at reviewBase + reviewSlope x satisfaction, so a satisfaction difference is worth
+ * reviewSlope x (what one reputation point adds to a day's profit here).
+ */
 export function contributions(state: GameState, a: Analysis, report: DayReport, opts: DayOptions, ids?: readonly number[], managed = false): Contribution[] {
   if (!report.open) return [];
   // A manager at the restaurant the player runs only works when the team is handed over.
   const managing = !!managerRunsTeam(state, managed);
+  const repPoint = Math.max(0, dayRun({ ...state, rep: Math.min(100, state.rep + 1) }, opts).report.pnl.profit - report.pnl.profit);
   const out: Contribution[] = [];
   for (const s of state.staff) {
     if (ids && !ids.includes(s.id)) continue;
@@ -84,7 +89,7 @@ export function contributions(state: GameState, a: Analysis, report: DayReport, 
     }
     const alt: GameState = { ...state, staff: state.staff.map((x) => (x.id === s.id ? standardReplacement(s) : x)) };
     const r = dayRun(alt, opts).report;
-    const value = report.pnl.profit - r.pnl.profit;
+    const value = report.pnl.profit - r.pnl.profit + (report.satisfaction - r.satisfaction) * T.reputation.reviewSlope * repPoint;
     out.push({ id: s.id, value, reason: reasonFor(s, value, report, r, a, state.day, managing) });
   }
   return out;
@@ -96,7 +101,7 @@ function reasonFor(s: Staff, value: number, actual: DayReport, alt: DayReport, a
   const dinner = personalPressure(s, { service: 'dinner', load: a.pressure.dinner, day });
   const lunch = personalPressure(s, { service: 'lunch', load: a.pressure.lunch, day });
   const worst = Math.abs(dinner - 1) >= Math.abs(lunch - 1) ? { p: dinner, sv: 'dinner' } : { p: lunch, sv: 'lunch' };
-  if (s.role !== 'manager' && Math.abs(worst.p - 1) >= 0.04 && (worst.p > 1) === up) {
+  if (s.role !== 'manager' && Math.abs(worst.p - 1) >= 0.03 && (worst.p > 1) === up) {
     return up ? `Stayed calm in the ${worst.sv} rush` : `Struggled under pressure at ${worst.sv} (CMP ${s.attrs.composure})`;
   }
   if (!up && s.morale <= 35) return `Unhappy and slow (morale ${Math.round(s.morale)})`;

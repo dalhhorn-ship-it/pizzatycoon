@@ -388,6 +388,11 @@ export class KitchenView {
     }
     if (it.role === 'sheeter' && a.kitchen.flow.unattachedSheeters.includes(uid)) badges.push(['not attached', '#a8342a']);
     if ((it.role === 'sink' || it.role === 'dishMachine') && a.kitchen.flow.washMult < 1) badges.push([`-${Math.round((1 - a.kitchen.flow.washMult) * 100)}% wash`, '#d9822b']);
+    const stn = a.kitchen.stations;
+    if (it.role === 'oven' && stn.tendRatio < 1) badges.push([`${Math.round(stn.tendRatio * 100)}% tended`, '#d9822b']);
+    if ((it.role === 'sink' || it.role === 'dishMachine') && stn.idleWashers > 0) badges.push([`${stn.idleWashers} idle`, '#d9822b']);
+    if ((it.role === 'sink' || it.role === 'handwash') && stn.washStrain > 0) badges.push(['cooks queue', '#d9822b']);
+    if (it.cold && stn.coldCap) badges.push([`${stn.coldCap}/day`, '#4a78a8']);
     if (!badges.length && (st || it.role === 'oven')) badges.push(['✓', '#3f7a45']);
     let bx = this.ox + (r.x + r.w) * t - 4;
     const by = this.oy + r.y * t + 4;

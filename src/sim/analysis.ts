@@ -36,7 +36,59 @@ export interface DishStats {
   work: number;
 }
 
+/**
+ * Station bottlenecks (kitchen-bottlenecks.md): where equipment and staff do not match.
+ * Every multiplier is 1 when the kitchen is set up for its team.
+ */
+export interface Stations {
+  /** Oven tending needed (a deck oven 0.5, a wood fired 1) and what the cooks can give. */
+  tendNeed: number;
+  tendRatio: number;
+  /** Wash points for cooks (sinks, dish machine, hand wash) and cooks beyond what they serve. */
+  washPoints: number;
+  washStrain: number;
+  prepWashMult: number;
+  /** Dishwashers who fit at the wash stations; the rest stand idle. */
+  washSlots: number;
+  idleWashers: number;
+  /** People on the kitchen floor beyond what the free tiles hold, and the speed that costs. */
+  kitchenPeople: number;
+  roomFor: number;
+  crowdOver: number;
+  crowdMult: number;
+  /** Dough for this many pizzas a day. */
+  coldCap: number;
+  plateStock: number;
+}
+
+export function stationsOf(state: GameState): Stations {
+  const t = T.stations;
+  const crew = onRota(state.staff, state.day);
+  const cooks = crew.filter((s) => s.role === 'chef' || s.role === 'cook').length;
+  const washers = crew.filter((s) => s.role === 'dishwasher').length;
+  const items = state.equipment.map((e) => EQUIPMENT[e.itemId]).filter((e): e is EquipmentItem => !!e);
+  const tendNeed = items.filter((i) => i.role === 'oven').reduce((a, i) => a + (i.tend ?? t.defaultTend), 0);
+  const tendRatio = tendNeed > 0 ? Math.min(1, (cooks * t.tendPerCook) / tendNeed) : 1;
+  const washPoints = items.reduce((a, i) => a + (i.washPoints ?? 0), 0);
+  const washStrain = Math.max(0, cooks - washPoints * t.cooksPerWashPoint);
+  const washSlots = items.reduce((a, i) => a + (i.washers ?? 0), 0);
+  const premises = PREMISES[state.premisesId];
+  const free = (premises?.kitchenTiles ?? 30) - 2 - items.reduce((a, i) => a + i.footprint, 0);
+  const roomFor = Math.max(1, Math.floor(free / t.tilesPerPerson));
+  const kitchenPeople = cooks + Math.min(washers, washSlots);
+  const crowdOver = Math.max(0, kitchenPeople - roomFor);
+  return {
+    tendNeed, tendRatio, washPoints, washStrain, prepWashMult: 1 - Math.min(t.washStrainCap, washStrain * t.washStrainPerCook),
+    washSlots, idleWashers: Math.max(0, washers - washSlots), kitchenPeople, roomFor, crowdOver,
+    crowdMult: 1 - Math.min(t.crowdCap, crowdOver * t.crowdPerPerson),
+    coldCap: items.reduce((a, i) => a + (i.coldCap ?? 0), 0),
+    plateStock: T.kitchen.plateStock + items.reduce((a, i) => a + (i.plateStock ?? 0), 0),
+  };
+}
+
 export interface KitchenStats {
+  /** Station bottlenecks between equipment and staff. */
+  stations: Stations;
   kitchenStaff: number;
   avgSkill: number;
   kitchenSkillK: number;
@@ -250,6 +302,7 @@ function ovenSpeed(item: EquipmentItem, cooks: Staff[], avgSkill: number, ctx: W
 export function kitchenStats(state: GameState, service: Service = 'dinner', load: AreaLoad = NO_LOAD): KitchenStats {
   const ctx: WorkContext = { service, load, day: state.day };
   const cooks = kitchenCrew(state);
+  const stations = stationsOf(state);
   const avgSkill = mean(cooks.map((c) => effAttr(c, 'quality', service, state.day) / 10));
   const hasChef = cooks.some((c) => c.role === 'chef');
   const K = cooks.length
@@ -279,7 +332,8 @@ export function kitchenStats(state: GameState, service: Service = 'dinner', load
     const speed = ovenSpeed(o, cooks, avgSkill, ctx);
     const slots = (o.slots ?? 0) + addonSum(oe, 'slotsAdd');
     const bake = (o.bakeMult ?? 1) * addonProduct(oe, 'bakeMult');
-    const perHour = (slots * 60) / (T.kitchen.bakeMinutes * bake * cookTimeMult) * speed;
+    // Ovens need tending, and a crowded kitchen slows everyone (kitchen-bottlenecks.md).
+    const perHour = (slots * 60) / (T.kitchen.bakeMinutes * bake * cookTimeMult) * speed * stations.tendRatio * stations.crowdMult;
     const scale = avgSkill < o.skillNeeded ? avgSkill / o.skillNeeded : 1;
     ovenPerHour += perHour;
     ovenOutput[oe.uid] = perHour;
@@ -303,7 +357,8 @@ export function kitchenStats(state: GameState, service: Service = 'dinner', load
     const it = EQUIPMENT[e.itemId] as EquipmentItem;
     const st = flow.stations[e.uid];
     const tool = Math.max(it.prepMult ?? 1, st?.sheeter ? (sheeterItem?.prepMult ?? 1.35) : 1);
-    return T.kitchen.prepRate * counterSpeed * tool * addonProduct(e, 'prepMult') * (st?.coldMult ?? 1) * (st?.reachMult ?? 1) * menu.efficiency;
+    return T.kitchen.prepRate * counterSpeed * tool * addonProduct(e, 'prepMult') * (st?.coldMult ?? 1) * (st?.reachMult ?? 1) * menu.efficiency *
+      stations.prepWashMult * stations.crowdMult;
   };
   const ranked = [...counters].sort((a, b) => stationRate(b) - stationRate(a) || (EQUIPMENT[b.itemId]?.qualityMod ?? 0) - (EQUIPMENT[a.itemId]?.qualityMod ?? 0));
   const staffedCounters = Math.min(counters.length, cooks.length);
@@ -353,6 +408,7 @@ export function kitchenStats(state: GameState, service: Service = 'dinner', load
     ovens: ovens.length,
     counters: counters.length,
     staffedCounters,
+    stations,
     footprintUsed: items.reduce((a, i) => a + i.footprint, 0),
     footprintMax: (premises?.kitchenTiles ?? 30) - 4,
     maintenancePerWeek:
@@ -466,12 +522,15 @@ export function serviceStats(state: GameState, kitchen: Record<Service, KitchenS
     0,
     1,
   );
-  const dishwashers = crew.filter((s) => s.role === 'dishwasher');
+  // Only as many dishwashers as the wash stations have room for; the fastest take the places.
+  const st = kitchen.dinner.stations;
+  const dishwashers = crew.filter((s) => s.role === 'dishwasher')
+    .sort((a, b) => personalSpeed(b, false, dinner) - personalSpeed(a, false, dinner)).slice(0, st.washSlots);
   const machine = kitchen.dinner.hasDishMachine ? (EQUIPMENT.dishMachine?.effectMult ?? 1) : 1;
   // Wash add-ons count on the best equipped wash station only (kitchen-upgrades.md 3).
   const washAddon = Math.max(1, ...state.equipment.filter((e) => ['sink', 'dishMachine'].includes(EQUIPMENT[e.itemId]?.role ?? '')).map((e) => addonProduct(e, 'washMult')));
   const platesPerHour =
-    dishwashers.reduce((a, d) => a + T.kitchen.dishwasherRate * personalSpeed(d, false, dinner), 0) * machine * kitchen.dinner.flow.washMult * washAddon;
+    dishwashers.reduce((a, d) => a + T.kitchen.dishwasherRate * personalSpeed(d, false, dinner), 0) * machine * kitchen.dinner.flow.washMult * washAddon * st.crowdMult;
   return { servers: servers.length, hasHost, serverSpeed, loadMult, seatTime, orderTime, serveTime, payTime, serviceTime, serviceScore, platesPerHour };
 }
 
