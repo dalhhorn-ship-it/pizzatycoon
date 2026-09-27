@@ -13,8 +13,12 @@ import { stateLocation } from './location';
 import { Rng } from './rng';
 import { hasTalent, onRota } from './staff';
 import { awarenessGain, discountFor, hasLoyalty, mktDelivery, mktFor, runSpendToday } from './marketing';
-import { catchment, deliveryCompetition, deliveryLive, deliveryMinutes, deliveryReachMult, deliveryWeeklyCosts, nextDrep, ridersToday, riderWages, timeScore } from './delivery';
+import { catchment, deliveryCompetition, deliveryLive, deliveryMinutes, deliveryReachMult, ridersToday, settleDelivery } from './delivery';
 import { playerCompetition } from './rivals';
+import { followingDemand, nextFollowing, queueDelay, valueScore } from './formulas';
+
+// Moved to formulas.ts (no import cycles, TD5); re-exported for existing callers.
+export { followingDemand, followingTarget, nextFollowing, queueDelay, valueScore } from './formulas';
 import { type DayReport, type DeliveryDay, type GameState, type MarketDay, type PnL, profitOf, type Recipe, type Review, type SegmentReport, type ServiceReport } from './state';
 
 export interface DayOptions {
@@ -44,19 +48,12 @@ interface Choice {
   avgWork: number;
 }
 
-export function valueScore(r: number, elasticity: number): number {
-  return clamp(T.pricing.valueBase - T.pricing.valueSlope * (r - 1) * elasticity, 0, 1);
-}
 
 export function attachRate(kind: SideKind, ambience: number): number {
   const a = T.attach[kind];
   return a.base + a.bonus * clamp((ambience - a.pivot) / a.span, 0, 1);
 }
 
-export function queueDelay(rho: number): number {
-  if (rho >= T.service.queueRhoCap) return T.service.queueCap;
-  return Math.min(T.service.queueCap, (2 * rho) / (1 - rho));
-}
 
 /** How good the wine list is, 0..1 (balance.md 4.9): its length beyond the house wine and the quality of what is on it. */
 export function wineListScore(wines: readonly Recipe[], a: Analysis): number {
@@ -525,7 +522,19 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     pnl.marketing = (pnl.marketing ?? 0) + runs;
     pnl.marketingPrepaid = runs;
   }
-  const delivery = dlv && riders ? settleDelivery() : undefined;
+  let delivery: DeliveryDay | undefined;
+  if (dlv && riders) {
+    const settled = settleDelivery({
+      d: dlv, riders, staff: state.staff, economy: economyOf(state),
+      segs: dSeg.map((x) => ({ id: x.id, w: x.w, rD: x.rD, food: foodBy[x.id] ?? 0.5, probs: x.choice.probs.map((p) => ({ id: p.recipe.id, p: p.p })) })),
+      wanted: dWanted, accepted: dAccepted, delivered: dDelivered, time: dTime, orderValue: dOrderValue, foodPerOrder: dFoodPerOrder, covers,
+    });
+    pnl.deliverySales = settled.deliverySales;
+    pnl.ingredients += settled.foodCost;
+    pnl.deliveryCosts = settled.deliveryCosts;
+    for (const [id, n] of Object.entries(settled.dishSales)) dishSales[id] = (dishSales[id] ?? 0) + n;
+    delivery = settled.day;
+  }
   pnl.profit = profitOf(pnl);
   const market: MarketDay = {
     cEff: competition.cEff, A: pull,
@@ -543,42 +552,6 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     ...(delivery ? { delivery } : {}),
   };
 
-  /** Delivery money, time and DRep for the day (competition.md 6.5 to 6.7). */
-  function settleDelivery(): DeliveryDay | undefined {
-    if (!dlv || !riders) return undefined;
-    const sumW = dSeg.reduce((x, d) => x + d.w, 0) || 1;
-    const wanted = dWanted.lunch + dWanted.dinner;
-    const accepted = dAccepted.lunch + dAccepted.dinner;
-    const delivered = dDelivered.lunch + dDelivered.dinner;
-    const travel = dt.travel + (dlv.mode === 'platform' ? 0 : 0.0006 * (riders.quality - 50));
-    const pack = dlv.packaging === 'eco' ? dt.ecoPackaging : 1;
-    const food = clamp((dSeg.reduce((x, d) => x + d.w * (foodBy[d.id] ?? 0.5), 0) / sumW) * travel * pack, 0, 1);
-    const value = dSeg.reduce((x, d) => x + d.w * valueScore(d.rD, SEGMENTS[d.id].elasticity), 0) / sumW;
-    const time = delivered > 0 ? SERVICES.reduce((x, sv) => x + (dDelivered[sv] / delivered) * timeScore(dTime[sv]), 0) : 0;
-    const S = 100 * (0.45 * food + 0.35 * time + 0.2 * value);
-    const next = nextDrep(dlv, S, accepted, accepted - delivered, wanted, wanted - accepted, economyOf(state).reputation);
-    const orderValue = dOrderValue;
-    const sales = delivered * (orderValue + (dlv.mode === 'platform' ? 0 : dt.fee));
-    const commission = dt.commission[dlv.mode] * orderValue * delivered;
-    const foodCost = delivered * dFoodPerOrder * economyOf(state).ingredients;
-    const packaging = delivered * dt.mainsPerOrder * dt.packaging[dlv.packaging];
-    const other = delivered * dt.utilitiesPerOrder + deliveryWeeklyCosts(dlv) / 7;
-    pnl.deliverySales = sales;
-    pnl.ingredients += foodCost;
-    pnl.deliveryCosts = commission + packaging + other;
-    for (const d of dSeg) {
-      const n = (delivered * d.w * dt.mainsPerOrder) / sumW;
-      for (const p of d.choice.probs) dishSales[p.recipe.id] = (dishSales[p.recipe.id] ?? 0) + n * p.p;
-    }
-    const mainsOut = delivered * dt.mainsPerOrder;
-    return {
-      wanted, accepted, refused: wanted - accepted, cancelled: accepted - delivered, delivered, time: { ...dTime },
-      drepBefore: dlv.drep, drepAfter: next.drep, topRated: next.topRated, topRatedDays: next.topRatedDays,
-      profit: sales - foodCost - pnl.deliveryCosts - riderWages(state.staff) / 7,
-      kitchenShare: mainsOut + covers > 0 ? mainsOut / (mainsOut + covers) : 0,
-      satisfaction: S, scores: { food, time, value }, sales, commission, food: foodCost, packaging, other, orderValue,
-    };
-  }
 }
 
 /** A line for the advisor when deliveries run late or cannot go out (competition.md 6.6). */
@@ -591,26 +564,8 @@ function deliveryTip(d: DeliveryDay | undefined, services: ServiceReport[]): str
   return [`Deliveries took ${Math.round(d.time[late])} minutes at ${late}: your kitchen was at ${Math.round(Math.min(1, rho) * 100)}%. A lower throttle or more kitchen keeps them under ${T.delivery.promise}.`];
 }
 
-/** Share of full demand that comes in: curious walk-ins plus locals who know the place (balance.md 4.3). */
-export function followingDemand(following: number): number {
-  return T.following.walkIn + (1 - T.following.walkIn) * clamp(following, 0, 1);
-}
 
-export function followingTarget(satisfaction: number): number {
-  const f = T.following;
-  return clamp((satisfaction - f.satZero) / (f.satFull - f.satZero), 0, 1);
-}
 
-/** Word of mouth: satisfied guests bring friends, unhappy ones and guests who gave up waiting keep them away. */
-export function nextFollowing(following: number, satisfaction: number, covers: number, impatient: number, loyal = false): { after: number; target: number } {
-  const f = T.following;
-  const target = Math.min(1, followingTarget(satisfaction) + (loyal ? 0.05 : 0));
-  const reach = clamp(covers / f.wordOfMouthGuests, f.wordOfMouthMin, 1);
-  const rate = target > following ? f.growth * reach : f.decline * (loyal ? 0.5 : 1);
-  const arrivals = covers + impatient;
-  const gaveUp = arrivals > 0 ? impatient / arrivals : 0;
-  return { after: clamp(following + rate * (target - following) - f.walkAwayLoss * gaveUp, 0, 1), target };
-}
 
 function fixedCosts(state: GameState, a: Analysis, covers: number): PnL {
   const staff = a.weeklySalaries / 7;

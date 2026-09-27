@@ -348,6 +348,40 @@ export interface DayReport {
   mood?: string[];
 }
 
+/** Deep copy of plain data (objects, arrays, primitives): the game state holds nothing else, and this is several times
+ * faster than structuredClone for it. */
+export function deepCopy<T>(v: T): T {
+  if (v === null || typeof v !== 'object') return v;
+  if (Array.isArray(v)) {
+    const out = new Array(v.length);
+    for (let i = 0; i < v.length; i++) out[i] = deepCopy(v[i]);
+    return out as T;
+  }
+  const out: Record<string, unknown> = {};
+  for (const k in v) out[k] = deepCopy((v as Record<string, unknown>)[k]);
+  return out as T;
+}
+
+/**
+ * A copy of the game for the reducer. Day reports and KPI rows are never changed once stored, so their arrays are
+ * copied but the rows are shared; everything else is a deep copy. Most of a save is history, so this is the cheap part
+ * of every command (sprint 2, TD2).
+ */
+export function cloneState(s: GameState): GameState {
+  const { history, kpis, branches, ...rest } = s;
+  const out = deepCopy(rest) as GameState;
+  out.history = history.slice();
+  out.kpis = kpis.slice();
+  out.branches = branches.map((b) => {
+    const { history: h, kpis: k, ...r } = b;
+    const c = deepCopy(r) as Location;
+    c.history = h.slice();
+    c.kpis = (k ?? []).slice();
+    return c;
+  });
+  return out;
+}
+
 /** A day report reduced to its totals: what the charts and trends read after the first week (T.history.fullDays). */
 export function compactReport(r: DayReport): DayReport {
   if (!r.services.length && !r.segments.length && !r.team && !r.market) return r;

@@ -1,8 +1,7 @@
 // Service pipeline strip (kitchen-builder.md 6): the pizza line as stages in covers per hour.
 
 import type { Service } from '../data/types';
-import { analyse } from '../sim/analysis';
-import { simulateDay } from '../sim/day';
+import { forecastDay } from '../sim/forecast';
 import type { GameState, ServiceReport } from '../sim/state';
 import { h } from './dom';
 
@@ -20,8 +19,7 @@ const stage = (r: ServiceReport | undefined, id: StageId): number => r?.stages[i
 
 /** Capacity now (after any changes) and demand from the last service. */
 export function pipelineData(state: GameState): { now: ServiceReport[]; last: ServiceReport[] | null } {
-  const a = analyse(state);
-  const now = simulateDay(state, a, { noise: false }).services;
+  const now = forecastDay(state).services;
   const lastDay = [...state.history].reverse().find((d) => d.open);
   return { now, last: lastDay?.services ?? null };
 }

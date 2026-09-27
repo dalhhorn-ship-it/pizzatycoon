@@ -540,14 +540,16 @@ export function weeklyRent(state: GameState): number {
 }
 
 /** Everything that does not depend on today's guests. `pressure` is the load per area and service (staff-management.md 2.3). */
-export function analyse(state: GameState, pressure: Record<Service, AreaLoad> = NO_PRESSURE): Analysis {
+export function analyse(state: GameState, pressure: Record<Service, AreaLoad> = NO_PRESSURE, opts: { menuOnly?: boolean } = {}): Analysis {
   const kitchen = { lunch: kitchenStats(state, 'lunch', pressure.lunch), dinner: kitchenStats(state, 'dinner', pressure.dinner) };
   const room = roomStats(state);
   const service = serviceStats(state, kitchen, room.tables, pressure);
   const crew = onRota(state.staff, state.day);
   const frugal = crew.some((s) => s.role === 'chef' && hasTalent(s, 'frugal'));
   const dishes: Record<string, DishStats> = {};
+  // The day model only reads dishes on the menu; the Menu tab wants the whole recipe book (menuOnly false).
   for (const r of state.recipes) {
+    if (opts.menuOnly && !r.onMenu) continue;
     dishes[r.id] = dishStats(r, kitchen.dinner.kitchenSkillK, kitchen.dinner.equipmentE, frugal, economyOf(state).ingredients, repPriceMult(state.rep));
   }
   return {

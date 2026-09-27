@@ -4,7 +4,9 @@ import { ADJACENT, DISTRICTS } from '../data/districts';
 import type { Service } from '../data/types';
 import { T } from '../data/tunables';
 import { VENUES } from '../data/venues';
-import { queueDelay } from './day';
+import { SEGMENTS } from '../data/segments';
+import type { SegmentId } from '../data/types';
+import { queueDelay, valueScore } from './formulas';
 import { onRota } from './staff';
 import type { DeliveryDay, DeliveryMode, DeliveryState, GameState, Staff } from './state';
 import { activeRivals } from './rivals';
@@ -144,5 +146,71 @@ export function deliveryWeeklyCosts(d: DeliveryState): number {
 }
 
 export const riderWages = (staff: readonly Staff[]): number => staff.filter((s) => s.role === 'rider').reduce((x, s) => x + s.salary, 0);
+
+/** Everything the day model measured about delivery today (competition.md 6.5 to 6.7). */
+export interface DeliveryInput {
+  d: DeliveryState;
+  riders: Riders;
+  staff: readonly Staff[];
+  economy: { reputation: number; ingredients: number };
+  /** Per segment: order weight, delivery price ratio, food score and dish choice. */
+  segs: readonly { id: SegmentId; w: number; rD: number; food: number; probs: readonly { id: string; p: number }[] }[];
+  wanted: Record<Service, number>;
+  accepted: Record<Service, number>;
+  delivered: Record<Service, number>;
+  time: Record<Service, number>;
+  orderValue: number;
+  foodPerOrder: number;
+  /** Dining guests today, for the kitchen share. */
+  covers: number;
+}
+
+export interface DeliverySettlement {
+  day: DeliveryDay;
+  deliverySales: number;
+  foodCost: number;
+  deliveryCosts: number;
+  /** Mains sent out, by recipe. */
+  dishSales: Record<string, number>;
+}
+
+/** Delivery money, time and rating for the day. Pure: the day model adds the result to its P&L and dish sales. */
+export function settleDelivery(i: DeliveryInput): DeliverySettlement {
+  const t = T.delivery;
+  const { d } = i;
+  const sumW = i.segs.reduce((x, s) => x + s.w, 0) || 1;
+  const wanted = i.wanted.lunch + i.wanted.dinner;
+  const accepted = i.accepted.lunch + i.accepted.dinner;
+  const delivered = i.delivered.lunch + i.delivered.dinner;
+  const travel = t.travel + (d.mode === 'platform' ? 0 : 0.0006 * (i.riders.quality - 50));
+  const pack = d.packaging === 'eco' ? t.ecoPackaging : 1;
+  const food = clamp((i.segs.reduce((x, s) => x + s.w * s.food, 0) / sumW) * travel * pack, 0, 1);
+  const value = i.segs.reduce((x, s) => x + s.w * valueScore(s.rD, SEGMENTS[s.id].elasticity), 0) / sumW;
+  const time = delivered > 0 ? (['lunch', 'dinner'] as const).reduce((x, sv) => x + (i.delivered[sv] / delivered) * timeScore(i.time[sv]), 0) : 0;
+  const S = 100 * (0.45 * food + 0.35 * time + 0.2 * value);
+  const next = nextDrep(d, S, accepted, accepted - delivered, wanted, wanted - accepted, i.economy.reputation);
+  const sales = delivered * (i.orderValue + (d.mode === 'platform' ? 0 : t.fee));
+  const commission = t.commission[d.mode] * i.orderValue * delivered;
+  const foodCost = delivered * i.foodPerOrder * i.economy.ingredients;
+  const packaging = delivered * t.mainsPerOrder * t.packaging[d.packaging];
+  const other = delivered * t.utilitiesPerOrder + deliveryWeeklyCosts(d) / 7;
+  const deliveryCosts = commission + packaging + other;
+  const dishSales: Record<string, number> = {};
+  for (const s of i.segs) {
+    const n = (delivered * s.w * t.mainsPerOrder) / sumW;
+    for (const p of s.probs) dishSales[p.id] = (dishSales[p.id] ?? 0) + n * p.p;
+  }
+  const mainsOut = delivered * t.mainsPerOrder;
+  return {
+    deliverySales: sales, foodCost, deliveryCosts, dishSales,
+    day: {
+      wanted, accepted, refused: wanted - accepted, cancelled: accepted - delivered, delivered, time: { ...i.time },
+      drepBefore: d.drep, drepAfter: next.drep, topRated: next.topRated, topRatedDays: next.topRatedDays,
+      profit: sales - foodCost - deliveryCosts - riderWages(i.staff) / 7,
+      kitchenShare: mainsOut + i.covers > 0 ? mainsOut / (mainsOut + i.covers) : 0,
+      satisfaction: S, scores: { food, time, value }, sales, commission, food: foodCost, packaging, other, orderValue: i.orderValue,
+    },
+  };
+}
 
 export type { Service };

@@ -1,8 +1,7 @@
 // The delivery panel (competition.md 6.11): setup, status, settings, riders and vehicles.
 
 import { T } from '../data/tunables';
-import { analyse } from '../sim/analysis';
-import { simulateDay } from '../sim/day';
+import { forecastSaturday } from '../sim/forecast';
 import { deliveryMissing, hasPacking, MODE_BLURB, MODE_NAMES, ridersNeeded, ridersToday } from '../sim/delivery';
 import type { Command } from '../sim/game';
 import type { DeliveryDay, DeliveryMode, DeliveryState, GameState } from '../sim/state';
@@ -22,8 +21,7 @@ const act = (ctx: PanelCtx, cmd: Command, ok?: string): boolean => {
 
 /** A busy day (Saturday) with these delivery settings, for the previews. */
 function busyDay(state: GameState, d: Partial<DeliveryState>): { day: DeliveryDay | undefined; profit: number } {
-  const hyp: GameState = { ...state, delivery: { ...(state.delivery as DeliveryState), ...d }, day: state.day - ((state.day - 1) % 7) + 5 };
-  const r = simulateDay(hyp, analyse(hyp), { noise: false });
+  const r = forecastSaturday({ ...state, delivery: { ...(state.delivery as DeliveryState), ...d } });
   return { day: r.delivery, profit: r.pnl.profit };
 }
 

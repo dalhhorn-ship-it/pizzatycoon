@@ -58,10 +58,10 @@ export function areaLoad(r: DayReport, sv: Service): AreaLoad {
  * then the day runs with that pressure. rho is read before any composure effect, so there is no feedback loop.
  */
 export function dayRun(state: GameState, opts: DayOptions): { a: Analysis; report: DayReport } {
-  const a0 = analyse(state);
+  const a0 = analyse(state, undefined, { menuOnly: true });
   const r0 = simulateDay(state, a0, opts);
   if (!r0.open || !needsPressure(state)) return { a: a0, report: r0 };
-  const a = analyse(state, { lunch: areaLoad(r0, 'lunch'), dinner: areaLoad(r0, 'dinner') });
+  const a = analyse(state, { lunch: areaLoad(r0, 'lunch'), dinner: areaLoad(r0, 'dinner') }, { menuOnly: true });
   return { a, report: simulateDay(state, a, opts) };
 }
 
@@ -82,7 +82,10 @@ export function contributions(state: GameState, a: Analysis, report: DayReport, 
   if (!report.open) return [];
   // A manager at the restaurant the player runs only works when the team is handed over.
   const managing = !!managerRunsTeam(state, managed);
-  const repPoint = Math.max(0, dayRun({ ...state, rep: Math.min(100, state.rep + 1) }, opts).report.pnl.profit - report.pnl.profit);
+  // Counterfactual days reuse the day's measured load (a.pressure): one pass each instead of dayRun's two. Swapping one
+  // person barely moves the load ratio, and composure still applies through analyse (sprint 2, TD2).
+  const rerun = (alt: GameState): DayReport => simulateDay(alt, analyse(alt, a.pressure, { menuOnly: true }), opts);
+  const repPoint = Math.max(0, rerun({ ...state, rep: Math.min(100, state.rep + 1) }).pnl.profit - report.pnl.profit);
   const out: Contribution[] = [];
   for (const s of state.staff) {
     if (ids && !ids.includes(s.id)) continue;
@@ -91,7 +94,7 @@ export function contributions(state: GameState, a: Analysis, report: DayReport, 
       continue;
     }
     const alt: GameState = { ...state, staff: state.staff.map((x) => (x.id === s.id ? standardReplacement(s) : x)) };
-    const r = dayRun(alt, opts).report;
+    const r = rerun(alt);
     const earned = (report.satisfaction - r.satisfaction) * T.reputation.reviewSlope * repPoint;
     const value = report.pnl.profit - r.pnl.profit + earned;
     out.push({ id: s.id, value, reason: reasonFor(s, value, report, r, a, state.day, managing, earned) });

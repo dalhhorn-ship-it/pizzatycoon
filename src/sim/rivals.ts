@@ -11,7 +11,7 @@ import type { SegmentId } from '../data/types';
 import { T } from '../data/tunables';
 import { VENUES } from '../data/venues';
 import { repPriceMult } from './analysis';
-import { followingDemand, nextFollowing, valueScore } from './day';
+import { followingDemand, nextFollowing, valueScore } from './formulas';
 import { economyOf, rivalSettingsOf } from './economy';
 import { bestFor, type LocationFacts, locationFacts } from './location';
 import { audienceMatch, audienceWeight, campaignCost, fatigueOf } from './marketing';
@@ -374,13 +374,45 @@ export function expectedWeek(state: GameState, rival: Rival, loc: RivalLocation,
   for (const s of SEGMENT_IDS) me.A[s] = rivalA(state, rival, loc, s, state.day);
   const others = market.filter((p) => !(p.venueId === loc.venueId));
   const cEff = rivalCompetition(me, others);
+  return weekMoney(state, rival, loc, cEff, me.A);
+}
+
+/**
+ * Sales and profit of rivalDay over the 7 days of this week, without the satisfaction work that move evaluation never
+ * reads. Same arithmetic in the same order as rivalDay, so the totals are identical (sprint 2, AC-272).
+ */
+function weekMoney(state: Pick<GameState, 'economy' | 'day'>, rival: Rival, loc: RivalLocation, cEff: Record<SegmentId, number>, A: Record<SegmentId, number>): { profit: number; sales: number } {
+  const facts = venueFacts(loc.venueId);
+  const a = ARCHETYPES[rival.archetype];
+  const skill = rivalSkill(state, rival);
+  const eco = economyOf(state);
+  const capacity = rivalSeats(loc.venueId) * a.turns;
+  const check = rivalMainPrice(loc, skill) * 1.5;
+  const foodCost = TIER_FOOD_COST[loc.tier] * 1.6 * (1.1 - 0.015 * skill) * eco.ingredients;
+  const rent = (facts.weeklyRent * eco.rent) / 7;
+  const staff = staffPerDay(rival, loc.venueId, skill) * eco.wages;
+  const upkeep = 15 + 0.002 * fitOut(rival.archetype, facts.premises.id);
+  const catchment = loc.delivery ? facts.footTraffic + T.delivery.adjacentWeight * (ADJACENT[facts.district.id] ?? []).reduce((x, id) => x + (DISTRICTS[id]?.footTraffic ?? 0), 0) : 0;
+  const aff = loc.delivery ? SEGMENT_IDS.reduce((x, s) => x + facts.shares[s] * (T.delivery.affinity[s] ?? 1), 0) : 0;
+  const orderValue = rivalMainPrice(loc, skill) * T.delivery.mainsPerOrder;
   let profit = 0;
   let sales = 0;
   const base = state.day - ((state.day - 1) % 7);
   for (let i = 0; i < 7; i++) {
-    const d = rivalDay(state, rival, loc, base + i, cEff, me.A);
-    profit += d.profit;
-    sales += d.sales;
+    const weekday = (base + i - 1) % 7;
+    const wd = T.time.weekdayMult[weekday] ?? 1;
+    let total = 0;
+    for (const s of SEGMENT_IDS) total += facts.district.footTraffic * facts.shares[s] * T.demand.captureBase * wd * A[s] * (1 - T.demand.competitionFactor * cEff[s]) * eco.demand;
+    const served = Math.min(total, capacity);
+    const utilities = 30 + 0.8 * served;
+    let deliveryProfit = 0;
+    if (loc.delivery) {
+      const deliveryOrders = Math.min(T.delivery.rivalCap * capacity, catchment * T.delivery.orderRate * aff * (T.demand.repMultBase + T.demand.repMultSlope * loc.drep) * wd * eco.demand);
+      deliveryProfit = deliveryOrders * (orderValue * (1 - T.delivery.commission.platform) - TIER_FOOD_COST[loc.tier] * T.delivery.mainsPerOrder * eco.ingredients - T.delivery.packaging.basic * T.delivery.mainsPerOrder);
+    }
+    const daySales = served * check;
+    profit += daySales - served * foodCost - rent - staff - utilities - upkeep + deliveryProfit;
+    sales += daySales;
   }
   return { profit, sales };
 }
@@ -622,7 +654,8 @@ const familyOf = (m: Move): 'price' | 'quality' | 'marketing' | null =>
   m.kind === 'price' ? 'price' : m.kind === 'tier' ? 'quality' : m.kind === 'campaign' || m.kind === 'stop' ? 'marketing' : null;
 
 function applyMove(loc: RivalLocation, m: Move, day: number): RivalLocation {
-  const l = structuredClone(loc);
+  // Moves change price, tier, campaigns or the delivery flag only: a shallow copy is enough.
+  const l: RivalLocation = { ...loc, campaigns: [...loc.campaigns] };
   if (m.kind === 'price') l.priceIndex = Math.round(l.priceIndex * m.mult * 1000) / 1000;
   if (m.kind === 'tier') l.tier = TIER_ORDER[clamp(TIER_ORDER.indexOf(l.tier) + m.dir, 0, TIER_ORDER.length - 1)] as RivalTier;
   if (m.kind === 'campaign') {

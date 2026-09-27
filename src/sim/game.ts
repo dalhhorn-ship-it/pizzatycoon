@@ -31,7 +31,7 @@ import { rivalSettingsOf } from './economy';
 import { campaignCost, newCampaign, renewCampaigns, slotsUsed, streakOnRestart } from './marketing';
 import { applyRivalToggle, inReach, ownRestaurants, playerCompetition, rivalAt, runRivalsDay, seedRivals } from './rivals';
 import { stateLocation } from './location';
-import { dailyCash, pushReport, type DayReport, type DeliveryMode, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION, type StaffPolicy } from './state';
+import { cloneState, dailyCash, pushReport, type DayReport, type DeliveryMode, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION, type StaffPolicy } from './state';
 import {
   bookCourse, dayRun, deliverAgency, ensureEveryRole as fillRoles, firstMarket, HIREABLE_ROLES, hiredFromMarket, managerWeek, policyOf,
   recordDeparture, refreshMarket, teamDay, weekNumber,
@@ -371,7 +371,7 @@ function atLocation(input: GameState, cmd: Command & { locationId?: number }, op
   if (cmd.locationId === undefined || cmd.locationId === input.locationId) return null;
   const target = input.branches.find((b) => b.id === cmd.locationId);
   if (!target) return fail(input, 'You do not own that restaurant.');
-  const state = structuredClone(input);
+  const state = cloneState(input);
   const here = extractLocation(state);
   state.branches = state.branches.map((b) => (b.id === target.id ? here : b));
   applyLocation(state, structuredClone(target));
@@ -391,7 +391,7 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
     const there = atLocation(input, cmd, opts);
     if (there) return there;
   }
-  const state = structuredClone(input);
+  const state = cloneState(input);
   const events: GameEvent[] = [];
   const premises = PREMISES[state.premisesId];
   const W = premises?.diningWidth ?? 10;
@@ -1072,7 +1072,7 @@ function rentVenue(input: GameState, venueId: string): Result {
   if (ownedVenues(input).has(venueId)) return fail(input, 'You already run a restaurant there.');
   if (rivalAt(input, venueId)) return fail(input, `${rivalAt(input, venueId)?.name} runs a restaurant there.`);
   if (quote.total > 0 && input.cash < quote.total) return fail(input, `Moving costs $${Math.ceil(quote.total).toLocaleString('en-US')}; you need $${Math.ceil(quote.total - input.cash).toLocaleString('en-US')} more.`);
-  const state = structuredClone(input);
+  const state = cloneState(input);
   state.furniture = moveDining(state, venue.premisesId).placed;
   state.equipment = moveKitchen(state, venue.premisesId).placed;
   const held = state.venueHold?.venueId === venueId && state.venueHold.untilDay > state.day ? state.venueHold.fee : 0;

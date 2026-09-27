@@ -2,7 +2,7 @@
 
 import { isMain } from '../data/recipes';
 import { analyse } from '../sim/analysis';
-import { simulateDay } from '../sim/day';
+import { forecastWeek } from '../sim/forecast';
 import type { GameState } from '../sim/state';
 
 export interface Outlook {
@@ -12,17 +12,26 @@ export interface Outlook {
   satisfaction: number;
 }
 
+/** Game states are never changed after a command, so a state's outlook can be kept (the baseline of every preview). */
+const outlooks = new WeakMap<GameState, Outlook>();
+
 /** Average expected day across a week, without randomness, at the current reputation. */
 export function outlook(state: GameState): Outlook {
+  const hit = outlooks.get(state);
+  if (hit) return hit;
+  const out = computeOutlook(state);
+  outlooks.set(state, out);
+  return out;
+}
+
+function computeOutlook(state: GameState): Outlook {
   const a = analyse(state);
   const mains = state.recipes.filter((r) => r.onMenu && isMain(r.kind));
   const quality = mains.length ? mains.reduce((x, r) => x + (a.dishes[r.id]?.quality ?? 0), 0) / mains.length : 0;
   let profit = 0;
   let covers = 0;
   let sat = 0;
-  const base = state.day - ((state.day - 1) % 7);
-  for (let i = 0; i < 7; i++) {
-    const r = simulateDay({ ...state, day: base + i }, a, { noise: false });
+  for (const r of forecastWeek(state)) {
     profit += r.pnl.profit;
     covers += r.covers;
     sat += r.satisfaction;
