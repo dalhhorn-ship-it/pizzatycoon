@@ -403,7 +403,7 @@ export interface ManagerLog {
 /** Everything that belongs to one restaurant. The one the player runs lives at the top of GameState. */
 export const LOCATION_KEYS = [
   'districtId', 'premisesId', 'venueId', 'deposit', 'rep', 'following', 'recipes', 'furniture', 'equipment', 'staff',
-  'daysOpen', 'fireSafety', 'roomTouches', 'history', 'departures', 'staffPolicy', 'delegateStaff', 'managerLog', 'campaigns', 'delivery',
+  'daysOpen', 'fireSafety', 'roomTouches', 'history', 'departures', 'staffPolicy', 'delegateStaff', 'managerLog', 'campaigns', 'delivery', 'kpis',
 ] as const;
 export type LocationKey = (typeof LOCATION_KEYS)[number];
 
@@ -420,7 +420,7 @@ export const KEY_SCOPE: Record<keyof GameState, 'shared' | 'location' | 'transie
   districtId: 'location', premisesId: 'location', venueId: 'location', deposit: 'location', rep: 'location', following: 'location',
   recipes: 'location', furniture: 'location', equipment: 'location', staff: 'location', daysOpen: 'location', fireSafety: 'location',
   roomTouches: 'location', history: 'location', departures: 'location', staffPolicy: 'location', delegateStaff: 'location',
-  managerLog: 'location', campaigns: 'location', delivery: 'location',
+  managerLog: 'location', campaigns: 'location', delivery: 'location', kpis: 'location',
   ownList: 'transient',
 };
 export type Location = Pick<GameState, LocationKey> & { id: number };
@@ -486,6 +486,8 @@ export interface GameState {
   campaigns: ActiveCampaign[];
   /** Food delivery at this restaurant (competition.md 6). */
   delivery: DeliveryState | null;
+  /** Weekly KPI rows for the business review, newest last (src/sim/kpi.ts). */
+  kpis: import('./kpi').WeekKpi[];
   /** Live rival pizzerias in the city (competition.md 3). */
   rivals: Rival[];
   rivalMeta?: { nextId: number; lastEntrantDay: number; lastEntrantByDistrict: Record<string, number>; pendingEntrants: number; pendingFrom: number };

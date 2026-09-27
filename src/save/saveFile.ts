@@ -8,6 +8,7 @@ import { VENUES, venueFor } from '../data/venues';
 import { ensureEveryRole, withRecipeBook } from '../sim/game';
 import { bestRep } from '../sim/chain';
 import { autoLayout, kitchenDims, layoutProblem } from '../sim/kitchen';
+import { backfillKpis } from '../sim/kpi';
 import { migrateStaff } from '../sim/staff';
 import { refreshMarket } from '../sim/team';
 
@@ -80,6 +81,9 @@ const MIGRATIONS: Record<number, (state: Record<string, unknown>) => Record<stri
     s.marketNews ??= [];
     s.campaigns ??= [];
     s.delivery ??= null;
+    // Weekly review rows from the full reports, before they are compacted.
+    s.kpis ??= backfillKpis(s, s.locationId ?? 1);
+    for (const b of s.branches ?? []) b.kpis ??= backfillKpis(b, b.id);
     const compact = (h: DayReport[]): DayReport[] => h.map((r, i) => (i < h.length - T.history.fullDays ? compactReport(r) : r));
     s.history = compact(s.history ?? []);
     for (const b of s.branches ?? []) {

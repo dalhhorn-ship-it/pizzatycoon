@@ -192,6 +192,8 @@ export const T = {
     fullDays: 7,
     /** Market news kept, in days. */
     newsDays: 28,
+    /** Weeks of KPI rows kept for the business review (12 weeks plus the one before, for week on week). */
+    kpiWeeks: 13,
   },
   delivery: {
     unlockRep: 60,

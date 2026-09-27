@@ -25,6 +25,7 @@ import { ROLE_NAMES } from '../data/staff';
 import type { TeamLine } from '../sim/state';
 import { lossLine } from '../sim/market';
 import { deliveryLine, deliveryWeek } from './delivery';
+import { openBusinessReview } from './review';
 import { type Nav, openMarketing, rivalsPanel, weekCompetitionCard } from './rivals';
 
 type Tab = 'menu' | 'kitchen' | 'room' | 'staff' | 'rivals' | 'money';
@@ -469,6 +470,7 @@ export class App {
       case 'staff': content = squadPanel(ctx); break;
       case 'rivals': content = rivalsPanel(ctx, this.nav()); break;
       case 'money': content = moneyPanel(ctx, h('div', { class: 'row' },
+        h('button', { class: 'small', onclick: () => openBusinessReview(ctx) }, '📊 Business review'),
         h('button', { class: 'small', onclick: () => openMarketing(ctx) }, '📣 Marketing'),
         h('button', { class: 'small', onclick: () => this.showSettings() }, '⚙ Settings, saves and difficulty'))); break;
     }

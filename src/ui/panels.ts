@@ -1,5 +1,6 @@
 // Side panels: menu, kitchen, room, staff, money. Each renders from state and dispatches commands.
 
+import { lastWeekCard } from './review';
 import { deliveryCard } from './delivery';
 import { DISTRICTS } from '../data/districts';
 import { VENUES } from '../data/venues';
@@ -635,6 +636,7 @@ export function moneyPanel(ctx: PanelCtx, extra: HTMLElement): HTMLElement {
       h('div', { class: 'spread' }, h('span', null, 'Cash'), h('span', { class: `big ${state.cash < 0 ? 'bad' : ''}` }, money(state.cash))),
       h('div', { class: 'small muted' }, `Weekly bills on Sunday night: wages ${money(a.weeklySalaries)}, rent ${money(a.weeklyRent)} (${where}), loan ${money(payment)}. Upkeep ${money(a.kitchen.maintenancePerWeek)}/week is paid daily.`),
       state.cash < 0 ? h('div', { class: 'warn small' }, 'Cash is below zero. Payments continue; after 7 days the bank advisor pauses your loan payments. Pizza D never ends your game.') : null),
+    lastWeekCard(ctx),
     deliveryCard(ctx),
     last ? h('div', { class: 'card' }, h('h3', null, `Day ${last.day}`), h('div', { class: 'pnl' }, ...pnlRows(last.pnl))) : null,
     recent.length ? h('div', { class: 'card' }, h('h3', null, 'Profit, last 14 days'),

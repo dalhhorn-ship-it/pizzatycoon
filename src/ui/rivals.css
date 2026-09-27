@@ -35,3 +35,23 @@
   .share-row { grid-template-columns: 1fr; justify-items: center; }
   .segbar { grid-template-columns: 70px 1fr; }
 }
+
+/* Business review (src/ui/review.ts) */
+.tscroll { overflow-x: auto; max-width: 100%; }
+table.wbr { border-collapse: collapse; font-size: 13px; width: 100%; font-variant-numeric: tabular-nums; }
+table.wbr th, table.wbr td { padding: 3px 6px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+table.wbr th { color: var(--muted); font-weight: 600; font-size: 12px; }
+table.wbr .k { text-align: left; position: sticky; left: 0; background: var(--panel); }
+table.wbr .cur { font-weight: 700; background: var(--panel-2); }
+table.wbr tr.grp td { text-align: left; font-weight: 700; color: var(--accent-text); padding-top: 8px; border-bottom: 2px solid var(--line); }
+table.wbr td.good { color: var(--good); }
+table.wbr td.bad { color: var(--bad); }
+table.wbr td.muted { color: var(--muted); }
+.wbr-spark { display: flex; align-items: flex-end; gap: 1px; height: 18px; width: 72px; }
+.wbr-spark i { flex: 1; background: var(--muted); min-height: 1px; opacity: 0.6; }
+.wbr-spark i.last { background: var(--accent); opacity: 1; }
+.wbr-spark i.neg { background: var(--bad); }
+.kpi-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.kpi-grid .kpi { display: grid; gap: 1px; }
+.kpi-grid .kpi b { font-size: 18px; }
+@media (max-width: 420px) { .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

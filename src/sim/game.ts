@@ -1,5 +1,6 @@
 // Commands in, state and events out (solution-design.md 5.1). Never mutates its input.
 
+import { closeWeek } from './kpi';
 import { applyDeliveryDay, deliveryMissing, hasPacking, MODE_NAMES, newDelivery } from './delivery';
 import { DISTRICTS, PREMISES } from '../data/districts';
 import { ADDONS, type AddonItem, UPGRADE_PATHS } from '../data/addons';
@@ -255,7 +256,7 @@ export function newGame(seed: number, districtId: string, premisesId = 'hole', e
     loan: { balance: 0, annualRate: T.finance.starterLoanRate, weeksLeft: 0, pausedWeeks: 0 },
     rep: T.reputation.start, following: startFollowing({ economy }), totalServed: 0, rank: 'cook', recipes, furniture: [], equipment: [], staff: [], candidates: [],
     nextUid: 1, daysBelowZero: 0, daysOpen: 0, fireSafety: [], roomTouches: [], history: [], locationId: 1, branches: [], unlockAll: false,
-    campaigns: [], delivery: null, rivals: [], marketNews: [],
+    campaigns: [], delivery: null, rivals: [], marketNews: [], kpis: [],
   };
   if (economy) state.economy = clampEconomy(economy);
   state.openedIn = { [districtId]: 1 };
@@ -959,7 +960,7 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       applyLocation(state, {
         id, districtId: venue.districtId, premisesId: venue.premisesId, venueId: venue.id, deposit,
         rep: T.reputation.start, following: startFollowing(state), recipes: structuredClone(state.recipes).map((r) => ({ ...r, onMenu: false })),
-        furniture: [], equipment: [], staff: [], daysOpen: 0, fireSafety: [], roomTouches: [], history: [], campaigns: [], delivery: null,
+        furniture: [], equipment: [], staff: [], daysOpen: 0, fireSafety: [], roomTouches: [], history: [], campaigns: [], delivery: null, kpis: [],
       });
       state.cash -= deposit - held;
       if (held) state.venueHold = null;
@@ -1226,6 +1227,8 @@ function runDay(state: GameState, opts: DayOptions): Result {
     return !!r && (inReach(state, r) || ownRestaurants(state).some((o) => o.districtId === n.districtId));
   });
   if (fresh[0]) events.push({ kind: 'market', text: fresh[0].text });
+  // Sunday night, after the rivals closed their week: the business review rows (src/sim/kpi.ts).
+  if (report.weekday === 6) closeWeek(state);
   state.day += 1;
   if (report.weekday === 6) refreshMarket(state, bestRep(state), state.day);
 
