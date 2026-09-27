@@ -4,7 +4,7 @@
 * Owner: Game Product Management
 * Date: 2026-09-26
 * Extends: `prd.md` 5.2 (districts and premises) and 5.11 (money); numbers extend `balance.md` 1.2 and 1.3
-* Features: F-118 to F-126. Acceptance criteria: AC-175 to AC-192
+* Features: F-191 to F-199. Acceptance criteria: AC-293 to AC-310
 * Code: `src/data/venues.ts`, `src/sim/location.ts`, `src/ui/city.ts`, `src/ui/city.css`
 
 ## 1. Goal and the loop it serves
@@ -158,38 +158,38 @@ The confirm sheet lists every line above with real numbers before the player com
 
 | ID | Feature |
 |---|---|
-| F-118 | City map view with seven neighbourhoods |
-| F-119 | Twenty four venues with their own modifiers, pros and cons |
-| F-120 | Demographic cards for neighbourhoods and venues |
-| F-121 | Floor area in m² (dining, kitchen, total) |
-| F-122 | Venue list with sort and filter |
-| F-123 | Relocation command with deposit, fee, resale and reputation rules |
-| F-124 | Two way link: HUD button and breadcrumb to the city, "Back to" button from the city |
-| F-125 | New game starts on the city map |
-| F-126 | Save migration schema 3 to 4 (`venueId`) |
+| F-191 | City map view with seven neighbourhoods |
+| F-192 | Twenty four venues (72 since M0.5, competition.md 4) with their own modifiers, pros and cons |
+| F-193 | Demographic cards for neighbourhoods and venues |
+| F-194 | Floor area in m² (dining, kitchen, total) |
+| F-195 | Venue list with sort and filter |
+| F-196 | Relocation command with deposit, fee, resale and reputation rules |
+| F-197 | Two way link: HUD button and breadcrumb to the city, "Back to" button from the city |
+| F-198 | New game starts on the city map |
+| F-199 | Save migration schema 3 to 4 (`venueId`) |
 
 ## 9. Acceptance criteria
 
 | ID | Criterion |
 |---|---|
-| AC-175 | At least 15 venues exist, each with a valid premises and neighbourhood, at least two pros and two cons |
-| AC-176 | At least 5 venues in 5 neighbourhoods leave $2,920 to fit out after the deposit; the reference starter kit fits every venue that is not a hole in the wall |
-| AC-177 | Effective shares of every venue sum to 1 (within 0.001) |
-| AC-178 | A new game at a venue uses that venue's rent, foot traffic and premises |
-| AC-179 | `rentVenue` charges new deposit − old deposit + moving fee and fails when cash is short |
-| AC-180 | `rentVenue` to the current venue fails with a clear message |
-| AC-181 | After a move, furniture outside the new room and unplaceable equipment are sold at 80% and reported |
-| AC-182 | After a move, reputation follows the same or other neighbourhood carry rule |
-| AC-183 | After a move, staff, recipes, loan, rank and guests served are unchanged |
-| AC-184 | Commands never mutate their input (existing rule holds for `rentVenue`) |
-| AC-185 | Schema 2 and 3 saves load, get a deposit and a matching `venueId`, and keep playing |
-| AC-186 | Balance harness numbers for the three original districts do not change |
-| AC-187 | The city view opens from the HUD button and from the neighbourhood name |
-| AC-188 | The city view always offers a way back (button, Escape) that returns to the previous tab unchanged |
-| AC-189 | Venue card shows foot traffic, weekly rent, floor area in m² with dining and kitchen split, and demographic cards |
-| AC-190 | The confirm sheet shows the same net cost that the command charges |
-| AC-191 | A new game starts on the city map and the player can open at any venue |
-| AC-192 | City view works at 375 px wide without horizontal scroll, in light and dark themes |
+| AC-293 | At least 15 venues exist, each with a valid premises and neighbourhood, at least two pros and two cons |
+| AC-294 | At least 5 venues in 5 neighbourhoods leave $2,920 to fit out after the deposit; the reference starter kit fits every venue that is not a hole in the wall |
+| AC-295 | Effective shares of every venue sum to 1 (within 0.001) |
+| AC-296 | A new game at a venue uses that venue's rent, foot traffic and premises |
+| AC-297 | `rentVenue` charges new deposit − old deposit + moving fee and fails when cash is short |
+| AC-298 | `rentVenue` to the current venue fails with a clear message |
+| AC-299 | After a move, furniture outside the new room and unplaceable equipment are sold at 80% and reported |
+| AC-300 | After a move, reputation follows the same or other neighbourhood carry rule |
+| AC-301 | After a move, staff, recipes, loan, rank and guests served are unchanged |
+| AC-302 | Commands never mutate their input (existing rule holds for `rentVenue`) |
+| AC-303 | Schema 2 and 3 saves load, get a deposit and a matching `venueId`, and keep playing |
+| AC-304 | Balance harness numbers for the three original districts do not change |
+| AC-305 | The city view opens from the HUD button and from the neighbourhood name |
+| AC-306 | The city view always offers a way back (button, Escape) that returns to the previous tab unchanged |
+| AC-307 | Venue card shows foot traffic, weekly rent, floor area in m² with dining and kitchen split, and demographic cards |
+| AC-308 | The confirm sheet shows the same net cost that the command charges |
+| AC-309 | A new game starts on the city map and the player can open at any venue |
+| AC-310 | City view works at 375 px wide without horizontal scroll, in light and dark themes |
 
 ## 10. Out of scope for M0.3
 

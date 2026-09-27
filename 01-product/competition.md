@@ -15,7 +15,7 @@
 3. **Rivals tab:** a top level Rivals tab, as in 7.1.
 4. **Delivery reputation is a separate thing:** DRep never moves the dining reputation and the dining reputation never moves DRep (6.6).
 5. **Delivery can turn a small kitchen into a gold mine if played well:** a small restaurant with a strong kitchen, good riders and a high DRep earns many times its dining profit; played badly it earns little more than before (6.12, 11).
-6. **Open:** whether rivals should seek out a very successful player. Until decided they keep avoiding strong players, because that is where they earn less (3.4).
+6. **Decided (M0.5):** rivals may seek out a successful player. It is the setting "Rivals target the leader" (off on Easy, on for Normal and Hard). How it works is in 15.1.
 
 ## 1. Goal and the loops it serves
 
@@ -50,7 +50,7 @@ Today competition is a single static number per neighbourhood (`district.competi
 The old district number is split. Half of it stays as **background competition**: the kebab shops, cafes and burger bars that are not pizzerias and never change. The other half is now carried by **live rivals** on the map.
 
 ```
-C_bg        = clamp(backgroundShare x district.competition + venue.competitionDelta, 0, 0.9)   backgroundShare 0.5
+C_bg        = clamp(backgroundShare x district.competition + venue.competitionDelta, 0, 0.9)   backgroundShare 0.7 (0.5 in the first draft, see 15.1)
 C_live_s    = sum over rival locations k of pressure_k,s  +  cannibalisation x (other own restaurants in the same district)
 C_eff_s     = min(0.9, C_bg + C_live_s)
 demand_s    = ...existing product...  x (1 - competitionFactor x C_eff_s)                    competitionFactor 0.5 (unchanged)
@@ -77,12 +77,12 @@ For the player every factor is read from the start of day analysis (prices, menu
 ### 2.3 Pressure of one rival
 
 ```
-rel_k,s       = clamp(A_k,s / A_p,s, relMin 0.25, relMax 2.5)
+rel_k,s       = clamp(A_k,s / A_p,s, relMin 0.35, relMax 2.5)
 proximity_k   = 1.3  same district and within 6 map units ("same street")
                 1.0  same district
                 0.3  other district, within 12 map units ("nearby")
                 0    otherwise
-pressure_k,s  = unitPressure (0.10) x proximity_k x rel_k,s
+pressure_k,s  = unitPressure (0.14) x proximity_k x rel_k,s
 ```
 
 * An equal rival in the same district takes 0.10, so two equal rivals plus the background reproduce University Quarter's old 0.40.
@@ -691,9 +691,9 @@ Schema bump (7 at the time of writing, or the next free number).
 
 | Tunable (`T.rivals`) | Unit | Start | Safe range |
 |---|---|---|---|
-| backgroundShare | share of district competition | 0.5 | 0.3 to 0.7 |
-| unitPressure | competition per equal rival | 0.10 | 0.06 to 0.15 |
-| relMin / relMax | ratio | 0.25 / 2.5 | 0.1 to 0.5 / 1.5 to 3.5 |
+| backgroundShare | share of district competition | 0.7 (draft 0.5) | 0.3 to 0.7 |
+| unitPressure | competition per equal rival | 0.14 (draft 0.10) | 0.06 to 0.15 |
+| relMin / relMax | ratio | 0.35 (draft 0.25) / 2.5 | 0.1 to 0.5 / 1.5 to 3.5 |
 | sameStreetUnits / sameStreetMult | map units / factor | 6 / 1.3 | 4 to 8 / 1.1 to 1.5 |
 | nearbyUnits / nearbyMult | map units / factor | 12 / 0.3 | 8 to 16 / 0.1 to 0.5 |
 | pBestBase / pBestPerSkill | probability | 0.35 / 0.06 | 0.2 to 0.5 / 0.03 to 0.08 |
@@ -701,11 +701,11 @@ Schema bump (7 at the time of writing, or the next free number).
 | cutsBeforeCooldown / cooldownWeeks | count / weeks | 2 / 4 | 1 to 3 / 2 to 8 |
 | styleBonus | share of weekly revenue | 0.10 | 0.05 to 0.2 |
 | runwayWeeks | weeks of fixed costs | 4 | 2 to 8 |
-| rescueAfterWeeks / closeLosingWeeks | weeks | 4 / 8 | 3 to 6 / 6 to 12 |
+| rescueAfterWeeks / closeLosingWeeks | weeks | 4 / 6 (draft 8) | 3 to 6 / 6 to 12 |
 | expansionChance / expansionRep / expansionRunwayWeeks | per week / Rep / weeks | 0.25 / 55 / 8 | 0.1 to 0.4 / 45 to 65 / 4 to 12 |
 | firstEntrantDay / graceDays / viewingDays / holdDays / returnWeeks | days, weeks | 28 / 28 / 7 / 28 / 16 | 14 to 56 / 14 to 42 / 5 to 14 / 14 to 42 / 8 to 26 |
 | entrantFollowing / entrantRep | 0..1 / Rep | 0.25 / 30 | 0.1 to 0.4 / 25 to 40 |
-| salaryBase | $ per week | 520 | 450 to 600 |
+| salaryBase | $ per week | 600 (draft 520) | 450 to 600 |
 | maxShareOfVenues | share | 0.30 | 0.2 to 0.4 |
 
 | Tunable (`T.marketing`) | Unit | Start | Safe range |
@@ -792,7 +792,7 @@ Other deviations:
 
 * **Turns per seat per day** are calibrated to the player's own reference builds (Price Fighter 2.7, Budget Chain 2.5, Hype House 2.2, Honest Trattoria 2.0, Trendy Kitchen 1.9, Artisan 1.6). The first draft's 2.2 to 4.0 let rivals outearn any real kitchen.
 * **Archetype ranges:** each archetype keeps to a tier range and a price index range (for example a Price Fighter stays between basic and standard, 0.75 to 1.00), so it stays recognisable after months of moves.
-* **Rivals target the leader** is a setting (off on Easy, on for Normal and Hard): marketing minded rivals weigh the player's best district 1.5 times when they choose where to open.
+* **Rivals target the leader** is a setting (off on Easy, on for Normal and Hard). The leader district is the player's restaurant with the highest reputation x guests over the last week, once its reputation is 55 or more. When a marketing minded rival (marketing style 0.45 or more) scores a venue there, it adds `leaderPull` (0.35) x the venue's expected weekly sales to the venue's expected profit. A newcomer also weighs the leader district 1.5 times when it picks a district.
 * **Newcomers** only look at districts where they can afford a free venue.
 * **No schema bump:** every new field is optional, and a missing `economy.rivals` means live rivals off. Old saves load unchanged and add rivals from the settings menu.
 * **Pipeline:** no fifth Delivery bar yet. The delivery panel shows the share of the kitchen used by delivery, and the advisor names the kitchen load when deliveries run late.

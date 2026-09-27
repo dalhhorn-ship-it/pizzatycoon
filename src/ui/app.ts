@@ -137,6 +137,8 @@ export class App {
   private tabs = h('nav', { class: 'tabs', role: 'tablist' });
   private bar = h('div', { class: 'bar' });
   private tab: Tab = 'menu';
+  /** Set when a new build is waiting (main.ts); calling it switches to the new version. */
+  private update: (() => void) | null = null;
   private city = new CityView();
   private main: HTMLElement;
   /** 'shop' shows the pizzeria, 'city' the city map (city-map.md 2). */
@@ -176,6 +178,10 @@ export class App {
     game.saves.onChange(() => {
       this.renderHud();
       if (game.saves.conflict) this.showConflict();
+    });
+    window.addEventListener('pizzad:update', (e) => {
+      this.update = (e as CustomEvent<() => void>).detail;
+      this.renderHud();
     });
   }
 
@@ -407,6 +413,7 @@ export class App {
       h('div', { class: 'grow' }),
       h('button', { class: 'small', onclick: () => this.showCity() }, '🏠 Buy another restaurant'),
       h('button', { class: 'small', onclick: () => this.showSettings() }, '⚙ Settings'),
+      this.update ? h('button', { class: 'small primary', title: 'A new version of Pizza D is ready. Your game is saved; the page reloads.', onclick: () => this.update?.() }, '⟳ Update ready') : '',
       this.game.saves.localFailed
         ? h('span', { class: 'cloud conflict', title: 'The browser refused to store the save (storage full or private browsing). Export a save code under Settings to keep your progress.' }, '⚠ Not saved on this device')
         : h('span', { class: `cloud ${status}` }, cloudText[status]),

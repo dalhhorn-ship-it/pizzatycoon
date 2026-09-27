@@ -20,5 +20,20 @@ void navigator.storage?.persist?.().catch(() => undefined);
 new App(root, game).start();
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  navigator.serviceWorker.register('./sw.js').catch(() => undefined);
+  // A new build waits; the HUD offers "Update ready", which asks the waiting worker to take over, then reloads.
+  const offer = (reg: ServiceWorkerRegistration): void => {
+    if (reg.waiting && navigator.serviceWorker.controller) {
+      window.dispatchEvent(new CustomEvent('pizzad:update', { detail: () => reg.waiting?.postMessage('skipWaiting') }));
+    }
+  };
+  navigator.serviceWorker.register('./sw.js').then((reg) => {
+    offer(reg);
+    reg.addEventListener('updatefound', () => reg.installing?.addEventListener('statechange', () => offer(reg)));
+  }).catch(() => undefined);
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading) return;
+    reloading = true;
+    window.location.reload();
+  });
 }

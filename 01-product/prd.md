@@ -101,6 +101,8 @@ Scope decisions favour Maya and Tom. Priya shapes transparency, Linda shapes acc
 
 ## 5. System specifications
 
+> **Current values (M0.6):** the numbers in this section are the first design. Where the game changed them, the value in `src/data/tunables.ts` and the `balance.md` tuning log win. The notes marked "As built" below list the differences that matter most.
+
 All formulas are **starting tuning assumptions** for prototyping. Every constant lives in data files designers can edit without code changes. The full parameter table and worked examples are in `balance.md`. Currency is shown as "$" as a placeholder for a localisable neutral currency.
 
 **Simulation authority.** The visible restaurant runs an agent level simulation (individual guests and staff). The aggregate formulas below are the design reference and are also used for off-screen locations. The agent simulation must reproduce the aggregate reference builds in `balance.md` within 10% on covers and revenue per day; if they disagree, design retunes constants.
@@ -119,7 +121,7 @@ All formulas are **starting tuning assumptions** for prototyping. Every constant
     * **Canal Quarter:** T 2,400, balanced mix, W 1.0, rent $11 per tile, C 0.30. Starter district, suits the middle ground.
     * **Old Harbour:** T 2,600, 30% foodies and 30% tourists, W 1.3, rent $19 per tile, C 0.25. Luxury territory.
   * The three recommended starter properties are two in Canal Quarter and one in University Quarter; Old Harbour properties are available from day 1 but marked "ambitious".
-  * Each property has a dining grid, a kitchen grid, and lease terms (deposit 8 weeks rent). Starter properties come with a basic kitchen (1 deck oven, 2 prep counters, 1 fridge, 1 sink). Purchase price from v1.0.
+  * Each property has a dining grid, a kitchen grid, and lease terms (deposit 8 weeks rent; **as built: 4 weeks**, fresh-start.md). Starter properties come with a basic kitchen (1 deck oven, 2 prep counters, 1 fridge, 1 sink). Purchase price from v1.0.
 * **Feedback:** district card with segment pie, wealth, traffic, rent, competition, "good for" tags (cheap eats, date night) and a projected guests per day range for the player's current menu and price.
 * **Failure and recovery:** a poor district choice is recoverable: adapt the concept to the local segments, or close and move (lease break fee 4 weeks rent). The projection warns before signing.
 
@@ -149,7 +151,7 @@ All formulas are **starting tuning assumptions** for prototyping. Every constant
 * **Verbs:** create recipe, drag ingredients onto a pizza, set each ingredient's tier, set price, add to menu, set daily special, retire dish.
 * **Rules:**
   * Pizza = dough + sauce + cheese + 0 to 6 toppings. Starters, drinks and desserts use preset recipes where the player picks ingredient tiers.
-  * Menu holds 4 to 16 items. v0.1 has 25 ingredients; v1.0 about 60.
+  * Menu holds 4 to 16 items (**as built:** no minimum beyond one pizza to open; up to 24 food items and 32 bar items, `menuMaxFood`, `menuMaxBar`). v0.1 has 25 ingredients; v1.0 about 60.
   * Taste tags: cheesy, spicy, classic, artisan, veggie, seasonal, kid friendly, meaty. A harmony data table lists matching pairs (tomato + basil) and clashing pairs (pineapple + anchovy).
 * **Formulas:**
 
@@ -285,7 +287,7 @@ guests_per_day(s) = T * share_s * capture_base * rep_mult * season_mult * weekda
                     * speed_mult_s * (1 - 0.5*C_eff)
 
 capture_base   = 0.035
-rep_mult       = 0.5 + Rep/100                                   (0.5 .. 1.5)
+rep_mult       = 0.5 + Rep/100                                   (0.5 .. 1.5)   as built: 0.5 + 0.012 x Rep (0.5 .. 1.7)
 season_mult    = per district and season, 0.85 .. 1.15
 weekday_mult   = Mon 0.80, Tue 0.85, Wed 0.90, Thu 1.00, Fri 1.25, Sat 1.35, Sun 1.10
 menu_fit_s     = 0.6 + 0.8 * mean taste match of the 5 best dishes for s (0..1)
@@ -410,6 +412,7 @@ area manager (v2.0)  = oversees up to 4 locations; their managers act at m + 1; 
 Rep (0..100), new location starts at 30 (at 40 if chain brand Rep >= 60)
 daily update: Rep = Rep + 0.05 * (review_score_today - Rep)
 review_score  = average stars today * 20 (no change if no reviews)
+               as built: review_score = -10 + 1.1 x satisfaction, per party (reviewBase, reviewSlope)
 walk-away penalty: -1 Rep if walk-aways exceed 10% of arrivals that day
 critic visit (v1.0): that review counts with weight 5
 brand Rep (chain) = revenue weighted mean of location Rep + marketing bonus (0..5)
@@ -423,7 +426,7 @@ star display = Rep / 20, one decimal
 ### 5.11 Finance
 
 * **Rules:**
-  * Starting cash $40,000. Starter loan up to $30,000 at 5% per year, repaid weekly over 104 weeks ($303.26 per week at the full amount).
+  * Starting cash $40,000. Starter loan up to $30,000 at 5% per year, repaid weekly over 104 weeks ($303.26 per week at the full amount). **As built (fresh-start.md):** $7,000 starting cash, a loan of up to $5,000 at 5% repaid over 52 weeks; you start in empty premises.
   * Daily P&L lines: sales; ingredients used; waste; staff (weekly / 7); rent (weekly / 7); utilities ($30 + $0.80 per cover); upkeep ($15 + equipment maintenance per week / 7); loan interest.
   * Cash settles daily for sales, deliveries, utilities and upkeep; weekly (Sunday night) for salaries, rent and loan payments.
   * Savings goals: the player can pin any catalogue item as a goal; the HUD shows progress and projected date at the last 7 day average profit.
@@ -565,23 +568,23 @@ City districts and property; ingredient quality tiers; menu and recipe design; p
 * **Game over and bankruptcy.** Replaced by the safety net.
 * **Real-time cooking or reflex minigames.**
 * **Multiplayer, online leaderboards, accounts, social sharing, UGC** (at least through v1.0).
-* **Free-to-play mechanics** of any kind.
+* **Free-to-play mechanics** of any kind (the game is free, with none of these mechanics).
 * **iPhone and portrait mode** at v1.0.
 * **Real brands, real cities, licensed products.**
 * **Realistic accounting** (tax, VAT, depreciation).
 * **Equipment breakdowns as random disasters.** Maintenance is a flat weekly cost, not a failure event.
-* **Delivery apps and online ordering.** Takeaway counter is a v2.0 candidate only.
-* **Cuisine beyond pizza plus simple sides** at v1.0 (Q7).
-* **Deep alcohol or bar gameplay.**
+* ~~Delivery apps and online ordering.~~ **Shipped in M0.5** (competition.md 6): delivery is a late game business model with its own rating.
+* ~~Cuisine beyond pizza plus simple sides~~ **Primi and secondi shipped in M0.1** (balance.md 4.2); other cuisines stay out of scope.
+* ~~Deep alcohol or bar gameplay.~~ **A light bar shipped in M0.1** (wine list, aperitivi, digestivi; balance.md 4.7); nothing deeper is planned.
 * **Technology choices** (engine, language, architecture, analytics vendor): the solution architect's call.
 
 ### 10.4 Scope risk and recommended cuts
 
 Tycoon games die from too many systems. If v1.0 slips, cut in this order:
 
-1. Friendly rival and festival (already v2.0).
+1. Friendly rival and festival (already v2.0; live rivals shipped in M0.5).
 2. Buying property (keep leasing).
-3. Critic visits and marketing.
+3. Critic visits (marketing shipped in M0.5).
 4. Style set bonuses (keep flat ambience).
 5. Shift schedule editor (keep automatic 5 shift rotas).
 6. Hybrid equipment tier (keep volume, quality, artisan).
@@ -604,7 +607,7 @@ New product, so baselines are **genre benchmarks for premium and cosy mobile or 
 | M6 | It feels relaxing | Playtest "How relaxed do you feel?" (1 to 5) | About 3.5 for non-cosy management sims | 4.2 or more |
 | M7 | It feels deep | Playtest "My decisions clearly changed the results" (1 to 5) | About 3.5 | 4.0 or more |
 | M8 | Legibility | Playtest: player correctly explains why a satisfaction or profit number moved | No baseline (new) | 80% of players on 3 of 4 probes |
-| M9 | Quality perception | App Store rating, first 90 days | About 4.3 for top premium iPad sims | 4.6 or more |
+| M9 | Quality perception (superseded: no App Store; use an in game rating prompt) | App Store rating, first 90 days | About 4.3 for top premium iPad sims | 4.6 or more |
 | M10 | Stability | Crash free sessions | 99.0% industry acceptable | 99.7% |
 | M11 | Fair value | Refund rate | 3 to 5% for premium iOS games | Under 3% |
 | M12 | Commercial | Units sold in first 12 months | 0 (new); indie premium iPad sims roughly 10k to 150k | 60k (validate against budget, Q10) |

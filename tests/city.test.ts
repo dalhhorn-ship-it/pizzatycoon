@@ -18,7 +18,7 @@ const run = (s: GameState, days: number): GameState => {
 describe('city map venues (city-map.md)', () => {
   const venues = Object.values(VENUES);
 
-  test('AC-175: at least 15 valid venues with pros and cons', () => {
+  test('AC-293: at least 15 valid venues with pros and cons', () => {
     expect(venues.length).toBeGreaterThanOrEqual(15);
     for (const v of venues) {
       expect(DISTRICTS[v.districtId], v.id).toBeDefined();
@@ -30,13 +30,13 @@ describe('city map venues (city-map.md)', () => {
     }
   });
 
-  test('AC-176: new players can afford several venues with money left to fit out', () => {
+  test('AC-294: new players can afford several venues with money left to fit out', () => {
     const affordable = venues.filter((v) => T.finance.startingCash - venueDeposit(v.id) >= 2920);
     expect(affordable.length).toBeGreaterThanOrEqual(5);
     expect(new Set(affordable.map((v) => v.districtId)).size).toBeGreaterThanOrEqual(5);
   });
 
-  test('AC-176: the reference starter kit fits every venue big enough for it', () => {
+  test('AC-294: the reference starter kit fits every venue big enough for it', () => {
     for (const v of venues.filter((x) => x.premisesId !== 'hole')) {
       const s = withStarterKit(newGameAt(1, v.id));
       const p = PREMISES[v.premisesId]!;
@@ -48,14 +48,14 @@ describe('city map venues (city-map.md)', () => {
     }
   });
 
-  test('AC-177: effective shares sum to 1', () => {
+  test('AC-295: effective shares sum to 1', () => {
     for (const v of venues) {
       const f = locationFacts(v.districtId, v.premisesId, v.id);
       expect(SEGMENT_IDS.reduce((a, id) => a + f.shares[id], 0)).toBeCloseTo(1, 3);
     }
   });
 
-  test('AC-178: a new game at a venue uses its rent, traffic and premises', () => {
+  test('AC-296: a new game at a venue uses its rent, traffic and premises', () => {
     const v = VENUES.towerPlaza!;
     const s = newGameAt(3, v.id);
     expect(s.venueId).toBe('towerPlaza');
@@ -79,7 +79,7 @@ describe('city map venues (city-map.md)', () => {
 });
 
 describe('rentVenue (city-map.md 6)', () => {
-  test('AC-179, AC-183: charges the quote and keeps team, menu and loan', () => {
+  test('AC-297, AC-301: charges the quote and keeps team, menu and loan', () => {
     let s = withStarterKit(newGameAt(9, 'lockKeeper'));
     s = apply(s, { type: 'takeLoan', amount: 5000 }).state;
     s = { ...s, cash: s.cash + 5000 };
@@ -97,19 +97,19 @@ describe('rentVenue (city-map.md 6)', () => {
     expect(r.state.rank).toBe(s.rank);
   });
 
-  test('AC-179: fails when cash is short', () => {
+  test('AC-297: fails when cash is short', () => {
     const s = { ...newGameAt(9, 'libraryLane'), cash: 0 };
     const r = apply(s, { type: 'rentVenue', venueId: 'lighthouseView' });
     expect(r.error).toMatch(/more/);
     expect(r.state).toBe(s);
   });
 
-  test('AC-180: moving to the current venue fails', () => {
+  test('AC-298: moving to the current venue fails', () => {
     const s = newGameAt(9, 'lockKeeper');
     expect(apply(s, { type: 'rentVenue', venueId: 'lockKeeper' }).error).toMatch(/already/);
   });
 
-  test('AC-181: what does not fit a smaller venue is sold, the rest is laid out again', () => {
+  test('AC-299: what does not fit a smaller venue is sold, the rest is laid out again', () => {
     const s = { ...withStarterKit(newGameAt(9, 'parkside')), cash: 100000 };
     const q = moveQuote(s, 'towpathKiosk')!;
     expect(q.soldFurniture.length).toBeGreaterThan(0);
@@ -137,7 +137,7 @@ describe('rentVenue (city-map.md 6)', () => {
     expect(r.state.deposit).toBe(venueDeposit('lighthouseView'));
   });
 
-  test('AC-182: reputation carry depends on the neighbourhood', () => {
+  test('AC-300: reputation carry depends on the neighbourhood', () => {
     const s = { ...newGameAt(9, 'lockKeeper'), rep: 80, cash: 100000 };
     const same = apply(s, { type: 'rentVenue', venueId: 'bridgeStreet' }).state.rep;
     const other = apply(s, { type: 'rentVenue', venueId: 'quaysideNook' }).state.rep;
@@ -145,7 +145,7 @@ describe('rentVenue (city-map.md 6)', () => {
     expect(other).toBeCloseTo(80 * 0.6 + 30 * 0.4);
   });
 
-  test('AC-184: rentVenue never mutates its input', () => {
+  test('AC-302: rentVenue never mutates its input', () => {
     const s = { ...newGameAt(9, 'lockKeeper'), cash: 100000 };
     const before = JSON.stringify(s);
     apply(s, { type: 'rentVenue', venueId: 'parkside' });
@@ -154,7 +154,7 @@ describe('rentVenue (city-map.md 6)', () => {
 });
 
 describe('save migration v2 to v4', () => {
-  test('AC-185: old saves get a deposit and the matching venue and keep playing', () => {
+  test('AC-303: old saves get a deposit and the matching venue and keep playing', () => {
     const s = newGame(4, 'harbour', 'cosy') as Partial<GameState>;
     delete s.venueId;
     delete (s as { deposit?: number }).deposit;

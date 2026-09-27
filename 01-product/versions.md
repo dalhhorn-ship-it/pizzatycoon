@@ -2,6 +2,20 @@
 
 Feature IDs refer to `features.md`; acceptance criteria to `acceptance-criteria.md`; numbers to `balance.md`. Durations are planning assumptions for a team of about 6 to 10 people (prd.md A12) and are for the delivery lead to confirm.
 
+## Delivered so far (M0.1 to M0.6)
+
+Pizza D is free and plays in the browser (founder decision); the App Store, TestFlight and paid launch items in the plan below are superseded, and cloud saves shipped in M0. The long term milestones (v0.1 onward) still describe the direction of travel.
+
+| Milestone | Scope | Spec | Done when |
+|---|---|---|---|
+| **M0** Systems prototype | Economy, day model, menu and tiers, dining room, finance, cloud saves | `prd.md`, `balance.md` | Strategy balance suite green (AC-01 to AC-12, AC-72) |
+| **M0.1** Menu depth | Primi and secondi, menu complexity, the bar and wine list, room touches | `balance.md` 4.2 to 4.10 | Balance log entries hold in `tests/balance` |
+| **M0.2** Kitchen Builder and Fresh Start | Kitchen floor plan and flow, pipeline, empty premises start, restaurant market | `kitchen-builder.md`, `fresh-start.md` | Their ACs pass |
+| **M0.3** Kitchen upgrades and the city map | Add-ons and upgrade paths; Porto Verde with rentable venues and moving; fire safety | `kitchen-upgrades.md`, `city-map.md` | Their ACs pass |
+| **M0.4** The Squad and kitchen bottlenecks | Four attributes, training, market, mood, team reports; stations, tending, wash points, dough, capacity view | `staff-management.md`, `kitchen-bottlenecks.md` | AC-194 to AC-225, AC-276 to AC-285 |
+| **M0.5** Competition, marketing and delivery | Live rivals, 72 venues, campaigns, Rivals tab and coach, food delivery | `competition.md` | AC-226 to AC-287; open balance items in its section 15 |
+| **M0.6** Business review and cleanup | Weekly KPIs and the business review; save v7, speed, docs and tests from `cleanup-sprints.md` | `business-review.md`, `cleanup-sprints.md` | AC-288 to AC-292; the five cleanup sprints done |
+
 ## Overview
 
 | Milestone | Goal in one line | Question it answers | Indicative length |
@@ -120,7 +134,7 @@ Feature IDs refer to `features.md`; acceptance criteria to `acceptance-criteria.
 * F-37 Central commissary (Nice)
 * F-60 Reservations and events (Nice), F-61 Takeaway counter (Nice)
 * F-51 Seasonal terrace (Nice), F-94 Scenarios (Nice), F-99 Photo mode (Nice), F-28 Hand drawn sign (Nice)
-* Candidates pending Q4 and Q5: cloud save sync, Mac and iPhone versions
+* Candidates pending Q5: Mac and iPhone versions (cloud save sync shipped in M0)
 
 **Question it answers.** Which additions measurably raise long term play (sessions after day 30) and review scores without adding stress?
 

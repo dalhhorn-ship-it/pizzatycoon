@@ -1,6 +1,6 @@
 # Solution design: Pizza D
 
-* Status: Draft 1, M0 build started
+* Status: Draft 2, as built at M0.6 (sections 4, 5, 6, 8, 9 and 13 updated; the M0 plan in 12 is history)
 * Inputs: everything in `01-product/` (PRD with founder decisions of 2026-09-26)
 * Companion files: `adrs/`, `infrastructure.md`
 
@@ -52,12 +52,12 @@ flowchart LR
 
 | Component | Folder | Responsibility | Talks to |
 |---|---|---|---|
-| Simulation core | `src/sim/` | Game state types, formulas, day model, finance, reputation, staff, commands, seeded RNG | Data only |
+| Simulation core | `src/sim/` | Game state types, formulas, day model, finance, reputation, staff, rivals, marketing, delivery, weekly KPIs, commands, seeded RNG (see 13) | Data only |
 | Content and balance data | `src/data/` | Districts, segments, ingredients, tiers, suppliers, recipes, equipment, furniture, staff roles, traits, all tunables | Nothing |
 | Game controller | `src/game/` | Holds current state, applies commands, emits events, triggers autosave | Sim, save |
 | Save layer | `src/save/` | Serialize, version, migrate, checksum; local and cloud adapters; sync | Controller, browser storage, cloud |
 | UI shell | `src/ui/` | Screens, panels, HUD; reads state, dispatches commands | Controller |
-| Floor view | `src/ui/floor/` | Grid rendering, build mode placement, guest animation from day results | Controller |
+| Floor view | `src/ui/floor.ts`, `src/ui/kitchenView.ts`, `src/ui/sprites.ts` | Grid rendering, build mode placement, guest animation from day results | Controller |
 | Balance harness | `tests/balance/` | Reference builds and strategy checks from `balance.md` section 3 | Sim, data |
 
 ## 5. Simulation core
@@ -66,26 +66,26 @@ flowchart LR
 
 The core is a reducer: `apply(state, command) -> { state, events }`. State is a plain JSON serialisable object; commands are plain objects; the core never mutates its input.
 
-| Command | Effect |
-|---|---|
-| `newGame { seed, districtId }` | Creates a game with starting cash and a starter property |
-| `setRecipeTier { recipeId, ingredientId, tier }` | Changes an ingredient tier in a recipe |
-| `setRecipeSupplier { recipeId, ingredientId, supplierId }` | Changes the supplier for that line |
-| `setPrice { itemId, price }` | Sets a menu price |
-| `toggleMenuItem { recipeId, on }` | Adds or removes a dish (4 to 16 items) |
-| `placeFurniture { itemId, x, y, rot }` / `removeFurniture { uid }` | Dining room build mode (80% refund) |
-| `buyEquipment { itemId }` / `sellEquipment { uid }` | Kitchen equipment (80% refund) |
-| `hire { candidateId }` / `fire { staffId }` / `giveRaise { staffId }` | Staff |
-| `takeLoan { amount }` / `repayLoan { amount }` | Finance |
-| `runDay {}` | Simulates one full service day and settles money |
+The full list of commands (54 at M0.6) is the `Command` union in `src/sim/commands.ts`; `apply` in `src/sim/game.ts` routes them, with the day loop in `settle.ts` and the live market commands in `marketCommands.ts`. By area:
 
-| Event | Used by |
+| Area | Commands (examples) |
 |---|---|
-| `dayCompleted { report }` | End of day summary, floor animation, reviews, P&L |
-| `bottleneck { kind, value }` | Advisor banner |
-| `milestoneReached { id }` | Unlocks, ranks |
-| `cashBelowZero`, `restructureOffered` | Safety net |
-| `staffNotice { staffId }` | Staff |
+| Menu | `setTier`, `setSupplier`, `setPrice`, `toggleMenu`, custom dishes |
+| Kitchen and room | `buyEquipment`, `sellEquipment`, add-ons and upgrade paths, `placeFurniture`, `moveFurniture`, fire safety, room touches |
+| Squad | `hire`, `fire`, raises, courses, coaching, rota, staff policy, agency |
+| City and chain | `rentVenue`, `openRestaurant`, `switchRestaurant`, `holdVenue` |
+| Market | `startCampaign`, `stopCampaign`, `mysteryDiner`, `startDelivery`, `setDelivery`, `stopDelivery`, `buyVehicle`, `sellVehicle` |
+| Money and settings | `takeLoan`, `repayLoan`, `setEconomy`, `freshStart` |
+| Time | `runDay`, `runWeek` (fast forward, stops when something needs the player) |
+
+| Event kind | Used by |
+|---|---|
+| `dayCompleted { report }`, `weekCompleted { reports, stoppedBecause }` | Day and week reports, floor playback |
+| `unlocked`, `rankUp` | Unlocks and ranks |
+| `restructure` | Safety net (loan pause) |
+| `staffNotice`, `staffLeft`, `staffOffer`, `staffReview` | The Squad; they also stop fast forward |
+| `market` | A rival's move within reach |
+| `info` | Everything else worth a line |
 
 ### 5.2 Day model (hybrid simulation)
 
@@ -100,12 +100,20 @@ Cost of this choice: interventions during service (comping a dessert, closing a 
 * The day is resolved in one step (`runDay`). The UI plays it back at the chosen speed (1x, 2x, 4x, pause) using `real_seconds_per_game_minute`. Pausing or skipping the playback never changes the outcome.
 * Weekly events (salaries, rent, loan payment, hiring board refresh) happen on Sunday night inside `runDay`.
 
+### 5.3a Speed (M0.6)
+
+* `apply` copies the state with `cloneState`: stored day reports and KPI rows are shared (they never change once stored), everything else is a plain data deep copy.
+* A day runs the two pass day model (`dayRun`: a neutral pass measures load, then the day with staff pressure), each staff member's counterfactual in one pass (for the day report), the guests lost to rivals (one pass without live rivals), the managed restaurants and the rivals.
+* Measured in Node on the two restaurant fixture with Normal rivals: about 7 ms a day (13.9 ms before M0.6). The rivals cost 1.03 to 1.07 times the day without them (AC-272, `tests/balance/perf.test.ts`). Not yet measured on an iPad.
+
 ### 5.4 Determinism
 
 * PRNG: mulberry32 with the seed in state; each subsystem derives its own stream from `(seed, day, subsystem)` so adding a new random call in one system does not shift another.
 * No `Date.now()`, `Math.random()` or floating time inside `src/sim` (lint rule).
 
 ## 6. Data model (key entities)
+
+> **As built (M0.6):** the diagram below is the first design. Inventory lines and purchase orders were not built (ingredients are bought just in time). Staff have four attributes, an OVR and personalities (`staff-management.md`). The state also holds rivals, market news, campaigns, delivery, managed restaurants (`branches`) and weekly KPI rows; `KEY_SCOPE` in `src/sim/state.ts` says for every field whether it is shared, per restaurant or transient. The types in `src/sim/state.ts` are the reference.
 
 ```mermaid
 erDiagram
@@ -150,9 +158,9 @@ erDiagram
 
 ## 8. Saves and cloud sync
 
-* Save = `{ schemaVersion, gameVersion, savedAt, revision, deviceId, checksum, state }` as JSON.
-* **Local first:** autosave after every `runDay` and on `visibilitychange` to hidden (iPad Safari may kill a background tab without warning). M0 uses `localStorage`; v0.1 moves to IndexedDB for size.
-* **Migrations:** an ordered list `migrations[n]: (stateVn) => stateVn+1`, tested with a fixture save for every past version.
+* Save = `{ schemaVersion, savedAt, summary, state }` as JSON (schema 7 since M0.6). Revision and base revision for sync live in the sync metadata, not in the save. There is no checksum yet.
+* **Local first:** autosave after every `runDay` and on `visibilitychange` to hidden (iPad Safari may kill a background tab without warning). It uses `localStorage` with a previous save slot as fallback, and shows "Not saved on this device" when the browser refuses a write. Day reports older than 7 days keep only their totals, so a two restaurant save stays around 200 KB. IndexedDB is still planned.
+* **Migrations:** an ordered list `migrations[n]: (stateVn) => stateVn+1`. Real saves written by schema 5 and schema 6 builds are kept in `tests/fixtures/` and tested: the schema 6 save plays its next week exactly as the old code did.
 * **Cloud:** the same Cloudflare Worker that serves the game exposes `/api/*` backed by D1. Anonymous player id plus secret token; a 6 character link code adds a second device. One table `saves(player_id, slot, revision, updated_at, blob)`. Sync on load, after autosave when online, and on focus (ADR-005, ADR-007).
 * **Conflicts:** each save carries a `revision` and the `baseRevision` it was derived from. If the cloud revision moved on since the local base, the game shows both saves (day, cash, stars, device, time) and lets the player pick. No silent overwrites of progress.
 * D1 is SQLite and the API is four plain HTTP routes, so the exit path is the same schema on any server (ADR-005).
@@ -162,11 +170,11 @@ erDiagram
 | Area | Target |
 |---|---|
 | Frame rate | 60 fps at 1x with 120 seated guests on the minimum iPad (candidate: iPad 9th gen, A13); 30 fps floor at 4x |
-| `runDay` cost | under 5 ms per location on the minimum iPad; a 6 location chain day under 30 ms |
+| `runDay` cost | under 5 ms per location on the minimum iPad; a 6 location chain day under 30 ms. Measured: about 7 ms in Node for two restaurants with rivals (5.3a) |
 | Load | first load under 2 MB gzipped before art; playable offline after first visit |
 | Memory | under 300 MB on iPad Safari |
 | Battery | render loop stops when nothing animates or the tab is hidden |
-| Privacy | no third party scripts; strict CSP; only the cloud save endpoint is contacted |
+| Privacy | no third party scripts or fonts; strict CSP; only the cloud save endpoint is contacted |
 | Accessibility | 44 px touch targets, text size setting, colour blind safe palette, no hover only interactions |
 
 ## 10. Failure modes
@@ -178,7 +186,7 @@ erDiagram
 | Cloud Worker or D1 | Down or offline | No sync | Game keeps working locally, sync retries with backoff, badge shows "not synced" |
 | Sync | Two devices played offline | Diverging saves | Revision check and explicit player choice |
 | Service worker | Stale cached build | Old code with new save | Versioned cache, update prompt at day end, saves carry `schemaVersion` and refuse to load in older code |
-| Save migration | Bug in a migration | Corrupt game | Fixture tests per version; keep previous save slot; checksum |
+| Save migration | Bug in a migration | Corrupt game | Fixture tests for schema 5 and 6; previous save slot; checksum still to do |
 | Simulation | Formula change breaks balance | One strategy dominates | Balance harness in CI fails the build |
 | Rendering | Too many sprites on old iPad | Stutter | Floor view caps animated guests and batches drawing; PixiJS path (ADR-003) |
 
@@ -198,7 +206,7 @@ erDiagram
 
 1. Repo scaffold: Vite, TypeScript strict, Vitest, ESLint, GitHub Actions CI (typecheck, lint, test, build).
 2. `src/data`: districts, segments, tiers, suppliers, ingredients, recipes, equipment, furniture, staff roles and traits from `balance.md`.
-3. `src/sim/formulas.ts`: quality, fair price, demand, choice, capacity, service time, queue delay, satisfaction, reviews, reputation. Unit tests per formula against the worked numbers in `balance.md` 2.2 to 2.5.
+3. Formulas (now in `day.ts`, `analysis.ts` and the shared `formulas.ts`): quality, fair price, demand, choice, capacity, service time, queue delay, satisfaction, reviews, reputation. Unit tests per formula against the worked numbers in `balance.md` 2.2 to 2.5.
 4. `src/sim/day.ts`: the aggregate day model and P&L. Golden test: starter restaurant day (`balance.md` 2) within tolerance.
 5. Balance harness: the three reference builds in three districts (`balance.md` 3) and the checks in 3.5.
 6. Commands and state: new game, menu, tiers, prices, equipment, furniture, staff, loans, run day, weekly settlement, safety net.
@@ -208,3 +216,17 @@ erDiagram
 10. Deploy; performance check on an iPad.
 
 v0.1 then adds: purchasing, storage and spoilage; IndexedDB; PixiJS floor if needed; art, audio, tutorial.
+
+## 13. As built: the live market, delivery and managed restaurants (M0.4 to M0.6)
+
+| Module | Role |
+|---|---|
+| `src/sim/rivals.ts` | Rival pizzerias: profiles, attractiveness, pressure on the player, their own day and week, openings, viewings, closings, entrants. Runs after the player's day (`runRivalsDay`). |
+| `src/sim/marketing.ts` | Campaign costs, audiences, fatigue, renewals and the demand multipliers. |
+| `src/sim/market.ts` | Read only analytics for the UI: shares, guests lost, rival cards, the coach. |
+| `src/sim/delivery.ts` | Delivery demand, riders, delivery time, rating (DRep) and the pure `settleDelivery`. The day model calls it inside the capacity loop. |
+| `src/sim/chain.ts` | Managed restaurants: `runBranchDay` runs the same day model on a merged view (`{ ...state, ...branch }`) and copies the per restaurant fields back. `LOCATION_KEYS` and `KEY_SCOPE` keep the two in step; a test fails when a field is not classified. |
+| `src/sim/team.ts` | The Squad's day: growth, mood, contributions, managers, the market. |
+| `src/sim/kpi.ts` | Weekly KPI rows per restaurant and the business review. |
+| `src/sim/forecast.ts` | What the UI uses for previews: the real two pass day without noise. |
+| `src/sim/formulas.ts` | Small shared formulas with no sim imports. `tests/imports.test.ts` fails on any runtime import cycle in `src/sim` and `src/data`. |

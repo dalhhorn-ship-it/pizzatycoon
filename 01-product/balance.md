@@ -43,7 +43,7 @@
 | Name | Unit | Students | Families | Professionals | Foodies | Seniors | Tourists | Safe range | Read by |
 |---|---|---|---|---|---|---|---|---|---|
 | elasticity e | exponent | 2.0 | 1.5 | 1.0 | 0.6 | 1.2 | 0.8 | 0.3 to 3.0 | price_mult, value_score |
-| budget B | $ per main | 11 (was 10, tuned in M0) | 12 | 16 | 28 (was 24, M0.2) | 15 | 20 | 6 to 40 | budget_mult |
+| budget B | $ per main | 11.5 (was 10, then 11; tuned in M0 and later, see 4) | 12 | 16 | 28 (was 24, M0.2) | 15 | 20 | 6 to 40 | budget_mult |
 | quality appeal qa | multiplier | 0.0 | 0.1 | 0.35 | 1.0 | 0.3 | 0.5 | 0 to 1.5 | quality_mult |
 | quality weight wq | weight | 0.30 | 0.35 | 0.40 | 0.60 | 0.40 | 0.35 | 0.1 to 0.8 | dish choice |
 | wait tolerance | game min | 10 | 12 | 8 lunch, 15 dinner | 20 | 15 | 15 | 5 to 30 | wait_score, walk-aways |
@@ -190,6 +190,8 @@ Other kitchen constants:
 
 ### 1.10 Staff
 
+> **Superseded in part (M0.4):** the Squad (`staff-management.md`) replaced the single skill with four attributes and an OVR. As built: morale moves toward a target built around 65 (not 70) by at most 4 points a day; growth is 4 shifts per attribute point (not 40 per skill point); the market holds 24 candidates with 8 new each week (not 6). Salaries per role are unchanged. `T.mood`, `T.staff` and `T.market` in `src/data/tunables.ts` hold the current values; the rows below are kept for history.
+
 | Name | Unit | Start | Safe range | Read by |
 |---|---|---|---|---|
 | role_base salary | $ per week | chef 900, cook 550, server 450, host 420, dishwasher 380, restaurant manager 1,100, area manager 1,800 | +/- 30% | Finance |
@@ -230,7 +232,7 @@ Other kitchen constants:
 | starting cash | $ | 7,000 (was 40,000, M0.2) | 5,000 to 10,000 | Finance |
 | starter loan | $, rate, term | up to 5,000, 5% per year, 52 weeks, $98.62 per week at full amount (was 30,000 over 104 weeks, M0.2) | 3,000 to 8,000 | Finance |
 | lease deposit | weeks of rent | 4 (was 8, M0.2) | 2 to 8 | Property |
-| menu minimum | items | 0 (was 4, M0.2); maximum 16 | | Menu |
+| menu minimum | items | 0 (was 4, M0.2); maximum 24 food and 32 bar items (was 16) | | Menu |
 | lease break fee | weeks of rent | 4 | | Property |
 | utilities | $ per day | 30 + 0.80 per cover | | Finance |
 | upkeep | $ per day | 15 + equipment maintenance per week / 7 | | Finance |
@@ -378,6 +380,18 @@ About 26 parties, 20% review (5 reviews), expected review score 20 + 0.8 x 60.9 
 
 ## 3. Strategy comparison: luxury vs volume vs middle ground
 
+### 3.0 Current results (M0.6, printed by `npm run balance`)
+
+Profit per day at steady reputation, reference price and the best price in the strategy band. This table is the current truth; 3.2 to 3.5 keep the earlier generations for history.
+
+| Build | University Quarter | Canal Quarter | Old Harbour |
+|---|---|---|---|
+| Luxury | -$303 (best $1,312 at $20) | -$218 (best $1,336 at $20) | **$2,155** (best $2,166 at $40) |
+| Volume | **$2,134** (best at $8.50) | -$133 | -$653 |
+| Middle | $1,699 | **$1,409** | $1,036 (best $1,296 at $16) |
+
+Checks: luxury and volume at home are 1% apart; volume beats the best middle build in University Quarter by 26% and luxury beats it in Old Harbour by 67%; middle is the top earner in Canal Quarter; each specialist loses money in the other's home. All pass (tests/balance/strategies.test.ts).
+
 ### 3.1 Reference builds
 
 Each build is a mature single location at steady state reputation (Rep where daily review score equals Rep), on a Thursday, spring. Prices are the reference prices; section 3.4 shows best prices.
@@ -440,7 +454,7 @@ Luxury column retuned in M0.2 (hand estimate, pending `npm run balance`; pre M0.
 
 | Build | University Quarter | Canal Quarter | Old Harbour |
 |---|---|---|---|
-| Luxury ($38 since M0.2; rerun required, pre M0.2 values at $28 shown) | -$192 (25 covers) | $58 (35 covers) | **about $2,045** (79 covers; was $2,064, 106 covers) |
+| Luxury ($38 since M0.2; history, see 3.0 for current values) | -$192 (25 covers) | $58 (35 covers) | **about $2,045** (79 covers; was $2,064, 106 covers) |
 | Volume ($8.50) | **$1,984** (358 covers) | -$50 (147 covers) | -$576 (125 covers) |
 | Middle ($13) | $1,563 (169 covers) | **$1,120** (143 covers) | $1,142 (156 covers) |
 
@@ -448,7 +462,7 @@ Luxury column retuned in M0.2 (hand estimate, pending `npm run balance`; pre M0.
 
 | Build (band) | University Quarter | Canal Quarter | Old Harbour |
 |---|---|---|---|
-| Luxury ($20 to $40 since M0.2; rerun required) | $667 at $20 | $1,014 at $20 | **about $2,045 at $38** (was $2,078 at $30) |
+| Luxury ($20 to $40 since M0.2; history, see 3.0) | $667 at $20 | $1,014 at $20 | **about $2,045 at $38** (was $2,078 at $30) |
 | Volume ($8 to $10) | **$2,106 at $8** | -$50 at $8.50 | -$576 at $8.50 |
 | Middle ($12 to $16) | $1,652 at $12 | **$1,236 at $12** | $1,415 at $16 |
 
