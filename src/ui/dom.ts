@@ -1,3 +1,5 @@
+import type { Command } from '../sim/game';
+
 type Child = Node | string | number | null | undefined | false;
 type Props = Record<string, unknown> & { class?: string; style?: string };
 
@@ -59,4 +61,18 @@ export function modal(content: HTMLElement, opts: { onClose?: () => void; wide?:
     h('div', { class: `modal ${opts.wide ? 'wide' : ''}`, role: 'dialog', 'aria-modal': 'true' }, content));
   document.body.append(back);
   return close;
+}
+
+/** A share as a whole percent: 0.42 is "42%". */
+export const pct = (x: number): string => `${Math.round(x * 100)}%`;
+
+/** Money with its sign: "+$120" or "-$45". */
+export const signedMoney = (x: number): string => `${x >= 0 ? '+' : ''}${money(x)}`;
+
+/** Run a command; show its error, or the success note. True when it went through. */
+export function act(ctx: { dispatch: (cmd: Command) => string | null }, cmd: Command, ok?: string): boolean {
+  const err = ctx.dispatch(cmd);
+  if (err) toast(err, 'warn');
+  else if (ok) toast(ok, 'good');
+  return !err;
 }

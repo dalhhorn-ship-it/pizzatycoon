@@ -217,7 +217,8 @@ export function coach(state: GameState): Situation[] {
       const worstShare = lossShare(reports, rival.id, worstSeg);
       const segName = SEGMENTS[worstSeg].name.toLowerCase();
       if (loc.priceIndex <= 0.9 * you.index && worstShare >= 0.1) {
-        const other = key.find((s) => !ARCHETYPES[rival.archetype].targets.includes(s as never) && s !== worstSeg) ?? key[0] ?? 'families';
+        const targets = ARCHETYPES[rival.archetype].targets;
+        const other = key.find((s) => !(Array.isArray(targets) && targets.includes(s)) && s !== worstSeg) ?? key[0] ?? 'families';
         const camp = bestCampaignFor(state, [other]);
         out.push({
           id: 'undercut', stake: lostTotal,

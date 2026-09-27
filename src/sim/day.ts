@@ -310,7 +310,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
 
   // ---- Capacity and service per sitting ----
   const services: ServiceReport[] = [];
-  const served: Record<SegmentId, Record<Service, number>> = {} as never;
+  const served = {} as Record<SegmentId, Record<Service, number>>;
   const perceivedWait: Record<Service, number> = { lunch: 0, dinner: 0 };
   const ticket: Record<Service, number> = { lunch: 0, dinner: 0 };
   const queueBy: Record<Service, number> = { lunch: 0, dinner: 0 };

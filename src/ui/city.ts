@@ -13,7 +13,7 @@ import { activeRivals, archetypeKnown, proximity, proximityLabel, rivalAt, rival
 import { economyOf } from '../sim/economy';
 import { bestFor, type LocationFacts, locationFacts, stateLocation } from '../sim/location';
 import type { GameState } from '../sim/state';
-import { h, money, signed } from './dom';
+import { h, money, pct, signed } from './dom';
 
 export interface CityCtx {
   /** 'new' picks the first venue of a new game; 'move' rents another venue for the running game. */
@@ -64,7 +64,6 @@ const FIT_OUT_MIN = 2920;
 const pinRadius = (premisesId: string): number =>
   premisesId === 'hole' ? 1.3 : premisesId === 'cosy' ? 1.7 : premisesId === 'medium' || premisesId === 'corner' ? 2.1 : 2.5;
 const level = (v: number, lo: number, hi: number, words: [string, string, string]): string => (v < lo ? words[0] : v < hi ? words[1] : words[2]);
-const pct = (v: number): string => `${Math.round(v * 100)}%`;
 const sqm = (v: number): string => `${Math.round(v)} m²`;
 
 export function venueFacts(v: Venue): LocationFacts {

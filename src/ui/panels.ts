@@ -21,7 +21,7 @@ import { kitchenDims, layoutProblem } from '../sim/kitchen';
 import type { GameState, OwnedEquipment, Recipe } from '../sim/state';
 import { locationName, managerOf } from '../sim/chain';
 import { ovr } from '../sim/staff';
-import { h, meter, money, signed, toast } from './dom';
+import { act, h, meter, money, signed, toast } from './dom';
 import type { Floor } from './floor';
 import { compare } from './impact';
 import { capacityCard, stationsCard } from './capacity';
@@ -39,12 +39,6 @@ export interface PanelCtx {
 
 const expanded = new Set<string>(['book:pizza']);
 const creatorState: { kind: MainKind; base: string; picked: Set<string> } = { kind: 'pizza', base: 'spaghetti', picked: new Set() };
-const act = (ctx: PanelCtx, cmd: Command, ok?: string): void => {
-  const err = ctx.dispatch(cmd);
-  if (err) toast(err, 'warn');
-  else if (ok) toast(ok, 'good');
-};
-
 function impactLine(d: { profit: number; covers: number; quality: number; satisfaction: number }, extra = ''): HTMLElement {
   const cls = d.profit >= 0 ? 'good' : 'bad';
   return h('div', { class: 'impact' },

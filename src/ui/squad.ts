@@ -13,7 +13,7 @@ import {
 } from '../sim/staff';
 import type { GameState, Location, Staff, StaffPolicy } from '../sim/state';
 import { courseOptions, HIREABLE_ROLES, isUnlockedFor, policyOf, unlockLabel, weekNumber } from '../sim/team';
-import { h, modal, money, signed, toast } from './dom';
+import { act, h, modal, money, signed } from './dom';
 import { compare } from './impact';
 import type { PanelCtx } from './panels';
 
@@ -25,13 +25,6 @@ const ui = {
   sort: 'ovr' as 'ovr' | 'price' | 'pot',
   tier: 'all' as Tier | 'all',
   agencyRole: 'cook' as Role,
-};
-
-const act = (ctx: PanelCtx, cmd: Command, ok?: string): boolean => {
-  const err = ctx.dispatch(cmd);
-  if (err) toast(err, 'warn');
-  else if (ok) toast(ok, 'good');
-  return !err;
 };
 
 const AREAS: Area[] = ['kitchen', 'floor', 'back', 'office', 'delivery'];

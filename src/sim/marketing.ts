@@ -5,7 +5,8 @@ import { SEGMENT_IDS } from '../data/segments';
 import type { SegmentId, Service } from '../data/types';
 import { T } from '../data/tunables';
 import type { LocationFacts } from './location';
-import type { ActiveCampaign } from './state';
+import { isUnlocked, unlockText } from './progress';
+import type { ActiveCampaign, GameState } from './state';
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
@@ -155,3 +156,11 @@ export function streakOnRestart(campaigns: readonly ActiveCampaign[] | undefined
 export function runSpendToday(campaigns: readonly ActiveCampaign[] | undefined, day: number): number {
   return (campaigns ?? []).filter((a) => a.startDay === day).reduce((x, a) => x + a.spent, 0);
 }
+
+/** Is a campaign available here? A promoted listing needs delivery through the app; the rest follow their unlock. */
+export function campaignUnlocked(state: GameState, c: Campaign): boolean {
+  if (c.unlock === 'delivery') return !!state.delivery?.on && state.delivery.mode !== 'own';
+  return isUnlocked(state, c.unlock);
+}
+
+export const campaignUnlockText = (c: Campaign): string => (c.unlock === 'delivery' ? 'Needs delivery through the app' : unlockText(c.unlock));

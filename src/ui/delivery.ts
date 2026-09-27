@@ -3,21 +3,12 @@
 import { T } from '../data/tunables';
 import { forecastSaturday } from '../sim/forecast';
 import { deliveryMissing, hasPacking, MODE_BLURB, MODE_NAMES, ridersNeeded, ridersToday } from '../sim/delivery';
-import type { Command } from '../sim/game';
 import type { DeliveryDay, DeliveryMode, DeliveryState, GameState } from '../sim/state';
-import { h, money, signed, stars, toast } from './dom';
+import { act, h, money, signed, signedMoney, stars } from './dom';
 import type { PanelCtx } from './panels';
 
 const MODES: DeliveryMode[] = ['platform', 'marketplace', 'own'];
 const THROTTLES: (number | null)[] = [0.7, 0.8, 0.9, 1, null];
-const sm = (x: number): string => `${x >= 0 ? '+' : ''}${money(x)}`;
-
-const act = (ctx: PanelCtx, cmd: Command, ok?: string): boolean => {
-  const err = ctx.dispatch(cmd);
-  if (err) toast(err, 'warn');
-  else if (ok) toast(ok, 'good');
-  return !err;
-};
 
 /** A busy day (Saturday) with these delivery settings, for the previews. */
 function busyDay(state: GameState, d: Partial<DeliveryState>): { day: DeliveryDay | undefined; profit: number } {
@@ -74,7 +65,7 @@ export function deliveryCard(ctx: PanelCtx): HTMLElement {
     h('button', { class: 'small', disabled: d.markup >= 0.2, onclick: () => act(ctx, { type: 'setDelivery', markup: d.markup + 0.05 }) }, '+5%'),
     (() => {
       const up = d.markup < 0.2 ? busyDay(state, { markup: Math.min(0.2, d.markup + 0.05) }) : null;
-      return up && now.day && up.day ? h('span', { class: 'small muted' }, `+5%: ${signed(up.day.delivered - now.day.delivered, 1)} orders, ${sm(up.profit - now.profit)} on a Saturday`) : null;
+      return up && now.day && up.day ? h('span', { class: 'small muted' }, `+5%: ${signed(up.day.delivered - now.day.delivered, 1)} orders, ${signedMoney(up.profit - now.profit)} on a Saturday`) : null;
     })());
   const late = last ? Math.max(last.time.lunch, last.time.dinner) > T.delivery.promise : false;
   return h('div', { class: 'card' },

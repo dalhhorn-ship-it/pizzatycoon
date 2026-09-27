@@ -10,13 +10,12 @@ import { T } from '../data/tunables';
 import { VENUES } from '../data/venues';
 import { locationName } from '../sim/chain';
 import { rivalSettingsOf } from '../sim/economy';
-import { type Command, isUnlocked, unlockText } from '../sim/game';
 import { stateLocation } from '../sim/location';
 import { type Answer, coach, districtShare, lossesOver, ownDistricts, readRival, rivalsInReach, type Situation, shareTrend } from '../sim/market';
-import { audienceMatch, campaignCost, fatigueOf, isActive, matchLabel, mktFor, newCampaign, slotsUsed } from '../sim/marketing';
+import { audienceMatch, campaignCost, campaignUnlocked, campaignUnlockText, fatigueOf, isActive, matchLabel, mktFor, newCampaign, slotsUsed } from '../sim/marketing';
 import { inReach } from '../sim/rivals';
 import type { DayReport, GameState, Rival } from '../sim/state';
-import { h, modal, money, signed, toast } from './dom';
+import { act, h, modal, money, pct, signed, signedMoney, toast } from './dom';
 import { compare } from './impact';
 import type { PanelCtx } from './panels';
 
@@ -27,8 +26,6 @@ export interface Nav {
 }
 
 const ui = { district: null as string | null, segFilter: 'all' as SegmentId | 'all' };
-const pct = (x: number): string => `${Math.round(x * 100)}%`;
-const sm = (x: number): string => `${x >= 0 ? '+' : ''}${money(x)}`;
 const stars = (x: number): string => '★'.repeat(Math.round(x)) + '☆'.repeat(Math.max(0, 5 - Math.round(x)));
 
 // ---------- Small charts ----------
@@ -137,13 +134,6 @@ function rivalCard(ctx: PanelCtx, rival: Rival, lost: number): HTMLElement {
       : h('button', { class: 'small', disabled: !canDine || state.cash < T.rivals.mysteryDinerPrice, onclick: () => act(ctx, { type: 'mysteryDiner', rivalId: rival.id }) }, `Mystery diner ${money(T.rivals.mysteryDinerPrice)}`));
 }
 
-const act = (ctx: PanelCtx, cmd: Command, ok?: string): boolean => {
-  const err = ctx.dispatch(cmd);
-  if (err) toast(err, 'warn');
-  else if (ok) toast(ok, 'good');
-  return !err;
-};
-
 // ---------- The coach (7.5) ----------
 
 function previewFor(state: GameState, a: Answer): number | null {
@@ -176,7 +166,7 @@ export function coachCard(ctx: PanelCtx, nav: Nav, situations: Situation[] = coa
         h('div', { class: 'small' }, h('b', null, sit.diagnosis)),
         ...answers.map(({ a, gain }) => h('div', { class: 'line' },
           h('div', null, h('div', { class: 'small' }, a.text, best?.a === a ? h('span', { class: 'chip up' }, 'Recommended') : null),
-            gain !== null ? h('div', { class: `small ${gain < 0 ? 'bad' : 'muted'}` }, `about ${sm(gain)} a week`) : null),
+            gain !== null ? h('div', { class: `small ${gain < 0 ? 'bad' : 'muted'}` }, `about ${signedMoney(gain)} a week`) : null),
           h('button', { class: 'small', onclick: () => doIt(ctx, nav, a) }, a.action.kind === 'hold' ? 'Noted' : 'Do it'))));
     }));
 }
@@ -204,7 +194,7 @@ function confirmPrice(ctx: PanelCtx, mult: number): void {
   close = modal(h('div', { class: 'stack' },
     h('h2', null, `Mains ${mult < 1 ? `${Math.round((1 - mult) * 100)}% cheaper` : `${Math.round((mult - 1) * 100)}% dearer`}`),
     h('div', { class: 'kv' }, ...mains.flatMap((r) => [h('span', null, r.name), h('b', null, `${money(r.price, true)} → ${money(Math.round(r.price * mult * 2) / 2, true)}`)])),
-    h('div', { class: 'impact' }, `About ${signed(d.covers, 1)} guests and ${sm(d.profit)} a day.`),
+    h('div', { class: 'impact' }, `About ${signed(d.covers, 1)} guests and ${signedMoney(d.profit)} a day.`),
     h('div', { class: 'row', style: 'justify-content:flex-end' },
       h('button', { onclick: () => close() }, 'Cancel'),
       h('button', { class: 'primary', onclick: () => {
@@ -231,8 +221,7 @@ export function openMarketing(ctx: PanelCtx, prefill?: { id: CampaignId; audienc
       const c = CAMPAIGNS[id];
       if (!c) return null;
       const running = active.find((a) => a.id === id);
-      const needsDelivery = c.unlock === 'delivery';
-      const unlocked = needsDelivery ? !!state.delivery?.on && state.delivery.mode !== 'own' : isUnlocked(state, c.unlock as never);
+      const unlocked = campaignUnlocked(state, c);
       const audience = c.audience === 'choose' ? (running?.audience ?? chosen[id] ?? []) : [];
       const cost = campaignCost(c, facts.footTraffic);
       const match = audienceMatch(c, audience, facts.shares);
@@ -241,7 +230,7 @@ export function openMarketing(ctx: PanelCtx, prefill?: { id: CampaignId; audienc
       if (unlocked && !running && (c.audience !== 'choose' || audience.length) && (c.lift > 0 || c.id === 'loyalty')) {
         const hyp = { ...state, campaigns: [...(state.campaigns ?? []).filter((y) => y.id !== id), { ...newCampaign(id, audience, state.day, facts), startDay: state.day - 1, endsDay: state.day + 30, spent: 0 }] };
         const d = compare(state, hyp);
-        preview = h('div', { class: 'impact' }, `About ${signed(d.covers, 1)} guests a day, ${sm(d.profit * 7 - cost * (7 / c.runDays))} a week after its cost.`,
+        preview = h('div', { class: 'impact' }, `About ${signed(d.covers, 1)} guests a day, ${signedMoney(d.profit * 7 - cost * (7 / c.runDays))} a week after its cost.`,
           dinnerFull ? h('div', { class: 'small warn' }, 'Your dinner is full: most of these guests would be turned away.') : null);
       }
       const segChip = (s: SegmentId): HTMLElement => {
@@ -273,7 +262,7 @@ export function openMarketing(ctx: PanelCtx, prefill?: { id: CampaignId; audienc
             class: 'small primary',
             disabled: !unlocked || state.cash < cost || (!c.everyRestaurant && slots >= T.marketing.maxActive) || (c.audience === 'choose' && !audience.length),
             onclick: () => { if (act(ctx, { type: 'startCampaign', campaignId: id, audience }, `${c.name} starts today`)) rerender(); },
-          }, !unlocked ? (needsDelivery ? 'Needs platform delivery' : unlockText(c.unlock as never)) : state.cash < cost ? `Need ${money(cost - state.cash)} more`
+          }, !unlocked ? campaignUnlockText(c) : state.cash < cost ? `Need ${money(cost - state.cash)} more`
             : !c.everyRestaurant && slots >= T.marketing.maxActive ? `${T.marketing.maxActive} running, stop one first` : `Start for ${money(cost)}`));
     };
     // Extra guests so far from what is running (5.5): served x (1 - 1 / lift) on the segments reached.
