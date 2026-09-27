@@ -1,6 +1,7 @@
 // The game's commands, the events they raise and the reducer's result (solution-design.md 5.1).
 
 import type { CampaignId } from '../data/campaigns';
+import type { DeliveryDealId } from '../data/deliveryDeals';
 import type { AttrId, MainKind, Role, SegmentId, TierId } from '../data/types';
 import type { Economy } from './economy';
 import type { DayReport, DeliveryMode, GameState, StaffPolicy } from './state';
@@ -48,7 +49,7 @@ export type Command =
   /** Mystery diner at a rival (7.3). */
   | { type: 'mysteryDiner'; rivalId: number }
   | { type: 'startDelivery'; mode: DeliveryMode }
-  | { type: 'setDelivery'; mode?: DeliveryMode; markup?: number; packaging?: 'basic' | 'eco'; throttle?: number | null }
+  | { type: 'setDelivery'; mode?: DeliveryMode; markup?: number; packaging?: 'basic' | 'eco'; throttle?: number | null; deal?: DeliveryDealId | null }
   | { type: 'stopDelivery' }
   | { type: 'buyVehicle'; kind: 'bike' | 'scooter' }
   | { type: 'sellVehicle'; kind: 'bike' | 'scooter' }

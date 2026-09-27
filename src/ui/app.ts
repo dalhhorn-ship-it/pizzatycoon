@@ -26,7 +26,7 @@ import { ROLE_NAMES } from '../data/staff';
 import type { TeamLine } from '../sim/state';
 import { lossLine, rivalsInReach } from '../sim/market';
 import { deliveryUnlocked } from '../sim/delivery';
-import { deliveryLine, deliveryWeek } from './delivery';
+import { deliveryDayCard, deliveryWeek } from './delivery';
 import { openBusinessReview } from './review';
 import { type Nav, openMarketing, rivalsPanel, weekCompetitionCard } from './rivals';
 
@@ -579,7 +579,7 @@ export class App {
             h('span', { class: 'small muted' }, `Sales ${money(r.pnl.sales)} · reputation ${signed(repDelta, 1)}`))),
       dayCapacityLine(r),
       r.open && lossLine(state, r) ? h('div', { class: 'small' }, lossLine(state, r)) : null,
-      deliveryLine(r.delivery),
+      deliveryDayCard(r.delivery, state),
       r.open ? h('div', { class: 'small muted' },
         `Word of mouth: ${Math.round(r.followingBefore * 100)}% → ${Math.round(r.followingAfter * 100)}% of locals know you. ` +
         `At today's satisfaction the following heads for ${Math.round(r.followingTarget * 100)}%.`) : null,

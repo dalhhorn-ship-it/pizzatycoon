@@ -17,6 +17,14 @@
 .fitlist { display: grid; gap: 8px; }
 .fit { display: grid; gap: 6px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); }
 .fit.locked { opacity: 0.6; }
+.eq-group { display: grid; gap: 6px; border-top: 2px dotted var(--line); padding-top: 6px; }
+.eq-group > summary { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; cursor: pointer; min-height: 32px; list-style: none; }
+.eq-group > summary::-webkit-details-marker { display: none; }
+.eq-group > summary .group-title::before { content: '▸ '; display: inline-block; width: 1em; }
+.eq-group[open] > summary .group-title::before { content: '▾ '; }
+.eq-group > summary .group-title { margin-top: 0; }
+.eq-controls { flex-wrap: wrap; gap: 6px; }
+details.deals > summary, details.delivery-day > summary { cursor: pointer; min-height: 28px; }
 .group-title { font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-top: 6px; }
 @media (max-width: 860px) {
   .pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }

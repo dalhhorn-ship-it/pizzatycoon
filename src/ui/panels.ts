@@ -240,12 +240,116 @@ function guestsNotice(state: GameState, E: number): HTMLElement {
     h('div', { class: 'small muted' }, 'Better ovens, benches and proving lift how guests rate the food; foodies notice most, students least. More or faster stations shorten the wait for food when the kitchen is busy.'));
 }
 
-const GROUPS: [string, (it: EquipmentItem) => boolean][] = [
-  ['Ovens', (it) => it.role === 'oven'],
-  ['Prep', (it) => it.role === 'counter' || it.role === 'sheeter' || it.role === 'proving'],
-  ['Cold', (it) => it.role === 'cold'],
-  ['Wash, plates and pass', (it) => it.role === 'sink' || it.role === 'dishMachine' || it.role === 'pass' || it.role === 'handwash' || it.role === 'storage' || it.role === 'packing'],
+type GroupBy = 'station' | 'line';
+type Group = { key: string; title: string; blurb: string; test: (it: EquipmentItem) => boolean };
+
+/** Equipment by what it does in the kitchen. */
+const STATION_GROUPS: Group[] = [
+  { key: 'ovens', title: '🔥 Ovens', blurb: 'Bake the pizzas. The biggest lever on how many you sell and how good they are.', test: (it) => it.role === 'oven' },
+  { key: 'prep', title: '🫓 Prep stations', blurb: 'One cook each. Where dough becomes pizza and pasta gets plated.', test: (it) => it.role === 'counter' },
+  { key: 'dough', title: '🌀 Dough tools', blurb: 'Sheeters attach to a prep station; proving cabinets lift every base.', test: (it) => it.role === 'sheeter' || it.role === 'proving' },
+  { key: 'cold', title: '❄️ Cold storage', blurb: 'Dough for the day. Next to a bench it speeds prep up.', test: (it) => it.role === 'cold' },
+  { key: 'wash', title: '🧽 Washing', blurb: 'Clean plates and clean hands keep the line moving.', test: (it) => it.role === 'sink' || it.role === 'dishMachine' || it.role === 'handwash' },
+  { key: 'pass', title: '🍽️ Pass and plates', blurb: 'Where plates wait for the servers, and spare plates for the rush.', test: (it) => it.role === 'pass' || it.role === 'storage' },
+  { key: 'delivery', title: '🛵 Delivery', blurb: 'A packing station is needed before you can deliver.', test: (it) => it.role === 'packing' },
 ];
+
+/** Equipment by quality line. */
+const LINE_GROUPS: Group[] = [
+  { key: 'basic', title: 'Basic', blurb: 'Cheap and dependable. Where every kitchen starts.', test: (it) => it.family === 'basic' },
+  { key: 'volume', title: 'Volume', blurb: 'More pizzas an hour, a touch less care on each.', test: (it) => it.family === 'volume' },
+  { key: 'quality', title: 'Quality', blurb: 'Better food guests can taste, at a fair pace.', test: (it) => it.family === 'quality' },
+  { key: 'hybrid', title: 'Hybrid', blurb: 'Quality at speed. Expensive, and worth it for a busy good restaurant.', test: (it) => it.family === 'hybrid' },
+  { key: 'artisan', title: 'Artisan', blurb: 'The very best food. Slow, and needs skilled cooks.', test: (it) => it.family === 'artisan' },
+];
+
+const FOLD_KEY = 'pizza-d.kitchenFold';
+const GROUP_KEY = 'pizza-d.kitchenGroupBy';
+
+function loadFolds(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(FOLD_KEY) ?? '[]') as string[]);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Groups the player folded, kept per browser. */
+const folded = loadFolds();
+let groupBy: GroupBy = (() => {
+  try {
+    return localStorage.getItem(GROUP_KEY) === 'line' ? 'line' : 'station';
+  } catch {
+    return 'station';
+  }
+})();
+
+function saveFolds(): void {
+  try {
+    localStorage.setItem(FOLD_KEY, JSON.stringify([...folded]));
+  } catch {
+    // Private mode: folds last for this visit only.
+  }
+}
+
+const groupsFor = (by: GroupBy): Group[] => (by === 'line' ? LINE_GROUPS : STATION_GROUPS);
+
+/** A foldable group; `where` keeps the add, catalogue and owned lists folding on their own. */
+function foldGroup(where: string, g: Group, meta: string, rows: HTMLElement[], openByDefault = true): HTMLElement {
+  const key = `${where}:${g.key}`;
+  const isOpen = openByDefault ? !folded.has(key) : folded.has(`${key}:open`);
+  return h('details', {
+    class: 'eq-group', open: isOpen,
+    ontoggle: (e: Event) => {
+      const open = (e.currentTarget as HTMLDetailsElement).open;
+      if (openByDefault) {
+        if (open) folded.delete(key);
+        else folded.add(key);
+      } else if (open) folded.add(`${key}:open`);
+      else folded.delete(`${key}:open`);
+      saveFolds();
+    },
+  },
+  h('summary', null, h('span', { class: 'group-title' }, g.title), h('span', { class: 'small muted' }, meta)),
+  h('div', { class: 'small muted' }, g.blurb),
+  h('div', { class: 'fitlist' }, ...rows));
+}
+
+/** "Group by" switch and fold all / open all, for a list of groups. */
+function groupControls(ctx: PanelCtx, where: string, keys: string[], openByDefault = true): HTMLElement {
+  const setAll = (open: boolean): void => {
+    for (const k of keys) {
+      const key = `${where}:${k}`;
+      if (openByDefault) {
+        if (open) folded.delete(key);
+        else folded.add(key);
+      } else if (open) folded.add(`${key}:open`);
+      else folded.delete(`${key}:open`);
+    }
+    saveFolds();
+    ctx.rerender();
+  };
+  return h('div', { class: 'row eq-controls' },
+    h('span', { class: 'small muted' }, 'Group by'),
+    h('div', { class: 'seg' }, ...(['station', 'line'] as const).map((by) => h('button', {
+      class: groupBy === by ? 'on' : '',
+      onclick: () => {
+        groupBy = by;
+        try {
+          localStorage.setItem(GROUP_KEY, by);
+        } catch {
+          // Remembered for this visit only.
+        }
+        ctx.rerender();
+      },
+    }, by === 'station' ? 'Station' : 'Quality line'))),
+    h('button', { class: 'small', onclick: () => setAll(true) }, 'Open all'),
+    h('button', { class: 'small', onclick: () => setAll(false) }, 'Fold all'));
+}
+
+/** Unlocked first, then the cheapest. */
+const byAvailability = (state: GameState) => (a: EquipmentItem, b: EquipmentItem): number =>
+  Number(isUnlocked(state, b.unlock)) - Number(isUnlocked(state, a.unlock)) || a.price - b.price;
 
 function itemStats(it: EquipmentItem): string {
   const stats: string[] = [];
@@ -261,7 +365,8 @@ function itemStats(it: EquipmentItem): string {
   if (it.washPoints) stats.push(`${it.washPoints} wash point${it.washPoints > 1 ? 's' : ''} for ${it.washPoints * 2} cooks`);
   if (it.plateStock) stats.push(`${it.plateStock} more clean plates`);
   if (it.role === 'oven') stats.push(`needs ${it.tend ?? 0.5} of a cook to tend`);
-  if (it.effectMult) stats.push(it.role === 'pass' ? `serving x${it.effectMult}` : `dishwashing x${it.effectMult}`);
+  if (it.effectMult) stats.push(it.role === 'pass' ? `serving x${it.effectMult}` : it.role === 'packing' ? `packs in x${it.effectMult} the time` : `dishwashing x${it.effectMult}`);
+  if (it.deliveryFood) stats.push(`deliveries arrive ${Math.round(it.deliveryFood * 100)} points hotter`);
   if (it.qualityMod) stats.push(`quality ${signed(it.qualityMod)}`);
   if (it.skillNeeded) stats.push(`needs cooks with Quality ${it.skillNeeded * 10}`);
   stats.push(`${it.w}x${it.h} tiles`);
@@ -295,13 +400,16 @@ export function kitchenPanel(ctx: PanelCtx, view: KitchenView): HTMLElement {
   };
 
   if (sel.kind === 'tile') {
-    const groups = GROUPS.map(([title, test]) => {
-      const rows = Object.values(EQUIPMENT).filter(test).map((it) => {
+    const groups = groupsFor(groupBy).map((g) => {
+      const items = Object.values(EQUIPMENT).filter(g.test).sort(byAvailability(state));
+      let locked = 0;
+      const rows = items.map((it) => {
         const spot = fitAt(state, it.id, sel.x, sel.y);
         if (!spot) return null;
         const unlocked = isUnlocked(state, it.unlock);
+        if (!unlocked) locked += 1;
         let impact: HTMLElement | null = null;
-        if (unlocked) {
+        if (unlocked && !folded.has(`add:${g.key}`)) {
           const hyp = structuredClone(state);
           hyp.equipment.push(spot);
           const d = compare(state, hyp);
@@ -325,12 +433,15 @@ export function kitchenPanel(ctx: PanelCtx, view: KitchenView): HTMLElement {
             } }, state.cash < buyPrice(state, it.price) ? `Need ${money(buyPrice(state, it.price) - state.cash)} more` : 'Buy and install here')
             : h('span', { class: 'small muted' }, `🔒 ${unlockText(it.unlock)}`));
       }).filter((x) => x !== null) as HTMLElement[];
-      return rows.length ? [h('div', { class: 'group-title' }, title), ...rows] : [];
-    }).flat();
+      if (!rows.length) return null;
+      const ready = rows.length - locked;
+      return foldGroup('add', g, `${ready} ready${locked ? ` · ${locked} locked` : ''}`, rows);
+    }).filter((x): x is HTMLElement => x !== null);
     return h('div', { class: 'stack' },
       h('div', { class: 'spread' }, h('h2', null, 'Add equipment'), h('button', { class: 'small', onclick: clear }, 'Close')),
-      h('div', { class: 'small muted' }, `Things that fit with their corner on this spot. Cash ${money(state.cash)}.`),
-      groups.length ? h('div', { class: 'fitlist' }, ...groups) : h('div', { class: 'muted' }, 'Nothing fits here. Try another spot, or move something to make room.'));
+      h('div', { class: 'small muted' }, `Things that fit with their corner on this spot. Cash ${money(state.cash)}. Tap a group to fold it.`),
+      groupControls(ctx, 'add', groupsFor(groupBy).map((g) => g.key)),
+      groups.length ? h('div', { class: 'stack' }, ...groups) : h('div', { class: 'muted' }, 'Nothing fits here. Try another spot, or move something to make room.'));
   }
 
   if (sel.kind === 'station') {
@@ -393,12 +504,40 @@ export function kitchenPanel(ctx: PanelCtx, view: KitchenView): HTMLElement {
     h('div', { class: 'row' },
       h('button', { onclick: () => act(ctx, { type: 'tidyKitchen' }, 'Kitchen tidied into a tight pizza line') }, 'Tidy up layout')),
     h('h3', null, 'Your equipment'),
-    ...state.equipment.map((e) => {
-      const it = EQUIPMENT[e.itemId];
-      if (!it) return h('div');
-      return h('button', { class: 'spread', style: 'text-align:left', onclick: () => { view.select({ kind: 'station', uid: e.uid }); ctx.rerender(); } },
-        h('span', null, h('b', null, it.name), ' ', h('span', { class: `chip family-${it.family}` }, it.family)),
-        h('span', { class: 'small muted' }, it.role === 'oven' ? `${(k.ovenOutput[e.uid] ?? 0).toFixed(0)}/h` : it.role === 'counter' ? `${(k.stationPrep[e.uid] ?? 0).toFixed(0)}/h` : ''));
+    groupControls(ctx, 'own', groupsFor(groupBy).map((g) => g.key)),
+    ...groupsFor(groupBy).map((g) => {
+      const mine = state.equipment.filter((e) => { const it = EQUIPMENT[e.itemId]; return !!it && g.test(it); });
+      if (!mine.length) return null;
+      const upgrades = mine.filter((e) => UPGRADE_PATHS.some(([from, to]) => from === e.itemId && EQUIPMENT[to] && isUnlocked(state, EQUIPMENT[to].unlock))).length;
+      return foldGroup('own', g, `${mine.length} owned${upgrades ? ` · ${upgrades} can upgrade` : ''}`, mine.map((e) => {
+        const it = EQUIPMENT[e.itemId] as EquipmentItem;
+        return h('button', { class: 'spread', style: 'text-align:left', onclick: () => { view.select({ kind: 'station', uid: e.uid }); ctx.rerender(); } },
+          h('span', null, h('b', null, it.name), ' ', h('span', { class: `chip family-${it.family}` }, it.family)),
+          h('span', { class: 'small muted' }, it.role === 'oven' ? `${(k.ovenOutput[e.uid] ?? 0).toFixed(0)}/h` : it.role === 'counter' ? `${(k.stationPrep[e.uid] ?? 0).toFixed(0)}/h` : ''));
+      }));
+    }),
+    catalogueSection(state));
+}
+
+/** Every piece of equipment in the game, grouped and folded, so the player can plan ahead (kitchen-upgrades.md 7). */
+function catalogueSection(state: GameState): HTMLElement {
+  const all = Object.values(EQUIPMENT);
+  const ready = all.filter((it) => isUnlocked(state, it.unlock)).length;
+  return h('div', { class: 'stack' },
+    h('div', { class: 'spread' }, h('h3', null, 'Equipment catalogue'), h('span', { class: 'small muted' }, `${ready} of ${all.length} available`)),
+    h('div', { class: 'small muted' }, 'Everything you can buy, now and later. Tap an empty spot on the plan to place one, or tap a station you own to upgrade it on the spot.'),
+    ...groupsFor(groupBy).map((g) => {
+      const items = all.filter(g.test).sort(byAvailability(state));
+      if (!items.length) return null;
+      const open = items.filter((it) => isUnlocked(state, it.unlock)).length;
+      return foldGroup('cat', g, `${open} of ${items.length} available`, items.map((it) => {
+        const unlocked = isUnlocked(state, it.unlock);
+        return h('div', { class: `fit ${unlocked ? '' : 'locked'}` },
+          h('div', { class: 'spread' }, h('b', null, it.name), h('b', null, money(buyPrice(state, it.price)))),
+          h('div', { class: 'row' }, h('span', { class: `chip family-${it.family}` }, it.family), h('span', { class: 'small muted' }, it.blurb)),
+          h('div', { class: 'small' }, itemStats(it)),
+          unlocked ? null : h('span', { class: 'small muted' }, `🔒 ${unlockText(it.unlock)}`));
+      }), false);
     }));
 }
 

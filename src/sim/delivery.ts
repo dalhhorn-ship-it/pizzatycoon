@@ -1,6 +1,9 @@
 // Food delivery (competition.md 6): unlock, demand from the catchment, riders, delivery time and DRep.
 
 import { ADJACENT, DISTRICTS } from '../data/districts';
+import { DELIVERY_DEALS } from '../data/deliveryDeals';
+import { EQUIPMENT } from '../data/equipment';
+import type { EquipmentItem } from '../data/types';
 import type { Service } from '../data/types';
 import { T } from '../data/tunables';
 import { VENUES } from '../data/venues';
@@ -36,13 +39,41 @@ export function deliveryMissing(state: Pick<GameState, 'rep' | 'daysOpen' | 'equ
 
 export const deliveryUnlocked = (state: Pick<GameState, 'rep' | 'daysOpen' | 'equipment'>): boolean => deliveryMissing(state).length === 0;
 
-export const hasPacking = (state: Pick<GameState, 'equipment'>): boolean => state.equipment.some((e) => e.itemId === 'packingStation');
+export const hasPacking = (state: Pick<GameState, 'equipment'>): boolean => !!packingOf(state);
+
+/** The best packing station in the kitchen: the heated one keeps food hotter and packs faster. */
+export function packingOf(state: Pick<GameState, 'equipment'>): EquipmentItem | undefined {
+  return state.equipment.map((e) => EQUIPMENT[e.itemId]).filter((it): it is EquipmentItem => it?.role === 'packing')
+    .sort((a, b) => (b.deliveryFood ?? 0) - (a.deliveryFood ?? 0))[0];
+}
+
+/** What a delivery deal changes on one service's orders; all zero without a deal (or at dinner for a lunch deal). */
+export interface DealTerms {
+  mainsDiscount: number;
+  sidesDiscount: number;
+  extraMains: number;
+  extraDrinks: number;
+  extraDesserts: number;
+  orderLift: number;
+  feeWaived: boolean;
+}
+
+const NO_DEAL: DealTerms = { mainsDiscount: 0, sidesDiscount: 0, extraMains: 0, extraDrinks: 0, extraDesserts: 0, orderLift: 0, feeWaived: false };
+
+export function dealTerms(d: Pick<DeliveryState, 'deal'> | null | undefined, sv: Service): DealTerms {
+  const deal = d?.deal ? DELIVERY_DEALS[d.deal] : undefined;
+  if (!deal || (deal.lunchOnly && sv === 'dinner')) return NO_DEAL;
+  return {
+    mainsDiscount: deal.mainsDiscount, sidesDiscount: deal.sidesDiscount, extraMains: deal.extraMains, extraDrinks: deal.extraDrinks,
+    extraDesserts: deal.extraDesserts, orderLift: deal.orderLift, feeWaived: !!deal.feeWaived,
+  };
+}
 
 export function newDelivery(day: number, mode: DeliveryMode): DeliveryState {
   const d = T.delivery;
   return {
     on: true, mode, markup: d.markupDefault, packaging: 'basic', throttle: d.throttleDefault, drep: d.startDRep, since: day,
-    vehicles: { bike: 0, scooter: 0 }, topRatedDays: 0, topRated: false,
+    vehicles: { bike: 0, scooter: 0 }, topRatedDays: 0, topRated: false, deal: null,
   };
 }
 
@@ -105,9 +136,9 @@ export function ridersNeeded(peakPerHour: number, ride: number): number {
 }
 
 /** Minutes from order to door (6.5). */
-export function deliveryMinutes(cookTime: number, kitchenRho: number, ordersPerHour: number, r: Riders, mode: DeliveryMode): number {
+export function deliveryMinutes(cookTime: number, kitchenRho: number, ordersPerHour: number, r: Riders, mode: DeliveryMode, packMult = 1): number {
   const t = T.delivery;
-  const ticket = cookTime + queueDelay(Math.min(kitchenRho, T.service.queueRhoCap)) + t.packMinutes;
+  const ticket = cookTime + queueDelay(Math.min(kitchenRho, T.service.queueRhoCap)) + t.packMinutes * packMult;
   let wait: number = t.platformWait;
   if (mode !== 'platform') {
     const rhoR = r.capPerHour > 0 ? ordersPerHour / r.capPerHour : 9;
@@ -147,22 +178,43 @@ export function deliveryWeeklyCosts(d: DeliveryState): number {
 
 export const riderWages = (staff: readonly Staff[]): number => staff.filter((s) => s.role === 'rider').reduce((x, s) => x + s.salary, 0);
 
+/** One segment's share of the day's delivery orders at one service. */
+export interface DeliverySeg {
+  id: SegmentId;
+  w: number;
+  rD: number;
+  food: number;
+  probs: readonly { id: string; p: number }[];
+}
+
+/** An average order at one service. */
+export interface Basket {
+  orderValue: number;
+  foodPerOrder: number;
+  mains: number;
+  /** Money given away by the deal on an average order (already out of orderValue). */
+  given: number;
+  feeWaived: boolean;
+  segs: readonly DeliverySeg[];
+}
+
 /** Everything the day model measured about delivery today (competition.md 6.5 to 6.7). */
 export interface DeliveryInput {
   d: DeliveryState;
   riders: Riders;
   staff: readonly Staff[];
   economy: { reputation: number; ingredients: number };
-  /** Per segment: order weight, delivery price ratio, food score and dish choice. */
-  segs: readonly { id: SegmentId; w: number; rD: number; food: number; probs: readonly { id: string; p: number }[] }[];
+  basket: Record<Service, Basket>;
   wanted: Record<Service, number>;
   accepted: Record<Service, number>;
   delivered: Record<Service, number>;
   time: Record<Service, number>;
-  orderValue: number;
-  foodPerOrder: number;
   /** Dining guests today, for the kitchen share. */
   covers: number;
+  /** Extra hold on the food from a heated packing station. */
+  packingFood?: number;
+  /** Delivery orders rivals nearby took yesterday, weighted by distance. */
+  rivalOrders?: number;
 }
 
 export interface DeliverySettlement {
@@ -174,47 +226,101 @@ export interface DeliverySettlement {
   dishSales: Record<string, number>;
 }
 
+const SERVICES = ['lunch', 'dinner'] as const;
+
 /** Delivery money, time and rating for the day. Pure: the day model adds the result to its P&L and dish sales. */
 export function settleDelivery(i: DeliveryInput): DeliverySettlement {
   const t = T.delivery;
   const { d } = i;
-  const sumW = i.segs.reduce((x, s) => x + s.w, 0) || 1;
   const wanted = i.wanted.lunch + i.wanted.dinner;
   const accepted = i.accepted.lunch + i.accepted.dinner;
   const delivered = i.delivered.lunch + i.delivered.dinner;
-  const travel = t.travel + (d.mode === 'platform' ? 0 : 0.0006 * (i.riders.quality - 50));
+  // Scores weigh each service by the orders it delivered (or wanted, on a day nothing went out).
+  const weightOf = (sv: Service): number => (delivered > 0 ? i.delivered[sv] / delivered : wanted > 0 ? i.wanted[sv] / wanted : sv === 'dinner' ? 1 : 0);
+  const segAvg = (sv: Service, f: (s: DeliverySeg) => number): number => {
+    const segs = i.basket[sv].segs;
+    const sumW = segs.reduce((x, s) => x + s.w, 0);
+    return sumW > 0 ? segs.reduce((x, s) => x + s.w * f(s), 0) / sumW : 0;
+  };
+  const travel = t.travel + (i.packingFood ?? 0) + (d.mode === 'platform' ? 0 : 0.0006 * (i.riders.quality - 50));
   const pack = d.packaging === 'eco' ? t.ecoPackaging : 1;
-  const food = clamp((i.segs.reduce((x, s) => x + s.w * s.food, 0) / sumW) * travel * pack, 0, 1);
-  const value = i.segs.reduce((x, s) => x + s.w * valueScore(s.rD, SEGMENTS[s.id].elasticity), 0) / sumW;
-  const time = delivered > 0 ? (['lunch', 'dinner'] as const).reduce((x, sv) => x + (i.delivered[sv] / delivered) * timeScore(i.time[sv]), 0) : 0;
+  const food = clamp(SERVICES.reduce((x, sv) => x + weightOf(sv) * segAvg(sv, (s) => s.food), 0) * travel * pack, 0, 1);
+  const value = SERVICES.reduce((x, sv) => x + weightOf(sv) * segAvg(sv, (s) => valueScore(s.rD, SEGMENTS[s.id].elasticity)), 0);
+  const time = delivered > 0 ? SERVICES.reduce((x, sv) => x + (i.delivered[sv] / delivered) * timeScore(i.time[sv]), 0) : 0;
   const S = 100 * (0.45 * food + 0.35 * time + 0.2 * value);
   const next = nextDrep(d, S, accepted, accepted - delivered, wanted, wanted - accepted, i.economy.reputation);
-  // Very late orders are partly refunded: nothing down to a time score of 0.5 (about 47 minutes), up to lateRefund of the
-  // order value at a time score of 0
-  // (cleanup sprint 4: running the kitchen hot must cost money, not only rating).
-  const refunds = (['lunch', 'dinner'] as const).reduce((x, sv) => x + t.lateRefund * Math.max(0, 1 - 2 * timeScore(i.time[sv])) * i.orderValue * i.delivered[sv], 0);
-  const sales = delivered * (i.orderValue + (d.mode === 'platform' ? 0 : t.fee)) - refunds;
-  const commission = t.commission[d.mode] * i.orderValue * delivered;
-  const foodCost = delivered * i.foodPerOrder * i.economy.ingredients;
-  const packaging = delivered * t.mainsPerOrder * t.packaging[d.packaging];
+  const own = d.mode !== 'platform';
+  let sales = 0;
+  let refunds = 0;
+  let commission = 0;
+  let foodCost = 0;
+  let packaging = 0;
+  let dealGiven = 0;
+  let feesWaived = 0;
+  let mainsOut = 0;
+  const dishSales: Record<string, number> = {};
+  const bySegment: Partial<Record<SegmentId, number>> = {};
+  for (const sv of SERVICES) {
+    const b = i.basket[sv];
+    const n = i.delivered[sv];
+    // Very late orders are partly refunded: nothing down to a time score of 0.5 (about 47 minutes), up to lateRefund of the
+    // order value at a time score of 0 (cleanup sprint 4: running the kitchen hot must cost money, not only rating).
+    const refund = t.lateRefund * Math.max(0, 1 - 2 * timeScore(i.time[sv])) * b.orderValue * n;
+    refunds += refund;
+    // Free delivery: own riders lose the fee; on the app you pay it to the app yourself.
+    const fee = own && !b.feeWaived ? t.fee : 0;
+    const waived = b.feeWaived ? t.fee * n : 0;
+    feesWaived += waived;
+    sales += n * (b.orderValue + fee) - refund - (own ? 0 : waived);
+    commission += t.commission[d.mode] * b.orderValue * n;
+    foodCost += n * b.foodPerOrder * i.economy.ingredients;
+    packaging += n * b.mains * t.packaging[d.packaging];
+    dealGiven += n * b.given;
+    mainsOut += n * b.mains;
+    const sumW = b.segs.reduce((x, s) => x + s.w, 0) || 1;
+    for (const s of b.segs) {
+      bySegment[s.id] = (bySegment[s.id] ?? 0) + (n * s.w) / sumW;
+      const mains = (n * s.w * b.mains) / sumW;
+      for (const p of s.probs) dishSales[p.id] = (dishSales[p.id] ?? 0) + mains * p.p;
+    }
+  }
   const other = delivered * t.utilitiesPerOrder + deliveryWeeklyCosts(d) / 7;
   const deliveryCosts = commission + packaging + other;
-  const dishSales: Record<string, number> = {};
-  for (const s of i.segs) {
-    const n = (delivered * s.w * t.mainsPerOrder) / sumW;
-    for (const p of s.probs) dishSales[p.id] = (dishSales[p.id] ?? 0) + n * p.p;
-  }
-  const mainsOut = delivered * t.mainsPerOrder;
+  const wages = riderWages(i.staff) / 7;
+  const basketOf = (sv: Service): { wanted: number; accepted: number; delivered: number; orderValue: number; mains: number } => ({
+    wanted: i.wanted[sv], accepted: i.accepted[sv], delivered: i.delivered[sv], orderValue: i.basket[sv].orderValue, mains: i.basket[sv].mains,
+  });
   return {
     deliverySales: sales, foodCost, deliveryCosts, dishSales,
     day: {
       wanted, accepted, refused: wanted - accepted, cancelled: accepted - delivered, delivered, time: { ...i.time },
       drepBefore: d.drep, drepAfter: next.drep, topRated: next.topRated, topRatedDays: next.topRatedDays,
-      profit: sales - foodCost - deliveryCosts - riderWages(i.staff) / 7,
+      profit: sales - foodCost - deliveryCosts - wages,
       kitchenShare: mainsOut + i.covers > 0 ? mainsOut / (mainsOut + i.covers) : 0,
-      satisfaction: S, scores: { food, time, value }, sales, commission, food: foodCost, packaging, other, orderValue: i.orderValue, refunds,
+      satisfaction: S, scores: { food, time, value }, sales, commission, food: foodCost, packaging, other,
+      orderValue: delivered > 0 ? SERVICES.reduce((x, sv) => x + i.delivered[sv] * i.basket[sv].orderValue, 0) / delivered : i.basket.dinner.orderValue,
+      refunds,
+      mainsPerOrder: delivered > 0 ? mainsOut / delivered : i.basket.dinner.mains,
+      riderWages: wages, dealGiven, feesWaived, deal: d.deal ?? null,
+      byService: { lunch: basketOf('lunch'), dinner: basketOf('dinner') },
+      bySegment,
+      ...(i.rivalOrders !== undefined ? { rivalOrders: i.rivalOrders } : {}),
     },
   };
+}
+
+/** Delivery orders rivals near this district took on their last day, weighted like delivery competition (6.3). */
+export function rivalDeliveryOrders(state: GameState, districtId: string): number {
+  let n = 0;
+  for (const r of activeRivals(state)) {
+    for (const l of r.locations) {
+      if (!l.delivery) continue;
+      const d = VENUES[l.venueId]?.districtId;
+      const prox = d === districtId ? 1 : d && (ADJACENT[districtId] ?? []).includes(d) ? 0.5 : 0;
+      n += prox * (l.last?.deliveryOrders ?? 0);
+    }
+  }
+  return n;
 }
 
 export type { Service };

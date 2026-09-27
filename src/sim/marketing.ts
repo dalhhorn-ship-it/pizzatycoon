@@ -160,7 +160,12 @@ export function runSpendToday(campaigns: readonly ActiveCampaign[] | undefined, 
 /** Is a campaign available here? A promoted listing needs delivery through the app; the rest follow their unlock. */
 export function campaignUnlocked(state: GameState, c: Campaign): boolean {
   if (c.unlock === 'delivery') return !!state.delivery?.on && state.delivery.mode !== 'own';
+  if (c.unlock === 'deliveryAny') return !!state.delivery?.on;
   return isUnlocked(state, c.unlock);
 }
 
-export const campaignUnlockText = (c: Campaign): string => (c.unlock === 'delivery' ? 'Needs delivery through the app' : unlockText(c.unlock));
+export const campaignUnlockText = (c: Campaign): string =>
+  c.unlock === 'delivery' ? 'Needs delivery through the app' : c.unlock === 'deliveryAny' ? 'Needs delivery running' : unlockText(c.unlock);
+
+/** Campaigns aimed at delivery orders. */
+export const isDeliveryCampaign = (c: Campaign): boolean => c.unlock === 'delivery' || c.unlock === 'deliveryAny';

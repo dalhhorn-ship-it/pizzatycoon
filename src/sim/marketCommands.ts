@@ -1,6 +1,7 @@
 // Commands of the live market: campaigns, holding a venue, the mystery diner and delivery (competition.md).
 
 import { CAMPAIGNS } from '../data/campaigns';
+import { DELIVERY_DEALS } from '../data/deliveryDeals';
 import { T } from '../data/tunables';
 import { VENUES } from '../data/venues';
 import { type Command, fail, type GameEvent, type Result } from './commands';
@@ -17,7 +18,7 @@ export function marketCommand(input: GameState, state: GameState, cmd: Command, 
   if (cmd.type === 'startCampaign') {
     const c = CAMPAIGNS[cmd.campaignId];
     if (!c) return fail(input, 'Unknown campaign.');
-    if (!campaignUnlocked(state, c)) return fail(input, c.unlock === 'delivery' ? 'A promoted listing needs delivery through the app.' : `Locked: ${campaignUnlockText(c)}.`);
+    if (!campaignUnlocked(state, c)) return fail(input, c.unlock === 'delivery' ? `${c.name} needs delivery through the app.` : `Locked: ${campaignUnlockText(c)}.`);
     const running = (state.campaigns ?? []).find((x) => x.id === c.id && (x.renew || state.day < x.endsDay));
     if (running) return fail(input, `${c.name} is already running here.`);
     if (!c.everyRestaurant && slotsUsed(state.campaigns, state.day) >= T.marketing.maxActive) return fail(input, `${T.marketing.maxActive} campaigns are running here; stop one first.`);
@@ -69,6 +70,10 @@ export function marketCommand(input: GameState, state: GameState, cmd: Command, 
     if (cmd.markup !== undefined) d.markup = Math.min(0.2, Math.max(0, Math.round(cmd.markup * 100) / 100));
     if (cmd.packaging) d.packaging = cmd.packaging;
     if (cmd.throttle !== undefined) d.throttle = cmd.throttle === null ? null : Math.min(1, Math.max(0.7, cmd.throttle));
+    if (cmd.deal !== undefined) {
+      if (cmd.deal !== null && !DELIVERY_DEALS[cmd.deal]) return fail(input, 'Unknown deal.');
+      d.deal = cmd.deal;
+    }
     return null;
   }
   if (cmd.type === 'stopDelivery') {

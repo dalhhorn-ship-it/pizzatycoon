@@ -169,7 +169,7 @@ export const T = {
   marketing: {
     maxActive: 3,
     liftCap: 0.5,
-    deliveryLiftCap: 0.6,
+    deliveryLiftCap: 0.8,
     fatigueWeeks: 4,
     fatigue1: 0.8,
     fatigue2: 0.6,

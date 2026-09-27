@@ -2,7 +2,9 @@
 
 import type { SegmentId, Unlock } from './types';
 
-export type CampaignId = 'flyers' | 'social' | 'studentDeal' | 'familySundays' | 'lunchClub' | 'tourGuide' | 'foodiePress' | 'loyalty' | 'radio' | 'promotedListing';
+export type CampaignId =
+  | 'flyers' | 'social' | 'studentDeal' | 'familySundays' | 'lunchClub' | 'tourGuide' | 'foodiePress' | 'loyalty' | 'radio' | 'promotedListing'
+  | 'appVoucher' | 'doorHangers' | 'foodInfluencer';
 
 export interface Campaign {
   id: CampaignId;
@@ -24,7 +26,8 @@ export interface Campaign {
   choose?: number;
   deliveryLift: number;
   awareness: number;
-  unlock: Unlock | 'delivery';
+  /** 'delivery': needs delivery through the app; 'deliveryAny': needs delivery running in any mode. */
+  unlock: Unlock | 'delivery' | 'deliveryAny';
   /** Plain words: what it does. */
   effect: string;
   blurb: string;
@@ -86,6 +89,19 @@ export const CAMPAIGNS: Record<CampaignId, Campaign> = {
   promotedListing: {
     id: 'promotedListing', name: 'Promoted delivery listing', cost: 250, scaled: false, runDays: 7, renews: true, lift: 0, audience: {}, deliveryLift: 0.3, awareness: 0,
     unlock: 'delivery', effect: '+30% delivery orders', blurb: 'Top of the app, for a fee.', rivals: true,
+  },
+  appVoucher: {
+    id: 'appVoucher', name: 'Welcome voucher on the app', cost: 200, scaled: false, runDays: 7, renews: true, lift: 0, audience: {}, deliveryLift: 0.25, awareness: 0.01,
+    unlock: 'delivery', effect: '+25% delivery orders from people trying you for the first time', blurb: '$5 off a first order. New faces, some of them stay.', rivals: false,
+  },
+  doorHangers: {
+    id: 'doorHangers', name: 'Door hanger menus', cost: 90, scaled: true, runDays: 7, renews: true, lift: 0, audience: {}, deliveryLift: 0.15, awareness: 0.01,
+    unlock: 'deliveryAny', effect: '+15% delivery orders, in the neighbouring streets too', blurb: 'A menu on every door handle, a fridge magnet inside.', rivals: false,
+  },
+  foodInfluencer: {
+    id: 'foodInfluencer', name: 'Food influencer unboxing', cost: 600, scaled: false, runDays: 7, renews: false, lift: 0.04,
+    audience: { students: 1, professionals: 0.6, foodies: 0.5 }, deliveryLift: 0.35, awareness: 0.03,
+    unlock: 'deliveryAny', effect: '+35% delivery orders for a week, a little buzz in the room too', blurb: 'A local foodie opens your box on camera. One week of fame.', rivals: false,
   },
 };
 

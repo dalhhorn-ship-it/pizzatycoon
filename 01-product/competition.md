@@ -348,6 +348,9 @@ A campaign is bought per restaurant (Local radio covers every restaurant of the 
 | loyalty | Loyalty cards | $300 setup, then 3% of dining sales | until stopped | none | your regulars | +5% | none | following decline x0.5 and following target +0.05 | Rank Owner |
 | radio | Local radio | $1,000 per week, flat | 7 days | +10% at every restaurant you own | families 1.0, seniors 1.0, professionals 0.8, students 0.3, foodies 0.3, tourists 0.3 | +10% | +0.03 | none | Rank Owner |
 | promotedListing | Promoted delivery listing | $250 per week, flat | 7 days | none | delivery app users | +30% | none | none | Delivery on (platform modes) |
+| appVoucher | Welcome voucher on the app | $200 per week, flat | 7 days | none | delivery app users | +25% | +0.01 | none | Delivery on (platform modes) |
+| doorHangers | Door hanger menus | $90 per week, scaled | 7 days | none | everyone in the catchment | +15% | +0.01 | none | Delivery on (any mode) |
+| foodInfluencer | Food influencer unboxing | $600 one off | 7 days | +4% | students, professionals, foodies | +35% | +0.03 | none | Delivery on (any mode) |
 
 **Cost scale:** campaigns marked "scaled" cost `base x clamp(traffic_v / 2,400, 0.6, 3.0)`: reaching a bigger crowd costs more. Flyers at Campus Gate (7,200 passersby) cost $360 a week; at the Bandstand Kiosk (1,440) $72.
 
@@ -558,6 +561,27 @@ Hand estimate, a hole in the wall in Canal Quarter played well: two deck ovens, 
 | topRatedDays | days | 14 | 7 to 28 |
 | topRatedBoost | orders multiplier | 1.25 | 1.1 to 1.4 |
 
+### 6.13 Delivery deals, delivery marketing and the delivery day report (as built, M0.7)
+
+Founder request: "more detailed delivery stats in the daily report and also tips how to boost delivery. Have also delivery marketing to get a bigger share, including e.g. 25% discount for second pizza etc, so prices go down but volume up."
+
+**Deals** (`src/data/deliveryDeals.ts`, `DeliveryState.deal`): one standing offer at a time, set in the Delivery panel with a Saturday preview for each. A deal lowers the price guests judge (the main price x (1 + markup) x (1 - mainsDiscount)), so the price and budget multipliers of 6.3 lift orders by segment elasticity, then `orderLift` adds the app's deal badge. Bigger baskets add mains, drinks or desserts to each order; extra mains load the kitchen as delivery work. The value score of DRep uses the discounted price.
+
+| Deal | Discount | Basket | Order lift |
+|---|---|---|---|
+| Second pizza 25% off | about 12% off mains | +0.3 mains | +12% |
+| Second pizza half price | about 22% off mains | +0.45 mains | +20% |
+| Free delivery | the $2.50 fee (own riders lose it; on the app you pay it) | none | +18% |
+| Meal deal | 15% off everything | +0.5 drinks, +0.5 desserts | +8% |
+| 10% off every order | 10% off everything | none | +5% |
+| Lunch deal (lunch only) | 20% off everything | +0.3 drinks | +25% |
+
+Deals pay when the kitchen has room. With a full kitchen the app turns the extra orders away and the discount goes on orders you would have had anyway; the tips say so.
+
+**Delivery marketing**: three campaigns in the Marketing sheet besides the promoted listing (table in 5.1): Welcome voucher on the app (+25%), Door hanger menus (+15%, any mode) and Food influencer unboxing (+35% for one week, any mode). `deliveryLiftCap` rises from 0.6 to 0.8 so three delivery campaigns can stack.
+
+**Delivery day report**: the day report's delivery card folds open with orders wanted and delivered, average order and mains per order, profit per order, kitchen share, share of delivery nearby (against rivals' last day, weighted like 6.3), a lunch and dinner table (wanted, out, refused, time, order value), food, time and value scores, the money lines (sales, deal discounts, refunds, commission, food, packaging, riders, vehicles and utilities), who ordered, and **How to grow delivery**: up to four tips from `src/sim/deliveryAdvice.ts`, ranked (riders missing, refused orders, late orders, the weakest score, a deal, delivery marketing, mode, Top rated progress, the main crowd). The same tips sit in the Delivery panel with a Delivery marketing button.
+
 ## 7. Competition analytics and the coach
 
 ### 7.1 The Rivals tab
@@ -711,7 +735,7 @@ Schema bump (7 at the time of writing, or the next free number).
 | Tunable (`T.marketing`) | Unit | Start | Safe range |
 |---|---|---|---|
 | maxActive | campaigns | 3 | 2 to 4 |
-| liftCap / deliveryLiftCap | multiplier above 1 | 0.5 / 0.6 | 0.3 to 0.8 |
+| liftCap / deliveryLiftCap | multiplier above 1 | 0.5 / 0.8 | 0.3 to 0.8 |
 | fatigueWeeks / fatigue1 / fatigue2 / restWeeks | weeks / factor | 4 / 0.8 / 0.6 / 2 | 3 to 6 / 0.6 to 0.9 / 0.4 to 0.7 / 1 to 4 |
 | costScaleRef / costScaleMin / costScaleMax | passersby / factor | 2,400 / 0.6 / 3.0 | / 0.4 to 0.8 / 2 to 4 |
 | matchGreat / matchOk | match | 0.35 / 0.15 | 0.25 to 0.45 / 0.1 to 0.2 |

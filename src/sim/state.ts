@@ -1,4 +1,5 @@
 import type { CampaignId } from '../data/campaigns';
+import type { DeliveryDealId } from '../data/deliveryDeals';
 import type { ArchetypeId, RivalTier } from '../data/rivals';
 import type { AttrId, DishKind, PersonalityId, RankId, Role, SegmentId, Service, TalentId, TierId } from '../data/types';
 
@@ -85,6 +86,8 @@ export interface DeliveryState {
   /** Days in a row at or above the Top rated threshold, and whether the badge is held. */
   topRatedDays: number;
   topRated: boolean;
+  /** A standing offer on every delivery order; missing on older saves. */
+  deal?: DeliveryDealId | null;
 }
 
 export interface RivalCampaign {
@@ -183,6 +186,20 @@ export interface DeliveryDay {
   orderValue?: number;
   /** Refunds for deliveries with a time score of 0. */
   refunds?: number;
+  /** Mains on an average order, after any deal. */
+  mainsPerOrder?: number;
+  /** Rider wages for the day (a seventh of the week). */
+  riderWages?: number;
+  /** Money a deal gave away today, and delivery fees you paid for free delivery. */
+  dealGiven?: number;
+  feesWaived?: number;
+  deal?: DeliveryDealId | null;
+  /** Orders, basket and money per service. */
+  byService?: Record<Service, { wanted: number; accepted: number; delivered: number; orderValue: number; mains: number }>;
+  /** Orders delivered per crowd. */
+  bySegment?: Partial<Record<SegmentId, number>>;
+  /** Orders rivals nearby delivered on their last day, weighted by distance. */
+  rivalOrders?: number;
 }
 
 /** One line of the mood breakdown on the player card (staff-management.md 5). */

@@ -320,7 +320,8 @@ export function kitchenStats(state: GameState, service: Service = 'dinner', load
   const flow = kitchenFlow(state);
   const hasPass = items.some((i) => i.role === 'pass');
   const hasDishMachine = items.some((i) => i.role === 'dishMachine');
-  const proving = items.find((i) => i.role === 'proving');
+  // The best proving cabinet counts; a second one adds nothing.
+  const proving = items.filter((i) => i.role === 'proving').sort((a, b) => b.qualityMod - a.qualityMod)[0];
 
   const perfectionistShare = cooks.length ? cooks.filter((c) => hasTalent(c, 'perfectionist')).length / cooks.length : 0;
   const cookTimeMult = 1 + (T.kitchen.perfectionistCookTime - 1) * perfectionistShare;
@@ -356,11 +357,16 @@ export function kitchenStats(state: GameState, service: Service = 'dinner', load
 
   // Prep stations (kitchen-builder.md 4): each staffed station gets one cook, best stations first.
   const counterSpeed = cooks.length ? mean(cooks.map((c) => personalSpeed(c, false, ctx) * nightOwlMult(c, service))) : 0;
-  const sheeterItem = EQUIPMENT.doughSheeter;
+  // The sheeter attached to a station sets its tool speed and quality (a dough press or divider differs from the basic one).
+  const sheeterOf = (uid: number): EquipmentItem | undefined => {
+    const su = flow.stations[uid]?.sheeterUid;
+    const se = su === null || su === undefined ? undefined : state.equipment.find((x) => x.uid === su);
+    return se ? EQUIPMENT[se.itemId] : undefined;
+  };
   const stationRate = (e: (typeof counters)[number]): number => {
     const it = EQUIPMENT[e.itemId] as EquipmentItem;
     const st = flow.stations[e.uid];
-    const tool = Math.max(it.prepMult ?? 1, st?.sheeter ? (sheeterItem?.prepMult ?? 1.35) : 1);
+    const tool = Math.max(it.prepMult ?? 1, st?.sheeter ? (sheeterOf(e.uid)?.prepMult ?? 1.35) : 1);
     return T.kitchen.prepRate * counterSpeed * tool * addonProduct(e, 'prepMult') * (st?.coldMult ?? 1) * (st?.reachMult ?? 1) * menu.efficiency *
       stations.prepWashMult * stations.crowdMult;
   };
@@ -379,14 +385,14 @@ export function kitchenStats(state: GameState, service: Service = 'dinner', load
     stationPrep[c.uid] = rate;
     prepPerHour += rate;
     const withSheeter = flow.stations[c.uid]?.sheeter ?? false;
-    counterQ += (EQUIPMENT[c.itemId]?.qualityMod ?? 0) + (withSheeter ? (sheeterItem?.qualityMod ?? 0) : 0);
+    counterQ += (EQUIPMENT[c.itemId]?.qualityMod ?? 0) + (withSheeter ? (sheeterOf(c.uid)?.qualityMod ?? 0) : 0);
     const sheeter = state.equipment.find((x) => x.uid === flow.stations[c.uid]?.sheeterUid);
     counterAddonQ += addonSum(c, 'qualityAdd') + (sheeter ? addonSum(sheeter, 'qualityAdd') : 0);
   });
   counterQ = staffedCounters ? counterQ / staffedCounters : 0;
   counterAddonQ = staffedCounters ? counterAddonQ / staffedCounters : 0;
   const passE = owned.find((e) => EQUIPMENT[e.itemId]?.role === 'pass');
-  const provingE = owned.find((e) => EQUIPMENT[e.itemId]?.role === 'proving');
+  const provingE = owned.find((e) => e.itemId === proving?.id);
   // kitchen-upgrades.md 3: add-on quality is capped in total.
   const addonE = Math.min(
     T.addons.qualityCap,
@@ -396,7 +402,7 @@ export function kitchenStats(state: GameState, service: Service = 'dinner', load
   const wasteMult = Math.min(1, ...colds.map((e) => addonProduct(e, 'wasteMult')));
 
   const E = clamp(
-    ovenQ + counterQ + (proving?.qualityMod ?? 0) + (hasPass ? (EQUIPMENT.heatLampPass?.qualityMod ?? 0) : 0) + addonE,
+    ovenQ + counterQ + (proving?.qualityMod ?? 0) + (passE ? (EQUIPMENT[passE.itemId]?.qualityMod ?? 0) : 0) + addonE,
     T.quality.eMin,
     T.quality.eMax,
   );
@@ -511,7 +517,7 @@ export function serviceStats(state: GameState, kitchen: Record<Service, KitchenS
     servers.length ? mean(servers.map((s) => personalSpeed(s, false, { service, load: load[service], day: state.day }) * nightOwlMult(s, service))) * loadMult : 0;
   const seatTime = hasHost ? T.service.seatWithHost : T.service.seatWithoutHost;
   const passE = state.equipment.find((e) => EQUIPMENT[e.itemId]?.role === 'pass');
-  const passMult = passE ? (EQUIPMENT.heatLampPass?.effectMult ?? 1) * addonProduct(passE, 'serveMult') : 1;
+  const passMult = passE ? (EQUIPMENT[passE.itemId]?.effectMult ?? 1) * addonProduct(passE, 'serveMult') : 1;
   const mk = (f: (sv: Service) => number): Record<Service, number> => ({ lunch: f('lunch'), dinner: f('dinner') });
   const serverSpeed = mk(speedFor);
   const orderTime = mk((sv) => (serverSpeed[sv] > 0 ? T.service.order / serverSpeed[sv] : 99));
@@ -530,7 +536,8 @@ export function serviceStats(state: GameState, kitchen: Record<Service, KitchenS
   const st = kitchen.dinner.stations;
   const dishwashers = crew.filter((s) => s.role === 'dishwasher')
     .sort((a, b) => personalSpeed(b, false, dinner) - personalSpeed(a, false, dinner)).slice(0, st.washSlots);
-  const machine = kitchen.dinner.hasDishMachine ? (EQUIPMENT.dishMachine?.effectMult ?? 1) : 1;
+  // The fastest dish machine sets the pace.
+  const machine = Math.max(1, ...state.equipment.filter((e) => EQUIPMENT[e.itemId]?.role === 'dishMachine').map((e) => EQUIPMENT[e.itemId]?.effectMult ?? 1));
   // Wash add-ons count on the best equipped wash station only (kitchen-upgrades.md 3).
   const washAddon = Math.max(1, ...state.equipment.filter((e) => ['sink', 'dishMachine'].includes(EQUIPMENT[e.itemId]?.role ?? '')).map((e) => addonProduct(e, 'washMult')));
   const platesPerHour =

@@ -49,7 +49,13 @@ export class KitchenView {
   /** Optional sprite hook: return true when it drew the item itself. */
   drawSprite: ((g: CanvasRenderingContext2D, itemId: string, x: number, y: number, w: number, h: number, tile: number, active: boolean) => boolean) | null =
     (g, itemId, x, y, w, h, tile, active) => {
-      const alias: Record<string, string> = { usedDeckOven: 'deckOven', oldWorkbench: 'prepCounter', doughFridge: 'fridge' };
+      const alias: Record<string, string> = {
+        usedDeckOven: 'deckOven', oldWorkbench: 'prepCounter', doughFridge: 'fridge', electricDeckOven: 'deckOven', tripleDeckOven: 'doubleDeckOven',
+        gasStoneOven: 'stoneHearthOven', rotatingStoneOven: 'stoneHearthOven', twinConveyorOven: 'conveyorOven', neapolitanDomeOven: 'woodFiredOven',
+        steelPrepTable: 'prepCounter', graniteBench: 'marbleBench', olivewoodBench: 'marbleBench', refrigeratedMakeLine: 'prepFridge',
+        precisionSheeter: 'doughSheeter', doughDivider: 'doughSheeter', retarderProver: 'provingCabinet', heatedStonePass: 'heatLampPass',
+        hoodDishwasher: 'dishMachine', blastChiller: 'fridge', doubleDoorFridge: 'fridge',
+      };
       drawEquipment(g, alias[itemId] ?? itemId, x, y, w, h, tile, active, performance.now() / 1000);
       return true;
     };

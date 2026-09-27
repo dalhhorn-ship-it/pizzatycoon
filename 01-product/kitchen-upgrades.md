@@ -144,3 +144,38 @@ Add-on prices and effects live in the add-on data file; each price may move with
 ## 10. M0.3 definition of done
 
 AC-175 to AC-193 pass; `npm run balance` prints the add-on payback table and the fully upgraded middle check passes; the founder can open a Second hand Deck Oven on an iPad, install a Thermostat Tune up, see the dot appear and the oven bar grow, then Upgrade to Deck Oven for $1,680 and keep the thermostat.
+
+## 11. Higher end equipment and a foldable catalogue (as built, M0.7)
+
+Founder request: "have more kitchen upgrades available, make categories groupable/foldable also have a wide range of higher quality equipment available."
+
+**19 new stations** in `src/data/equipment.ts`, each on an existing role so the sim reads them generically. Prices and unlocks sit above the M0.3 ladder, so the reference builds of `balance.md` 3.1 are unchanged.
+
+| Item | Role, family | Price | Key numbers | Unlock | Upgrade from |
+|---|---|---|---|---|---|
+| Electric Deck Oven Pro | oven, quality | $4,200 | 4 slots, bake x0.9, quality +2 | serve 500 | Deck Oven |
+| Gas Fired Stone Oven | oven, hybrid | $9,000 | 5 slots, bake x0.95, quality +6, tend 0.6 | rep 50 | Deck Pro, Stone Hearth |
+| Triple Deck Oven | oven, volume | $9,500 | 12 slots, quality -1, tend 0.75 | serve 2,000 | Double Deck |
+| Rotating Stone Deck Oven | oven, hybrid, 3x3 | $16,000 | 6 slots, bake x0.85, quality +7, skill 5 | rank Restaurateur | none |
+| Twin Belt Conveyor Oven | oven, volume, 3x2 | $15,000 | 9 slots, bake x0.55, quality -3, tend 0.35 | rank Restaurateur | Conveyor |
+| Neapolitan Dome Oven | oven, artisan, 3x3 | $18,000 | 4 slots, bake x1.15, quality +12, skill 8 | rep 70 | Wood Fired |
+| Stainless Prep Table | counter, basic | $1,800 | prep x1.05 | day 5 | Workbench, Prep Counter |
+| Granite Pastry Bench | counter, quality | $6,500 | prep x1.05, quality +3 | rep 55 | Marble Bench |
+| Refrigerated Marble Make Line | counter, quality, 3x1 | $7,800 | prep x1.3, cold, dough for 150, quality +3 | rep 60 | none |
+| Chef's Olive Wood Bench | counter, artisan | $9,000 | prep x0.95, quality +5 | rep 70 | Granite Bench |
+| Precision Dough Press | sheeter, quality | $5,000 | prep x1.3, quality 0 (the basic sheeter is -2) | rep 50 | Dough Sheeter |
+| Automatic Dough Divider | sheeter, volume | $7,000 | prep x1.5, quality -2 | serve 2,000 | Dough Sheeter |
+| Retarder Prover | proving, quality, 1x2 | $7,000 | quality +5, cold, dough for 120 | rep 60 | none |
+| Heated Stone Pass | pass, quality | $4,000 | serving x0.65, quality +1 | rep 55 | Heat Lamp Pass |
+| Hood Type Dishwasher | dish machine, volume | $8,000 | dishwashing x2.4 | serve 2,000 | Dish Machine |
+| Blast Chiller | cold, quality, 1x1 | $4,500 | dough for 300 on one tile | rep 55 | Dough Fridge |
+| Double Door Fridge | cold, basic, 2x1 | $3,200 | dough for 500 | serve 500 | none |
+| Heated Packing Station | packing, quality | $3,500 | packs in half the time, delivery food +0.04 | rep 65 | Packing Station |
+| Plate Warmer Cabinet | storage, quality | $1,200 | 150 more plates | serve 1,000 | Plate Shelving |
+
+Sim changes so the new items count: the pass, sheeter and dish machine now use their own item's numbers (the attached sheeter per station, the fastest dish machine, the best proving cabinet), and any packing role item opens delivery. Existing add-ons fit the new stations of the same kind.
+
+Guardrail kept: the artisan Neapolitan Dome bakes about 17 pizzas an hour at skill 5, under the deck oven's 20 (`tests/formulas.test.ts`).
+
+**UI.** The Add equipment list, Your equipment and a new **Equipment catalogue** (every item, now and later, with its unlock) are grouped in foldable sections. **Group by** switches between *Station* (Ovens, Prep stations, Dough tools, Cold storage, Washing, Pass and plates, Delivery) and *Quality line* (Basic, Volume, Quality, Hybrid, Artisan). Open all and Fold all sit next to it; folds are remembered per browser. Inside a group, unlocked items come first, cheapest first.
+

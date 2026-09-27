@@ -158,6 +158,8 @@ export interface EquipmentItem {
   coldCap?: number;
   /** Extra clean plates in stock. */
   plateStock?: number;
+  /** Packing stations: added to how well food survives the ride. */
+  deliveryFood?: number;
   maintenance: number;
   unlock: Unlock;
   blurb: string;

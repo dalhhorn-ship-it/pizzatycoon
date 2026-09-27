@@ -188,7 +188,7 @@ export function bestCampaignFor(state: GameState, segments: SegmentId[]): { id: 
   const facts = stateLocation(state);
   let best: { id: CampaignId; audience: SegmentId[]; match: number } | null = null;
   for (const c of Object.values(CAMPAIGNS)) {
-    if (c.lift <= 0 || c.everyRestaurant || c.unlock === 'delivery') continue;
+    if (c.lift <= 0 || c.everyRestaurant || c.unlock === 'delivery' || c.unlock === 'deliveryAny') continue;
     const audience = c.audience === 'choose' ? segments.slice(0, c.choose ?? 1) : [];
     const reaches = SEGMENT_IDS.filter((s) => (c.audience === 'choose' ? audience.includes(s) : (c.audience[s] ?? 0) > 0));
     if (!segments.some((s) => reaches.includes(s))) continue;

@@ -322,6 +322,11 @@ These shipped with their numbers in the balance tuning log; the log section is t
 | F-210 | Reputation price premium | A good name lets you charge more before guests find it steep | Should | Built | balance.md 4.10 | tests/formulas.test.ts |
 | F-211 | Fast forward | Run a week without watching service; stops when something needs the player | Must | Built | prd.md 4, game.ts `runWeek` | tests/game.test.ts |
 | F-212 | Cloud saves and device linking | Local first saves with cloud sync, a 6 character link code and a conflict chooser | Must | Built | solution-design.md 8 | worker tests (manual) |
+| F-213 | Delivery deals | Second pizza 25% off, half price, free delivery, meal deal, 10% off and a lunch deal: lower prices, bigger baskets, more orders | Should | Built | competition.md 6.13 | tests/deliveryDeals.test.ts |
+| F-214 | Delivery marketing | Welcome voucher, door hanger menus and a food influencer week aimed at delivery orders | Should | Built | competition.md 6.13 | tests/deliveryDeals.test.ts |
+| F-215 | Delivery day report and tips | Detailed delivery card in the day report and ranked tips to grow delivery, also in the Delivery panel | Should | Built | competition.md 6.13 | tests/deliveryDeals.test.ts |
+| F-216 | Higher end equipment | 19 more stations from Electric Deck Pro to the Neapolitan Dome, with upgrade paths and add-on fits | Should | Built | kitchen-upgrades.md 11 | tests/equipmentRange.test.ts |
+| F-217 | Foldable equipment catalogue | Add, owned and catalogue lists grouped by station or quality line, foldable, remembered per browser | Should | Built | kitchen-upgrades.md 11 | manual |
 
 ## Dependency map (critical path)
 

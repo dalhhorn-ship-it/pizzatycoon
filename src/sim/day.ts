@@ -13,7 +13,7 @@ import { stateLocation } from './location';
 import { Rng } from './rng';
 import { hasTalent, onRota } from './staff';
 import { awarenessGain, discountFor, hasLoyalty, mktDelivery, mktFor, runSpendToday } from './marketing';
-import { catchment, deliveryCompetition, deliveryLive, deliveryMinutes, deliveryReachMult, ridersToday, settleDelivery } from './delivery';
+import { catchment, dealTerms, deliveryCompetition, type DeliveryInput, deliveryLive, deliveryMinutes, deliveryReachMult, packingOf, ridersToday, rivalDeliveryOrders, settleDelivery } from './delivery';
 import { playerCompetition } from './rivals';
 import { followingDemand, nextFollowing, queueDelay, valueScore } from './formulas';
 
@@ -277,34 +277,50 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   const dAccepted: Record<Service, number> = { lunch: 0, dinner: 0 };
   const dDelivered: Record<Service, number> = { lunch: 0, dinner: 0 };
   const dTime: Record<Service, number> = { lunch: 0, dinner: 0 };
-  const dSeg: { id: SegmentId; w: number; rD: number; choice: Choice }[] = [];
-  let dOrderValue = 0;
-  let dFoodPerOrder = 0;
+  // One average order per service: a lunch deal changes only the lunch basket.
+  const dBasket: Record<Service, { orderValue: number; foodPerOrder: number; mains: number; given: number; feeWaived: boolean; segs: { id: SegmentId; w: number; rD: number; choice: Choice }[] }> = {
+    lunch: { orderValue: 0, foodPerOrder: 0, mains: dt.mainsPerOrder, given: 0, feeWaived: false, segs: [] },
+    dinner: { orderValue: 0, foodPerOrder: 0, mains: dt.mainsPerOrder, given: 0, feeWaived: false, segs: [] },
+  };
   if (dlv && riders) {
     const markup = dlv.markup;
     const soft = onMenu.filter((r) => r.id === 'softDrink');
-    let sum = 0;
-    for (const p of segPre) {
-      const seg = SEGMENTS[p.id];
-      const rD = (p.choice.avgPrice * (1 + markup)) / p.choice.avgFair;
-      const priceMult = clamp(Math.pow(rD, -seg.elasticity), T.demand.priceMultMin, T.demand.priceMultMax);
-      const budgetMult = clamp(Math.pow((seg.budget * district.wealth) / (p.choice.avgPrice * (1 + markup)), T.demand.budgetExponent), T.demand.budgetMultMin, T.demand.budgetMultMax);
-      const w = district.shares[p.id] * (dt.affinity[p.id] ?? 1) * priceMult * budgetMult * p.qualityMult;
-      if (w <= 0) continue;
-      sum += w;
-      dSeg.push({ id: p.id, w, rD, choice: p.choice });
-      const drink = chooseDishes(soft, a, p.id);
-      const dessert = segs.find((x) => x.id === p.id)?.sides.dessert ?? null;
-      dOrderValue += w * (dt.mainsPerOrder * p.choice.avgPrice * (1 + markup) + dt.drinksPerOrder * (drink?.avgPrice ?? 0) + dt.dessertsPerOrder * (dessert?.avgPrice ?? 0));
-      dFoodPerOrder += w * (dt.mainsPerOrder * p.choice.avgCost + dt.drinksPerOrder * (drink?.avgCost ?? 0) + dt.dessertsPerOrder * (dessert?.avgCost ?? 0));
-    }
-    if (sum > 0) {
-      dOrderValue /= sum;
-      dFoodPerOrder /= sum;
-      const orders = catchment(district.district.id, district.footTraffic) * dt.orderRate * sum * deliveryReachMult(dlv, state.day) * weekdayMult *
-        mktDelivery(campaigns, state.day, district.shares) * (1 - 0.5 * deliveryCompetition(state, district.district.id, dlv.drep)) * economyOf(state).demand;
-      dWanted.lunch = orders * dt.lunchShare;
-      dWanted.dinner = orders * (1 - dt.lunchShare);
+    const base = catchment(district.district.id, district.footTraffic) * dt.orderRate * deliveryReachMult(dlv, state.day) * weekdayMult *
+      mktDelivery(campaigns, state.day, district.shares) * (1 - 0.5 * deliveryCompetition(state, district.district.id, dlv.drep)) * economyOf(state).demand;
+    for (const sv of SERVICES) {
+      const deal = dealTerms(dlv, sv);
+      const b = dBasket[sv];
+      b.mains = dt.mainsPerOrder + deal.extraMains;
+      b.feeWaived = deal.feeWaived;
+      const drinks = dt.drinksPerOrder + deal.extraDrinks;
+      const desserts = dt.dessertsPerOrder + deal.extraDesserts;
+      let sum = 0;
+      for (const p of segPre) {
+        const seg = SEGMENTS[p.id];
+        // Guests judge the price they pay for a main: the app markup, less the deal.
+        const unit = p.choice.avgPrice * (1 + markup) * (1 - deal.mainsDiscount);
+        const rD = unit / p.choice.avgFair;
+        const priceMult = clamp(Math.pow(rD, -seg.elasticity), T.demand.priceMultMin, T.demand.priceMultMax);
+        const budgetMult = clamp(Math.pow((seg.budget * district.wealth) / unit, T.demand.budgetExponent), T.demand.budgetMultMin, T.demand.budgetMultMax);
+        const w = district.shares[p.id] * (dt.affinity[p.id] ?? 1) * priceMult * budgetMult * p.qualityMult;
+        if (w <= 0) continue;
+        sum += w;
+        b.segs.push({ id: p.id, w, rD, choice: p.choice });
+        const drink = chooseDishes(soft, a, p.id);
+        const dessert = segs.find((x) => x.id === p.id)?.sides.dessert ?? null;
+        const mainsFull = b.mains * p.choice.avgPrice * (1 + markup);
+        const sidesFull = drinks * (drink?.avgPrice ?? 0) + desserts * (dessert?.avgPrice ?? 0);
+        const given = mainsFull * deal.mainsDiscount + sidesFull * deal.sidesDiscount;
+        b.orderValue += w * (mainsFull + sidesFull - given);
+        b.given += w * given;
+        b.foodPerOrder += w * (b.mains * p.choice.avgCost + drinks * (drink?.avgCost ?? 0) + desserts * (dessert?.avgCost ?? 0));
+      }
+      if (sum > 0) {
+        b.orderValue /= sum;
+        b.given /= sum;
+        b.foodPerOrder /= sum;
+        dWanted[sv] = base * sum * (1 + deal.orderLift) * (sv === 'lunch' ? dt.lunchShare : 1 - dt.lunchShare);
+      }
     }
   }
 
@@ -352,7 +368,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     let kitchenForDine = kitchenPerHour;
     let dServedPH = 0;
     if (dlv && dWanted[sv] > 0) {
-      const perOrder = dt.mainsPerOrder * dt.work;
+      const perOrder = dBasket[sv].mains * dt.work;
       const need = (dWanted[sv] / (hours * U)) * perOrder;
       const dineNeed = Math.min(demand / (hours * U), seatPerHour);
       const ridersOk = dlv.mode === 'platform' || (riders?.onShift ?? 0) > 0;
@@ -402,7 +418,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const line = Math.min(ovenCoversPerHour, prepPerHour);
     const kitchenRho = line > 0 ? (servedPerHour + dServedPH) / line : 1;
     ticket[sv] = k.cookTime + T.satisfaction.ticketQueueShare * queueDelay(Math.min(kitchenRho, T.service.queueRhoCap));
-    if (dlv && riders && dDelivered[sv] > 0) dTime[sv] = deliveryMinutes(k.cookTime, kitchenRho, dDelivered[sv] / (hours * U), riders, dlv.mode);
+    if (dlv && riders && dDelivered[sv] > 0) dTime[sv] = deliveryMinutes(k.cookTime, kitchenRho, dDelivered[sv] / (hours * U), riders, dlv.mode, packingOf(state)?.effectMult ?? 1);
     totalWalk += walk;
     const servedAfter = segs.reduce((x, s) => x + (served[s.id]?.[sv] ?? 0), 0);
     services.push({
@@ -524,10 +540,15 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   }
   let delivery: DeliveryDay | undefined;
   if (dlv && riders) {
+    const basketOut = (sv: Service): DeliveryInput['basket'][Service] => {
+      const b = dBasket[sv];
+      return { ...b, segs: b.segs.map((x) => ({ id: x.id, w: x.w, rD: x.rD, food: foodBy[x.id] ?? 0.5, probs: x.choice.probs.map((p) => ({ id: p.recipe.id, p: p.p })) })) };
+    };
     const settled = settleDelivery({
       d: dlv, riders, staff: state.staff, economy: economyOf(state),
-      segs: dSeg.map((x) => ({ id: x.id, w: x.w, rD: x.rD, food: foodBy[x.id] ?? 0.5, probs: x.choice.probs.map((p) => ({ id: p.recipe.id, p: p.p })) })),
-      wanted: dWanted, accepted: dAccepted, delivered: dDelivered, time: dTime, orderValue: dOrderValue, foodPerOrder: dFoodPerOrder, covers,
+      basket: { lunch: basketOut('lunch'), dinner: basketOut('dinner') },
+      wanted: dWanted, accepted: dAccepted, delivered: dDelivered, time: dTime, covers,
+      packingFood: packingOf(state)?.deliveryFood ?? 0, rivalOrders: rivalDeliveryOrders(state, district.district.id),
     });
     pnl.deliverySales = settled.deliverySales;
     pnl.ingredients += settled.foodCost;

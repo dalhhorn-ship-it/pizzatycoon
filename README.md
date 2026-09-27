@@ -8,12 +8,12 @@ Playable in the browser, with everything below built and tested. What each docum
 
 * **Menu:** 13 pizzas, 15 primi, 9 secondi plus antipasti, drinks and desserts; ingredient quality tiers (Basic, Standard, Premium, Artisan) and supplier choice; custom dishes; pricing against a fair price band; menu complexity that loads the prep line
 * **The bar:** an Italian wine list, aperitivi and digestivi
-* **Kitchen:** a floor plan with stations, flow and a service pipeline; equipment families with add-ons and upgrade paths; bottlenecks (ovens need tending, cooks need wash points, sinks, dough in the fridges) and a capacity view per service
+* **Kitchen:** a floor plan with stations, flow and a service pipeline; 41 pieces of equipment from a second hand deck oven to a Neapolitan dome, in a foldable catalogue grouped by station or quality line, with add-ons and upgrade paths; bottlenecks (ovens need tending, cooks need wash points, sinks, dough in the fridges) and a capacity view per service
 * **Dining room:** build mode with tables, booths, decor, lighting, room touches and fire safety
 * **The Squad:** four attributes and an OVR per person, composure under pressure, courses and coaching, a staff market, personalities and mood, each person's value in the day and week reports; restaurant managers run the team by policy
 * **City:** Porto Verde with 7 neighbourhoods and 72 rentable venues, moving between venues, more than one restaurant with managers
 * **Live market:** rival pizzerias that compete on price, quality or marketing, open, grow into small chains and close; ten marketing campaigns with audiences; a Rivals tab with market share, rival cards and a coach
-* **Food delivery:** from 3 stars, three modes, a kitchen shared with the dining room, riders and vehicles, its own delivery rating and Top rated
+* **Food delivery:** from 3 stars, three modes, a kitchen shared with the dining room, riders and vehicles, its own delivery rating and Top rated; deals (second pizza 25% off and more), delivery marketing, a detailed delivery day report and tips to grow it
 * **Money:** daily and weekly P&L, starter loan, a safety net (no game over), and a weekly business review of every restaurant over 6 or 12 weeks
 * **Saves:** local first with a previous save slot, cloud sync on Cloudflare D1, device linking with a 6 character code, conflict chooser; fonts and code served from the site only
 
