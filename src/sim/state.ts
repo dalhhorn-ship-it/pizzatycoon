@@ -2,7 +2,7 @@ import type { CampaignId } from '../data/campaigns';
 import type { ArchetypeId, RivalTier } from '../data/rivals';
 import type { AttrId, DishKind, PersonalityId, RankId, Role, SegmentId, Service, TalentId, TierId } from '../data/types';
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export interface RecipeLine {
   ingredientId: string;
@@ -348,6 +348,21 @@ export interface DayReport {
   mood?: string[];
 }
 
+/** A day report reduced to its totals: what the charts and trends read after the first week (T.history.fullDays). */
+export function compactReport(r: DayReport): DayReport {
+  if (!r.services.length && !r.segments.length && !r.team && !r.market) return r;
+  const { team: _team, market: _market, mood: _mood, ...rest } = r;
+  return { ...rest, services: [], segments: [], dishSales: {}, reviews: [], tips: [] };
+}
+
+/** Append today's report, keep `keep` days and compact everything older than `full` days. */
+export function pushReport(history: readonly DayReport[], report: DayReport, keep: number, full: number): DayReport[] {
+  const out = [...history, report].slice(-keep);
+  const cut = out.length - full;
+  for (let i = Math.max(0, cut - 1); i < cut; i++) out[i] = compactReport(out[i] as DayReport);
+  return out;
+}
+
 export interface TeamLine {
   id: number;
   name: string;
@@ -391,6 +406,23 @@ export const LOCATION_KEYS = [
   'daysOpen', 'fireSafety', 'roomTouches', 'history', 'departures', 'staffPolicy', 'delegateStaff', 'managerLog', 'campaigns', 'delivery',
 ] as const;
 export type LocationKey = (typeof LOCATION_KEYS)[number];
+
+/**
+ * Where every GameState field lives: shared by the whole game, per restaurant (must be in LOCATION_KEYS, so managed
+ * restaurants keep their own copy), or transient (set only on a working view, never saved). The Record type makes the
+ * compiler refuse a new field until it is classified; tests/state.test.ts checks it against LOCATION_KEYS.
+ */
+export const KEY_SCOPE: Record<keyof GameState, 'shared' | 'location' | 'transient'> = {
+  schemaVersion: 'shared', seed: 'shared', day: 'shared', cash: 'shared', loan: 'shared', totalServed: 'shared', rank: 'shared',
+  candidates: 'shared', nextUid: 'shared', daysBelowZero: 'shared', locationId: 'shared', branches: 'shared', unlockAll: 'shared',
+  rivals: 'shared', rivalMeta: 'shared', marketNews: 'shared', venueHold: 'shared', openedIn: 'shared', interviews: 'shared',
+  agencyOrders: 'shared', economy: 'shared',
+  districtId: 'location', premisesId: 'location', venueId: 'location', deposit: 'location', rep: 'location', following: 'location',
+  recipes: 'location', furniture: 'location', equipment: 'location', staff: 'location', daysOpen: 'location', fireSafety: 'location',
+  roomTouches: 'location', history: 'location', departures: 'location', staffPolicy: 'location', delegateStaff: 'location',
+  managerLog: 'location', campaigns: 'location', delivery: 'location',
+  ownList: 'transient',
+};
 export type Location = Pick<GameState, LocationKey> & { id: number };
 
 /** How a managed restaurant did today, for the day report. */
@@ -451,13 +483,13 @@ export interface GameState {
   delegateStaff?: boolean;
   managerLog?: ManagerLog;
   /** Marketing campaigns at this restaurant (competition.md 5). */
-  campaigns?: ActiveCampaign[];
+  campaigns: ActiveCampaign[];
   /** Food delivery at this restaurant (competition.md 6). */
-  delivery?: DeliveryState | null;
+  delivery: DeliveryState | null;
   /** Live rival pizzerias in the city (competition.md 3). */
-  rivals?: Rival[];
+  rivals: Rival[];
   rivalMeta?: { nextId: number; lastEntrantDay: number; lastEntrantByDistrict: Record<string, number>; pendingEntrants: number; pendingFrom: number };
-  marketNews?: NewsItem[];
+  marketNews: NewsItem[];
   /** A free venue the player holds for 28 days (3.5). */
   venueHold?: { venueId: string; untilDay: number; fee: number } | null;
   /** Days the player opened a restaurant, by district: new entrants wait 28 days there. */

@@ -15,6 +15,8 @@ export interface Conflict {
 export class SaveManager {
   status: CloudStatus = 'offline';
   conflict: Conflict | null = null;
+  /** True when the last local write was refused by the browser: the game is not saved on this device. */
+  localFailed = false;
   private listeners = new Set<() => void>();
   private pushing = false;
 
@@ -29,20 +31,24 @@ export class SaveManager {
   }
 
   loadLocal(): GameState | null {
-    const text = localStore.loadSave();
-    if (!text) return null;
-    try {
-      return deserialise(text).state;
-    } catch (err) {
-      console.error('Local save unreadable', err);
-      return null;
+    for (const text of [localStore.loadSave(), localStore.loadPrevious()]) {
+      if (!text) continue;
+      try {
+        return deserialise(text).state;
+      } catch (err) {
+        console.error('Local save unreadable', err);
+      }
     }
+    return null;
   }
 
   saveLocal(state: GameState): void {
-    localStore.writeSave(serialise(state, Date.now()));
+    const ok = localStore.writeSave(serialise(state, Date.now()));
     localStore.setMeta({ ...localStore.meta(), dirty: true });
+    const changed = ok === this.localFailed;
+    this.localFailed = !ok;
     if (this.status === 'synced') this.emit('pending');
+    else if (changed) this.emit();
   }
 
   /** Ensures a cloud identity; returns false when the API is not reachable (for example plain `vite dev`). */

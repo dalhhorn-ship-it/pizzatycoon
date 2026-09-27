@@ -7,7 +7,7 @@ import type { DayOptions } from './day';
 import { economyOf } from './economy';
 import { stateLocation } from './location';
 import { hasTalent, managerOf, ovr } from './staff';
-import { type BranchDay, dailyCash, type GameState, LOCATION_KEYS, type Location, profitOf, type Staff } from './state';
+import { type BranchDay, dailyCash, pushReport, type GameState, LOCATION_KEYS, type Location, profitOf, type Staff } from './state';
 import { applyDeliveryDay } from './delivery';
 import { renewCampaigns } from './marketing';
 import { venueFacts } from './rivals';
@@ -109,7 +109,7 @@ export function runBranchDay(state: GameState, b: Location, weekday: number, opt
   state.candidates = view.candidates;
   state.nextUid = view.nextUid;
   state.cash = view.cash;
-  b.history = [...b.history, report].slice(-28);
+  b.history = pushReport(b.history, report, T.history.branchKeepDays, T.history.fullDays);
   const week = weekday === 6 ? managerWeek(b as unknown as GameState) : null;
   return {
     day: {

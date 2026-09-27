@@ -183,6 +183,16 @@ export const T = {
     loyaltyShare: 0.03,
   },
   /** Food delivery (competition.md 6, 11.1). */
+  /** How much the game remembers (architecture TD1, TD13). */
+  history: {
+    /** Day reports kept for the restaurant you run and for managed ones. */
+    keepDays: 56,
+    branchKeepDays: 28,
+    /** Days kept in full; older reports keep only their totals (covers, P&L, reputation, following, delivery). */
+    fullDays: 7,
+    /** Market news kept, in days. */
+    newsDays: 28,
+  },
   delivery: {
     unlockRep: 60,
     unlockDays: 28,

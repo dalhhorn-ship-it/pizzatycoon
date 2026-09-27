@@ -406,7 +406,9 @@ export class App {
       h('div', { class: 'grow' }),
       h('button', { class: 'small', onclick: () => this.showCity() }, '🏠 Buy another restaurant'),
       h('button', { class: 'small', onclick: () => this.showSettings() }, '⚙ Settings'),
-      h('span', { class: `cloud ${status}` }, cloudText[status]),
+      this.game.saves.localFailed
+        ? h('span', { class: 'cloud conflict', title: 'The browser refused to store the save (storage full or private browsing). Export a save code under Settings to keep your progress.' }, '⚠ Not saved on this device')
+        : h('span', { class: `cloud ${status}` }, cloudText[status]),
     );
   }
 

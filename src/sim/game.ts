@@ -30,7 +30,7 @@ import { rivalSettingsOf } from './economy';
 import { campaignCost, newCampaign, renewCampaigns, slotsUsed, streakOnRestart } from './marketing';
 import { applyRivalToggle, inReach, ownRestaurants, playerCompetition, rivalAt, runRivalsDay, seedRivals } from './rivals';
 import { stateLocation } from './location';
-import { dailyCash, type DayReport, type DeliveryMode, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION, type StaffPolicy } from './state';
+import { dailyCash, pushReport, type DayReport, type DeliveryMode, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION, type StaffPolicy } from './state';
 import {
   bookCourse, dayRun, deliverAgency, ensureEveryRole as fillRoles, firstMarket, HIREABLE_ROLES, hiredFromMarket, managerWeek, policyOf,
   recordDeparture, refreshMarket, teamDay, weekNumber,
@@ -255,6 +255,7 @@ export function newGame(seed: number, districtId: string, premisesId = 'hole', e
     loan: { balance: 0, annualRate: T.finance.starterLoanRate, weeksLeft: 0, pausedWeeks: 0 },
     rep: T.reputation.start, following: startFollowing({ economy }), totalServed: 0, rank: 'cook', recipes, furniture: [], equipment: [], staff: [], candidates: [],
     nextUid: 1, daysBelowZero: 0, daysOpen: 0, fireSafety: [], roomTouches: [], history: [], locationId: 1, branches: [], unlockAll: false,
+    campaigns: [], delivery: null, rivals: [], marketNews: [],
   };
   if (economy) state.economy = clampEconomy(economy);
   state.openedIn = { [districtId]: 1 };
@@ -958,7 +959,7 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       applyLocation(state, {
         id, districtId: venue.districtId, premisesId: venue.premisesId, venueId: venue.id, deposit,
         rep: T.reputation.start, following: startFollowing(state), recipes: structuredClone(state.recipes).map((r) => ({ ...r, onMenu: false })),
-        furniture: [], equipment: [], staff: [], daysOpen: 0, fireSafety: [], roomTouches: [], history: [],
+        furniture: [], equipment: [], staff: [], daysOpen: 0, fireSafety: [], roomTouches: [], history: [], campaigns: [], delivery: null,
       });
       state.cash -= deposit - held;
       if (held) state.venueHold = null;
@@ -1218,11 +1219,9 @@ function runDay(state: GameState, opts: DayOptions): Result {
   state.rank = computeRank(state);
   if (state.rank !== rankBefore) events.push({ kind: 'rankUp', text: `You are now a ${RANK_NAMES[state.rank]}!` });
 
-  state.history = [...state.history, report].slice(-56);
+  state.history = pushReport(state.history, report, T.history.keepDays, T.history.fullDays);
   // The rival pizzerias run their day after yours, with your start of day pull (competition.md 2.3).
-  const newsBefore = (state.marketNews ?? []).length;
-  runRivalsDay(state);
-  const fresh = (state.marketNews ?? []).slice(newsBefore).filter((n) => {
+  const fresh = runRivalsDay(state).filter((n) => {
     const r = state.rivals?.find((x) => x.id === n.rivalId);
     return !!r && (inReach(state, r) || ownRestaurants(state).some((o) => o.districtId === n.districtId));
   });

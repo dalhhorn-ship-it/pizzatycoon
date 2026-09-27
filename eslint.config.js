@@ -8,6 +8,10 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     languageOptions: { globals: { ...globals.browser } },
+    rules: {
+      // `const { dropped: _dropped, ...kept } = x` is how we drop fields.
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true, varsIgnorePattern: '^_', argsIgnorePattern: '^_' }],
+    },
   },
   {
     // ADR-002: the simulation core is pure and deterministic.

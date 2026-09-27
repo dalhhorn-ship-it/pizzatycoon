@@ -313,7 +313,7 @@ export function playerPresence(state: GameState): { id: number; districtId: stri
 
 export function news(state: GameState, rival: Rival, kind: NewsItem['kind'], text: string, venueId?: string): void {
   const districtId = venueId ? (VENUES[venueId]?.districtId ?? '') : venueFacts(rival.locations[0]?.venueId ?? '').district.id;
-  state.marketNews = [...(state.marketNews ?? []).filter((n) => state.day - n.day < 28), { day: state.day, text, districtId, kind, rivalId: rival.id }];
+  state.marketNews = [...(state.marketNews ?? []).filter((n) => state.day - n.day < T.history.newsDays), { day: state.day, text, districtId, kind, rivalId: rival.id }];
 }
 
 /** Is a rival within reach of any of the player's restaurants? */
@@ -544,15 +544,10 @@ export function applyRivalToggle(state: GameState, wasOn: boolean): void {
 
 // ---------- The rivals' day (called after the player's restaurants) ----------
 
-export interface RivalOutcome {
-  news: NewsItem[];
-}
-
-/** Run every rival location for today, then weekly decisions on Sunday, openings and entrants. Mutates state. */
-export function runRivalsDay(state: GameState): void {
-  if (!liveOn(state)) return;
+/** Run every rival location for today, then weekly decisions on Sunday, openings and entrants. Mutates state; returns today's news. */
+export function runRivalsDay(state: GameState): NewsItem[] {
+  if (!liveOn(state)) return [];
   const rng = Rng.stream(state.seed, state.day, 'rivals');
-  const newsBefore = (state.marketNews ?? []).length;
   const market = presences(state, playerPresence(state));
   // Today's day for every location with competition frozen at the start of the day.
   for (const { rival, loc } of rivalLocations(state)) {
@@ -609,8 +604,8 @@ export function runRivalsDay(state: GameState): void {
   }
 
   if ((state.day - 1) % 7 === 6) weekly(state, rng);
-  // News goes to the player's notice elsewhere; nothing else to do here.
-  void newsBefore;
+  // The feed is trimmed as it grows, so today's items are picked by day, never by position.
+  return (state.marketNews ?? []).filter((n) => n.day === state.day);
 }
 
 // ---------- The rivals' week (3.4) ----------

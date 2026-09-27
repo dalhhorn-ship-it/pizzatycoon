@@ -1,6 +1,6 @@
 // Versioned save format with migrations (solution-design.md 8).
 
-import { SCHEMA_VERSION, type GameState } from '../sim/state';
+import { compactReport, type DayReport, SCHEMA_VERSION, type GameState } from '../sim/state';
 import { DISTRICTS, PREMISES } from '../data/districts';
 import { EQUIPMENT } from '../data/equipment';
 import { T } from '../data/tunables';
@@ -72,6 +72,24 @@ const MIGRATIONS: Record<number, (state: Record<string, unknown>) => Record<stri
     refreshMarket(s, bestRep(s), s.day);
     return state;
   },
+  // v6 to v7: the live market (competition.md 10) gets explicit defaults, and old day reports are compacted to their
+  // totals (T.history.fullDays), which keeps saves small. Rivals stay off for old saves (founder decision).
+  6: (state) => {
+    const s = state as unknown as GameState;
+    s.rivals ??= [];
+    s.marketNews ??= [];
+    s.campaigns ??= [];
+    s.delivery ??= null;
+    const compact = (h: DayReport[]): DayReport[] => h.map((r, i) => (i < h.length - T.history.fullDays ? compactReport(r) : r));
+    s.history = compact(s.history ?? []);
+    for (const b of s.branches ?? []) {
+      b.campaigns ??= [];
+      b.delivery ??= null;
+      b.history = compact(b.history ?? []);
+    }
+    delete s.ownList;
+    return state;
+  },
 };
 
 export function summarise(state: GameState, savedAt: number): SaveSummary {
@@ -85,7 +103,9 @@ export function summarise(state: GameState, savedAt: number): SaveSummary {
 }
 
 export function toSaveFile(state: GameState, savedAt: number): SaveFile {
-  return { schemaVersion: SCHEMA_VERSION, savedAt, summary: summarise(state, savedAt), state };
+  // Transient fields (KEY_SCOPE) belong to a working view and are never saved.
+  const { ownList: _ownList, ...saved } = state;
+  return { schemaVersion: SCHEMA_VERSION, savedAt, summary: summarise(state, savedAt), state: saved as GameState };
 }
 
 export function serialise(state: GameState, savedAt: number): string {

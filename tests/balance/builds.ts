@@ -13,7 +13,7 @@ import { PREMISES } from '../../src/data/districts';
 
 export type BuildId = 'luxury' | 'volume' | 'middle';
 
-interface BuildSpec {
+export interface BuildSpec {
   premises: string;
   tables: Record<string, number>;
   ambience: number;
@@ -132,7 +132,11 @@ function layout(state: GameState, spec: BuildSpec): PlacedFurniture[] {
 }
 
 export function buildState(build: BuildId, districtId: string, mainPrice?: number): GameState {
-  const spec = BUILDS[build];
+  return buildFromSpec(BUILDS[build], districtId, mainPrice, build);
+}
+
+/** A restaurant from any spec, for tests that need a build of their own (never add to BUILDS). */
+export function buildFromSpec(spec: BuildSpec, districtId: string, mainPrice?: number, build = 'custom'): GameState {
   const s = newGame(7, districtId, spec.premises);
   s.day = 4; // Thursday
   s.cash = 0;
