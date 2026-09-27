@@ -2,7 +2,7 @@
 
 * Companion to `prd.md` (system specs), `versions.md` (milestones), `acceptance-criteria.md` (tests), `balance.md` (numbers).
 * Priority: **Must** = required for the launch product (v1.0) or for the milestone listed; **Should** = strongly wanted, cut only under schedule pressure (see prd.md 10.4); **Nice** = only if capacity allows.
-* Milestones: **M0** systems prototype, **M0.2** Kitchen Builder and Fresh Start (`kitchen-builder.md`, `fresh-start.md`), **v0.1** vertical slice, **v1.0** launch, **v2.0** growth. A feature listed at v0.1 with an expansion at v1.0 shows both.
+* Milestones: **M0** systems prototype, **M0.2** Kitchen Builder and Fresh Start (`kitchen-builder.md`, `fresh-start.md`), **M0.3** Kitchen upgrades (`kitchen-upgrades.md`), **M0.4** Staff management (`staff-management.md`), **v0.1** vertical slice, **v1.0** launch, **v2.0** growth. A feature listed at v0.1 with an expansion at v1.0 shows both.
 * Loop: **MM** moment to moment, **D** service day, **W** week or season, **LT** long term.
 
 ## A. Core, platform and settings
@@ -213,6 +213,28 @@
 | F-122 | Station upgrade path (trade in) | "Upgrade to X" on the station card for Second hand Deck Oven to Deck Oven, Deck Oven to Double Deck or Stone Hearth, Old Workbench to Prep Counter, Prep Counter to Marble Bench or Prep Fridge; same tiles; net cost new price minus 80% of old; compatible add-ons kept, others refunded at 80%; Replace also carries compatible add-ons | W | Should | M0.3 | F-118, F-101 |
 | F-123 | Add-on balance checks | Reference builds carry no add-ons; new check that the fully upgraded middle build is still beaten by each specialist's best home profit by 15% or more; `npm run balance` prints each add-on's payback in its reference scenario | all | Must | M0.3 | F-119, F-81 |
 
+## R. Staff management, the Squad (spec: `staff-management.md`)
+
+| ID | Feature | Description | Loop | Priority | Milestone | Depends on |
+|---|---|---|---|---|---|---|
+| F-124 | Four attributes and OVR | Quality, Speed, Composure, Mentoring on 1 to 99; role weighted OVR; card tiers bronze, silver, gold, elite; POT 30 to 95 shown as a range; salary from OVR | W | Must | M0.4 | F-62 |
+| F-125 | Attributes in the sim | QUA drives kitchen K, artisan threshold, menu complexity and service score; SPD drives personal speed; manager effect reads OVR/10; identical results at QUA = SPD = 10 x skill, CMP 50 | D | Must | M0.4 | F-124, F-39, F-40 |
+| F-126 | Composure under pressure | Per service pressure multiplier from rho and CMP (onset 0.8, worst x0.70, best x1.15) on speed, half of it on quality | D | Must | M0.4 | F-125 |
+| F-127 | Squad tab and player card | Lineup by area with cards (OVR, tier, bars, morale face, form arrow); team ratings strip with bottleneck glow; player card with diamond chart, chips, mood drivers, contract, form sparkline and actions | W | Must | M0.4 | F-124 |
+| F-128 | Staff market | Pool of 24, 8 new per week, 21 day stay, at least one per role; tier mix by best Rep; interest gates for gold and elite; apprentices corner; recruitment agency; offer at asking or 10% below | W | Must | M0.4 | F-124, F-62 |
+| F-129 | Scouting and compare line | Attribute ranges until interview (3 free per week, then $40); POT exact after 4 weeks; compare line against the weakest teammate in the role | W | Must | M0.4 | F-128, F-63 |
+| F-130 | Natural growth and team growth bonus | 1 attribute point per 4 shifts to the highest weighted attribute below POT; area bonus from best MEN; replaces the Mentor trait | W | Must | M0.4 | F-124 |
+| F-131 | Coaching and courses | Coach and trainee pairs, gain (MEN - 30)/20 per week, coach speed x0.90; 9 courses with price, days off, gain formula with headroom, learn and mood; 14 day cooldown; training preview with rota impact and payback | W | Must | M0.4 | F-130, F-63 |
+| F-132 | Contract reviews and promotion rule | Review every 8 weeks and after a course lifting OVR by 3 or more; market value with young talent premium; promotion thresholds and recomputed OVR in the preview | W | Should | M0.4 | F-131 |
+| F-133 | Mood target and universal drivers | Morale moves up to 4 per day toward a target of 65 plus drivers: pay fairness, workload, pressure, development, team; morale also scales quality (0.95 to 1.05) | D | Must | M0.4 | F-64 |
+| F-134 | Personalities | 12 personalities reading business, speed, quality, reputation, pay or growth, with spawn weights; talents split from personality; Eager Learner and Big Game Player talents | D | Must | M0.4 | F-133, F-65 |
+| F-135 | Form | In form after 5 days at morale 80+ (+3 all attributes), Out of form after 5 days below 35 (-3); arrow on every card | D | Should | M0.4 | F-133 |
+| F-136 | Rival offers | OVR 70+ and paid 10%+ below market: 15% weekly chance, 7 days warning, Match or Let go; Loyal exempt; replacement suggestions open the market pre filtered | W | Should | M0.4 | F-128, F-132 |
+| F-137 | Team card in day and week reports | Contribution per person against a standard replacement (same seed), one reason per person; day: Star of the day, Weak spot, up to 2 more each, 2 mood lines; week: Player of the week, sorted table, Needs attention, one advisor suggestion | D | Must | M0.4 | F-125, F-133 |
+| F-138 | Manager staff policies | Training budget, pay, hiring focus, replace underperformers; manager choice accuracy 0.40 + 0.005 x P; coaching at half rate; calm effect; staff at managed restaurants grow and change morale | LT | Must | M0.4 | F-69, F-131, F-133 |
+| F-139 | Manager report line and override | Weekly manager line in the report with a proposal; read only Squad with Override; "Let my manager handle the team" at the player's own restaurant | LT | Should | M0.4 | F-138 |
+| F-140 | Staff balance checks and migration | Save migration of section 10; reference builds identical; strategy fit check; course payback table in `npm run balance`; managed team growth at most 90% of an optimal player | all | Must | M0.4 | F-124 to F-138, F-81 |
+
 ## Dependency map (critical path)
 
 ```
@@ -230,4 +252,4 @@ v1.0 chain: F-79 Expansion loan + F-69 Manager -> F-83 New locations -> F-85 Off
 
 ## Scope note
 
-123 features is already a lot for a small team. The cut order in prd.md 10.4 applies. Features that carry the two strategies (F-19, F-20, F-38, F-39, F-40, F-53, F-81) are pillars and are not cut.
+140 features is already a lot for a small team. The cut order in prd.md 10.4 applies. Features that carry the two strategies (F-19, F-20, F-38, F-39, F-40, F-53, F-81) are pillars and are not cut.

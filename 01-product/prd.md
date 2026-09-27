@@ -348,6 +348,8 @@ perceived_wait = order_time + serve_time + queue delay (x0.5 at lunch, x0.6 at d
 
 ### 5.8 Staff
 
+> **M0.4 update:** `staff-management.md` replaces the single skill with four attributes (Quality, Speed, Composure, Mentoring) and an OVR, adds training courses and coaching, a city wide staff market, personalities that react to how the restaurant performs, staff contributions in the day and week reports, and staff policies for restaurant managers. Where it conflicts with this section, the addendum wins.
+
 * **Loop:** week (hire, train) and long term (managers enable the chain). Every hire has a cost, a reputation and a measurable impact.
 * **Roles:** chef, cook, server, host, dishwasher (v0.1); restaurant manager (v1.0); area manager (v2.0).
 * **Verbs:** browse hiring board, interview (reveals the hidden trait), hire, set shifts, give raise, train, promote (cook to chef; chef or server to manager), let go (2 weeks pay).
