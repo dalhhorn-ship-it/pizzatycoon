@@ -3,7 +3,7 @@
 
 import { describe, expect, test } from 'vitest';
 import { T } from '../src/data/tunables';
-import { analyse } from '../src/sim/analysis';
+import { analyse, ownerShifts } from '../src/sim/analysis';
 import { simulateDay } from '../src/sim/day';
 import { audienceOf, newDelivery, nextAudience } from '../src/sim/delivery';
 import { apply } from '../src/sim/game';
@@ -106,5 +106,30 @@ describe('delivery audience', () => {
     s = apply(s, { type: 'startCampaign', campaignId: 'promotedListing', audience: [] }, { noise: false }).state;
     for (let i = 0; i < 7; i++) s = apply(s, { type: 'runDay' }, { noise: false }).state;
     expect(s.delivery!.audience!).toBeGreaterThan(before + 0.1);
+  });
+});
+
+describe('economics check (balance.md 5)', () => {
+  test('the owner works shifts where they run the place, not where a manager does', () => {
+    const s = buildState('middle', 'canal');
+    const wages = s.staff.reduce((x, y) => x + y.salary, 0);
+    expect(ownerShifts(s)).toBeCloseTo(T.staff.ownerShiftShare * 1100, 5);
+    expect(analyse(s).weeklySalaries).toBeCloseTo(wages - ownerShifts(s), 5);
+    expect(ownerShifts({ ...s, ownerAway: true })).toBe(0);
+    const managed = { ...s, staff: [...s.staff, staffFromSkill(9990, 'M', 'manager', 6)] };
+    expect(ownerShifts(managed)).toBe(0);
+  });
+
+  test('a heat lamp pass lets each server look after more guests', () => {
+    const s = buildState('volume', 'university');
+    const without = { ...s, equipment: s.equipment.filter((e) => e.itemId !== 'heatLampPass') };
+    expect(analyse(s).service.serverGuests.dinner).toBeGreaterThan(analyse(without).service.serverGuests.dinner * 1.15);
+  });
+
+  test('running costs take a share of dining sales and a fixed amount per tile', () => {
+    const s = buildState('middle', 'canal');
+    const r = day(s);
+    const fixed = T.finance.utilitiesBase + T.finance.utilitiesPerCover * r.covers;
+    expect(r.pnl.utilities).toBeGreaterThan(fixed + T.finance.runningShare * r.pnl.sales);
   });
 });

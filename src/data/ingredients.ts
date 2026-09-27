@@ -3,8 +3,8 @@ import type { Ingredient, QualityTier, Supplier, TierId } from './types';
 export const TIERS: Record<TierId, QualityTier> = {
   basic: { id: 'basic', name: 'Basic', quality: 35, priceMult: 0.7, shelfLifeMult: 1.3, wasteRate: 0.03 },
   standard: { id: 'standard', name: 'Standard', quality: 55, priceMult: 1.0, shelfLifeMult: 1.0, wasteRate: 0.05 },
-  premium: { id: 'premium', name: 'Premium', quality: 75, priceMult: 1.6, shelfLifeMult: 0.8, wasteRate: 0.07 },
-  artisan: { id: 'artisan', name: 'Artisan', quality: 90, priceMult: 2.4, shelfLifeMult: 0.6, wasteRate: 0.1 },
+  premium: { id: 'premium', name: 'Premium', quality: 75, priceMult: 1.75, shelfLifeMult: 0.8, wasteRate: 0.07 },
+  artisan: { id: 'artisan', name: 'Artisan', quality: 90, priceMult: 3.2, shelfLifeMult: 0.6, wasteRate: 0.1 },
 };
 
 export const TIER_IDS: TierId[] = ['basic', 'standard', 'premium', 'artisan'];

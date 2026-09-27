@@ -32,7 +32,7 @@ export const BUILDS: Record<BuildId, BuildSpec> = {
     ambience: 85,
     tierFor: { dry: 'premium', dairy: 'artisan', produce: 'artisan', meat: 'premium', drinks: 'premium' },
     menu: ['margherita', 'prosciuttoRucola', 'burrata', 'tartufo', 'funghi'],
-    mainPrice: 38,
+    mainPrice: 42,
     sides: { drink: 7, starter: 9, dessert: 8 },
     equipment: ['woodFiredOven', 'woodFiredOven', 'prepCounter', 'prepCounter', 'provingCabinet'],
     staff: [['chef', 8, 1], ['cook', 7, 0], ['server', 6, 0], ['server', 6, 0], ['server', 6, 0], ['host', 5, 0], ['dishwasher', 5, 0], ['dishwasher', 5, 0]],
@@ -51,7 +51,7 @@ export const BUILDS: Record<BuildId, BuildSpec> = {
     ],
     staff: [
       ['cook', 4, 0], ['cook', 4, 0], ['cook', 4, 0], ['cook', 4, 0], ['cook', 4, 0],
-      ['server', 4, 0], ['server', 4, 0], ['server', 4, 0], ['server', 4, 0], ['server', 4, 0], ['server', 4, 0], ['server', 4, 0],
+      ['server', 4, 0], ['server', 4, 0], ['server', 4, 0], ['server', 4, 0], ['server', 4, 0], ['server', 4, 0],
       ['host', 5, 0], ['dishwasher', 4, 0], ['dishwasher', 4, 0],
     ],
   },

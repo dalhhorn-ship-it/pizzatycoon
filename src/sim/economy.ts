@@ -76,9 +76,11 @@ const KEYS: EconomyKey[] = ['demand', 'ingredients', 'wages', 'rent', 'equipment
 export const ECONOMY_RANGE = { min: 0.5, max: 1.5, step: 0.05 } as const;
 
 export const PRESETS: Record<'easy' | 'normal' | 'hard', Economy> = {
-  easy: { demand: 1.2, ingredients: 0.85, wages: 0.85, rent: 0.8, equipment: 0.8, reputation: 1.3, startingCash: 1.5, start: 'normal' },
+  // Narrowed after the economics check: at realistic margins (about 15% on Normal) the old Hard (guests x0.85, costs x1.15
+  // to 1.2) left nothing. Easy lands near 21%, Hard near 7% for a well run medium restaurant.
+  easy: { demand: 1.1, ingredients: 0.92, wages: 0.92, rent: 0.9, equipment: 0.8, reputation: 1.3, startingCash: 1.5, start: 'normal' },
   normal: { demand: 1, ingredients: 1, wages: 1, rent: 1, equipment: 1, reputation: 1, startingCash: 1, start: 'slow' },
-  hard: { demand: 0.85, ingredients: 1.15, wages: 1.15, rent: 1.2, equipment: 1.2, reputation: 0.8, startingCash: 0.75, start: 'slow' },
+  hard: { demand: 0.93, ingredients: 1.06, wages: 1.06, rent: 1.1, equipment: 1.2, reputation: 0.8, startingCash: 0.75, start: 'slow' },
 };
 
 export const ECONOMY_LABELS: Record<EconomyKey, { name: string; easier: 'up' | 'down' }> = {

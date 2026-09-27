@@ -1,5 +1,6 @@
 // Staff management, the Squad (staff-management.md, AC-194 to AC-224).
 import { describe, expect, test } from 'vitest';
+import { POSITION_WAGE_MULT, ROLE_BASE_SALARY } from '../src/data/staff';
 import { PERSONALITIES, PERSONALITY_IDS } from '../src/data/personalities';
 import { T } from '../src/data/tunables';
 import { analyse, kitchenStats } from '../src/sim/analysis';
@@ -34,7 +35,7 @@ describe('player card (AC-194, AC-195)', () => {
     const cook = person(1, 'cook', attrs(60, 70, 50, 30));
     expect(ovr(cook)).toBe(60);
     expect(tierOf(ovr(cook))).toBe('silver');
-    expect(salaryFor('cook', 60, 0)).toBeCloseTo(616, 2);
+    expect(salaryFor('cook', 60, 0)).toBeCloseTo(1199, 2);
     expect(ovrFor('chef', attrs(60, 70, 50, 30))).toBe(54);
   });
 
@@ -51,7 +52,7 @@ describe('attributes in the sim (AC-196, AC-197)', () => {
     old.schemaVersion = 5;
     old.staff = s.staff.map((x, i) => ({
       id: x.id, name: x.name, role: x.role, skill: x.attrs.quality / 10, potential: x.potential / 10, fame: 0,
-      traits: [['steady'], ['crowdPleaser'], ['charmer'], ['nightOwl'], ['steady', 'mentor']][i], morale: 50, salary: x.salary,
+      traits: [['steady'], ['crowdPleaser'], ['charmer'], ['nightOwl'], ['steady', 'mentor']][i], morale: 50, salary: x.salary / POSITION_WAGE_MULT,
       shiftsWorked: 0, lowMoraleDays: 0, leavingOnDay: null,
     }));
     const loaded = deserialise(JSON.stringify({ schemaVersion: 5, savedAt: 0, summary: {}, state: old })).state;
@@ -121,7 +122,7 @@ describe('market (AC-202 to AC-206)', () => {
     for (const c of apprentices) {
       expect(ovr(c)).toBeGreaterThanOrEqual(25 - 2);
       expect(ovr(c)).toBeLessThanOrEqual(40 + 2);
-      expect(c.salary).toBeCloseTo(0.6 * ({ chef: 900, cook: 550, server: 450, host: 420, dishwasher: 380, manager: 1100 } as Record<string, number>)[c.role]!, 2);
+      expect(c.salary).toBeCloseTo(0.6 * (ROLE_BASE_SALARY as Record<string, number>)[c.role]!, 2);
     }
   });
 
@@ -260,9 +261,9 @@ describe('development (AC-208 to AC-213)', () => {
   });
 
   test('contract review asks for market value; declining leaves pay fairness negative', () => {
-    const cook = person(900, 'cook', attrs(60, 70, 50, 30), { potential: 80, salary: 616 });
-    expect(marketValue(cook)).toBeCloseTo(677.6, 2);
-    expect(marketValue({ ...cook, personality: ['moneyMinded'] })).toBeCloseTo(745.36, 2);
+    const cook = person(900, 'cook', attrs(60, 70, 50, 30), { potential: 80, salary: 1199 });
+    expect(marketValue(cook)).toBeCloseTo(1318.9, 2);
+    expect(marketValue({ ...cook, personality: ['moneyMinded'] })).toBeCloseTo(1450.79, 2);
     const { drivers } = moodOf(cook, neutral());
     expect(drivers.find((d) => d.label.startsWith('paid below'))!.value).toBeCloseTo(-4.55, 1);
     cook.nextReviewDay = 6;
@@ -270,9 +271,9 @@ describe('development (AC-208 to AC-213)', () => {
     s.day = 5;
     s = run(s, 1);
     const asked = s.staff.find((x) => x.id === 900)!;
-    expect(asked.review?.ask).toBeCloseTo(677.6, 1);
+    expect(asked.review?.ask).toBeCloseTo(1318.9, 1);
     s = apply(s, { type: 'answerReview', staffId: 900, accept: false }).state;
-    expect(s.staff.find((x) => x.id === 900)!.salary).toBe(616);
+    expect(s.staff.find((x) => x.id === 900)!.salary).toBe(1199);
     expect(s.staff.find((x) => x.id === 900)!.review).toBeNull();
   });
 
@@ -410,9 +411,9 @@ describe('rival offers (AC-218)', () => {
   test('match or let go', () => {
     const s = withStarterKit(newGame(2, 'canal', 'cosy'));
     const x = s.staff[0]!;
-    x.offer = { rival: 'Da Enzo', salary: 700, leavesOnDay: s.day + 7 };
+    x.offer = { rival: 'Da Enzo', salary: 1300, leavesOnDay: s.day + 7 };
     const matched = apply(s, { type: 'answerOffer', staffId: x.id, match: true }).state.staff[0]!;
-    expect(matched.salary).toBe(700);
+    expect(matched.salary).toBe(1300);
     expect(matched.offer).toBeNull();
     const gone = apply(s, { type: 'answerOffer', staffId: x.id, match: false }).state;
     expect(gone.staff.some((y) => y.id === x.id)).toBe(false);

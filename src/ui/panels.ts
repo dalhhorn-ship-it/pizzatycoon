@@ -13,7 +13,7 @@ import { isBar, isMain, menuSection, PRIMO_BASES, WINE_IDS } from '../data/recip
 import type { EquipmentItem, MainKind } from '../data/types';
 import { ADDONS, addonEffectText, UPGRADE_PATHS } from '../data/addons';
 import { T } from '../data/tunables';
-import { analyse, repPriceMult, roomStats } from '../sim/analysis';
+import { analyse, ownerShifts, repPriceMult, roomStats } from '../sim/analysis';
 import { wineListScore } from '../sim/day';
 import { addonProblem, type Command, fireSafetyUnlocked, isUnlocked, seatLimit, loanPayment, RANK_NAMES, suppliersFor, tiersFor, unlockText } from '../sim/game';
 import { buyPrice, sellPrice } from '../sim/economy';
@@ -755,7 +755,7 @@ export function moneyPanel(ctx: PanelCtx, extra: HTMLElement): HTMLElement {
     h('span', null, 'Waste'), h('b', null, money(-x.waste)),
     h('span', null, 'Staff'), h('b', null, money(-x.staff)),
     h('span', null, 'Rent'), h('b', null, money(-x.rent)),
-    h('span', null, 'Utilities and upkeep'), h('b', null, money(-(x.utilities + x.upkeep))),
+    h('span', null, 'Utilities, upkeep and running costs'), h('b', null, money(-(x.utilities + x.upkeep))),
     h('span', null, 'Loan interest'), h('b', null, money(-x.interest)),
     ...(x.marketing ? [h('span', null, 'Marketing'), h('b', null, money(-x.marketing))] : []),
     ...(x.deliveryCosts ? [h('span', null, 'Delivery: commission, packaging, vehicles'), h('b', null, money(-x.deliveryCosts))] : []),
@@ -767,6 +767,7 @@ export function moneyPanel(ctx: PanelCtx, extra: HTMLElement): HTMLElement {
     h('div', { class: 'card' },
       h('div', { class: 'spread' }, h('span', null, 'Cash'), h('span', { class: `big ${state.cash < 0 ? 'bad' : ''}` }, money(state.cash))),
       h('div', { class: 'small muted' }, `Weekly bills on Sunday night: wages ${money(a.weeklySalaries)}, rent ${money(a.weeklyRent)} (${where}), loan ${money(payment)}. Upkeep ${money(a.kitchen.maintenancePerWeek)}/week is paid daily.`),
+      ownerShifts(state) > 0 ? h('div', { class: 'small muted' }, `You work about 60 hours a week here yourself, which saves ${money(ownerShifts(state))} in wages. Each staff card covers its role at every lunch and dinner, seven days a week.`) : null,
       state.cash < 0 ? h('div', { class: 'warn small' }, 'Cash is below zero. Payments continue; after 7 days the bank advisor pauses your loan payments. Pizza D never ends your game.') : null),
     lastWeekCard(ctx),
     deliveryCard(ctx),

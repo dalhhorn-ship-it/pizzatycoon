@@ -1,8 +1,16 @@
 import type { AttrId, Role, Talent, TalentId } from './types';
 
+/**
+ * Weekly wage of a position at OVR 50. One staff card covers its role at every lunch and dinner, seven days a week:
+ * about 2 people on real shifts (with holidays and sick days), so wages are twice a single person's (economics check, balance.md 5).
+ * The manager is one salaried person on long hours; a rider only works the delivery peaks (about 1.3 people).
+ */
 export const ROLE_BASE_SALARY: Record<Role, number> = {
-  chef: 900, cook: 550, server: 450, host: 420, dishwasher: 380, manager: 1100, rider: 380,
+  chef: 1800, cook: 1100, server: 900, host: 840, dishwasher: 760, manager: 1500, rider: 520,
 };
+
+/** Old saves paid one person, not a position: wages scale by this on load (save v7 to v8). */
+export const POSITION_WAGE_MULT = 2;
 
 export const ROLE_NAMES: Record<Role, string> = {
   chef: 'Chef', cook: 'Cook', server: 'Server', host: 'Host', dishwasher: 'Dishwasher', manager: 'Restaurant manager', rider: 'Delivery rider',

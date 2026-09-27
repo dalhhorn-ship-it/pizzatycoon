@@ -82,6 +82,7 @@ export function runBranchDay(state: GameState, b: Location, weekday: number, opt
     // Its own daily randomness; the loan belongs to the owner, not to the restaurant.
     seed: state.seed + b.id * 7919,
     loan: { ...state.loan, balance: 0 },
+    ownerAway: true,
     economy: { ...eco, demand: eco.demand * eff.demand, ingredients: eco.ingredients * eff.ingredients },
   };
   const { a, report } = dayRun(s, opts);

@@ -1,6 +1,7 @@
 // The aggregate day model (ADR-002). This is the only authority on guests, money and reputation.
 // Formulas: 01-product/prd.md 5.7, 5.10, 5.11 and balance.md 1.4, 1.8, 1.12.
 
+import { PREMISES } from '../data/districts';
 import { FIRE_SAFETY } from '../data/fireSafety';
 import { ROOM_TOUCHES } from '../data/roomTouches';
 import { isMain, WINE_IDS } from '../data/recipes';
@@ -565,6 +566,8 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const aud = nextAudience(dlv, mktDelivery(campaigns, state.day, district.shares) - 1, settled.day.delivered);
     delivery = { ...settled.day, audienceBefore: audienceOf(dlv), audienceAfter: aud.after, audienceOrganic: aud.organic, audienceCampaigns: aud.campaigns };
   }
+  // Card fees, cleaning, linen and supplies grow with dining sales; delivery has its own cost lines and the app takes payment.
+  pnl.utilities += T.finance.runningShare * pnl.sales;
   pnl.profit = profitOf(pnl);
   const market: MarketDay = {
     cEff: competition.cEff, A: pull,
@@ -600,7 +603,10 @@ function deliveryTip(d: DeliveryDay | undefined, services: ServiceReport[]): str
 function fixedCosts(state: GameState, a: Analysis, covers: number): PnL {
   const staff = a.weeklySalaries / 7;
   const rent = a.weeklyRent / 7;
-  const utilities = T.finance.utilitiesBase + T.finance.utilitiesPerCover * covers;
+  const premises = PREMISES[state.premisesId];
+  const tiles = premises ? premises.diningWidth * premises.diningHeight + premises.kitchenTiles : 0;
+  // Utilities plus the fixed running costs (insurance, licences, accounting, repairs); the share of sales is added once sales are known.
+  const utilities = T.finance.utilitiesBase + T.finance.utilitiesPerCover * covers + (T.finance.runningPerTileWeek * tiles) / 7;
   const fireUpkeep = (state.fireSafety ?? []).reduce((x, id) => x + (FIRE_SAFETY[id]?.upkeep ?? 0), 0) +
     (state.roomTouches ?? []).reduce((x, id) => x + (ROOM_TOUCHES[id]?.upkeep ?? 0), 0);
   const upkeep = T.finance.upkeepBase + (a.kitchen.maintenancePerWeek + fireUpkeep) / 7;

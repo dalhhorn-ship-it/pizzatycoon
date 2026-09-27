@@ -3,7 +3,7 @@ import type { DeliveryDealId } from '../data/deliveryDeals';
 import type { ArchetypeId, RivalTier } from '../data/rivals';
 import type { AttrId, DishKind, PersonalityId, RankId, Role, SegmentId, Service, TalentId, TierId } from '../data/types';
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export interface RecipeLine {
   ingredientId: string;
@@ -482,7 +482,7 @@ export const KEY_SCOPE: Record<keyof GameState, 'shared' | 'location' | 'transie
   recipes: 'location', furniture: 'location', equipment: 'location', staff: 'location', daysOpen: 'location', fireSafety: 'location',
   roomTouches: 'location', history: 'location', departures: 'location', staffPolicy: 'location', delegateStaff: 'location',
   managerLog: 'location', campaigns: 'location', delivery: 'location', kpis: 'location',
-  ownList: 'transient',
+  ownList: 'transient', ownerAway: 'transient',
 };
 export type Location = Pick<GameState, LocationKey> & { id: number };
 
@@ -561,6 +561,8 @@ export interface GameState {
   ownList?: { id: number; districtId: string; venueId: string | null }[];
   /** Interviews used this week (free ones first). */
   interviews?: { week: number; used: number };
+  /** Set for a managed restaurant's day: the owner is not there to work shifts. */
+  ownerAway?: boolean;
   /** Recruitment agency orders waiting to arrive. */
   agencyOrders?: { role: Role; min: number; readyDay: number }[];
   /** Difficulty multipliers from the settings menu; missing means Normal. */

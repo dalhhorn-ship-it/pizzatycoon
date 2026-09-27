@@ -330,6 +330,7 @@ These shipped with their numbers in the balance tuning log; the log section is t
 | F-218 | Guests per cook | Each cook cooks for about 50 guests a service, up to 75 for a top cook, fewer for a slow one; delivery counts; a new kitchen bottleneck | Must | Built | kitchen-bottlenecks.md 9 | tests/staffLimits.test.ts |
 | F-219 | Guests per server | Each server looks after about 35 guests a service, up to 50; a new front of house bottleneck | Must | Built | kitchen-bottlenecks.md 9 | tests/staffLimits.test.ts |
 | F-220 | Delivery audience | Only people who know you deliver order: starts at 5%, grows slowly by word of mouth and fast with delivery campaigns | Must | Built | competition.md 6.14 | tests/staffLimits.test.ts |
+| F-221 | Realistic restaurant economics | Staff cards are positions (wages x2), the owner works shifts, running costs, dearer premium ingredients, narrower difficulty presets; margins 11 to 24% for the reference restaurants | Must | Built | balance.md 5 | tests/staffLimits.test.ts, npm run balance |
 
 ## Dependency map (critical path)
 

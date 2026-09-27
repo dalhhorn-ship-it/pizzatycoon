@@ -732,3 +732,48 @@ Measured on the cosy starter at full following, best pizza price (x the starter 
 **Hiring board (2026-09-26).** Every board offers every role: chef, cook, server, host, dishwasher and restaurant manager (from day 1). The random candidates are drawn as before; any role the draw missed is filled from its own random stream. Hiring the last candidate of a role brings a new one for that role straight away, and saves from before this rule get the missing roles when they load.
 
 **Menu limits (2026-09-26).** The single 36 item limit is split into 24 food items (antipasti, mains, desserts) and 32 bar items (drinks, wines, aperitivi, digestivi), so a full wine list never blocks a pizza. The menu header shows both counts, and a full section's button says so instead of failing silently.
+
+## 5. Economics check against restaurant benchmarks (as built)
+
+Founder request: "check logical economics and balances (chefs per kitchen on guests and deliveries, same with equipment), right size to Italian restaurant benchmark data." Founder decisions: margins "tycoon realistic" (12 to 18% for a well run restaurant), a staff card is a position, ovens keep the game rule (artisan ovens slow on purpose).
+
+### 5.1 What already matched
+
+Guests per cook (about 50 a service) and per server (about 25 at a casual dinner, 19 in fine dining), table turns (1.4 fine dining, 1.6 to 1.8 casual), rent (6 to 8% of sales), app commission (30%), rider throughput (about 2 orders an hour) and the conveyor oven (45 pizzas an hour) were inside benchmark ranges.
+
+### 5.2 What changed
+
+| Change | Before | After | Why |
+|---|---|---|---|
+| Wage of a staff card | one person | a position covering all 14 services: base x2 (cook 1,100, server 900, chef 1,800, dishwasher 760, host 840); rider 520 (peaks only, about 1.3 people); manager 1,500 | labour was 15 to 23% of sales against a 25 to 37% benchmark |
+| Skill premium | +1.2% a point either side of OVR 50 | +0.9% a point above 50, -2% a point below; fame +25% a point | juniors are cheap, a better cook still pays for themselves (AC-285) |
+| Owner's own shifts | none | you work about 60 hours a week where you run the place: 0.8 of a cook position off the wage bill; not at a managed restaurant or where a manager runs it | owner operators carry small restaurants; keeps the fresh start viable (AC-162) |
+| Running costs | none | 11% of dining sales (card fees, cleaning, linen, supplies) and $4 a tile a week (insurance, licences, accounting, repairs), shown with utilities | other operating costs are usually 10 to 15% of sales |
+| Utilities per guest | $0.80 | $0.20 | energy scales with the premises more than with plates |
+| Premium and artisan ingredients | x1.6 and x2.4 | x1.75 and x3.2 | fine dining food cost was 25% against 30 to 35% |
+| Delivery fee | $2.50 | $3.50 | usual app delivery fees are $3 to $5 |
+| Heat lamp pass | serving 30% faster | also each server looks after x1.2 guests | plates wait for a runner |
+| Difficulty | Easy guests x1.2, costs x0.8 to 0.85; Hard guests x0.85, costs x1.15 to 1.2 | Easy x1.1 and x0.9 to 0.92; Hard x0.93 and x1.06 to 1.1 | on realistic margins old Hard left nothing |
+| Save v7 to v8 | | wages x2 (manager x1.36, rider x1.37), offers and review asks too | |
+
+Rival restaurants keep their own simplified books (`T.rivals.salaryBase` 600, no running costs): their profit only decides openings and closings, and the live market checks (AC-273) are calibrated on it.
+
+### 5.3 Result: a normal week at steady reputation
+
+| Restaurant | Sales a week | Food | Labour | Rent | Utilities, upkeep, running | Profit |
+|---|---|---|---|---|---|---|
+| Starter (cosy, Canal) | $9,490 | 21% | 35% | 13% | 21% | 10.8% |
+| Middle (Canal) | $24,905 | 33% | 30% | 6% | 16% | 15.0% |
+| Volume (University) | $34,561 | 27% | 29% | 7% | 18% | 20.1% |
+| Luxury (Harbour) | $33,907 | 29% | 25% | 8% | 15% | 23.6% |
+
+The specialists at home are the best case of their strategy and sit a little above the 12 to 18% band; typical play lands inside it. The middle build over 26 weeks with live rivals: Easy about 21%, Normal about 15%, Hard about 7%.
+
+### 5.4 Reference builds and checks that moved
+
+* Luxury reference main $42 (was $38): artisan ingredients cost a third more.
+* Volume: 5 cooks (was 4), 6 servers (was 7, the pass stretches them) and a hand wash station.
+* The golden starter day (Rep 30, a quiet Thursday) now about breaks even instead of a small profit.
+* AC-274: volume hires one cook for the app; luxury may gain up to 25% from delivery (was 15%): an $80 app order lifts a fine dining kitchen with cooks to spare.
+* An old save whose small restaurant carries a manager now loses money: at realistic wages a 24 seat room cannot pay a manager.
+

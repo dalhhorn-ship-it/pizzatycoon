@@ -32,11 +32,13 @@ describe('old saves', () => {
     expect(loaded.rivals).toEqual([]);
     expect(loaded.campaigns).toEqual([]);
     expect(loaded.delivery).toBeNull();
-    // Measured with the code at 08e3aa4~1 on the same file.
+    // Measured with the code at 08e3aa4~1 on the same file (covers 511.68, profit 2296.31), then re-measured after the
+    // economics check: a staff card became a position (wages x2, save v7 to v8) and running costs arrived. This small
+    // restaurant employs a manager ($1,500 a week, and the owner no longer works its shifts), so it now loses money.
     const { s, covers, profit } = week(loaded);
-    expect(covers).toBeCloseTo(511.68, 1);
-    expect(profit).toBeCloseTo(2296.31, 0);
-    expect(s.cash).toBeCloseTo(75626.41, 0);
+    expect(covers).toBeCloseTo(511.91, 1);
+    expect(profit).toBeCloseTo(-1571.29, 0);
+    expect(s.cash).toBeCloseTo(70718.1, 0);
   });
 
   test('a schema 5 save (before the Squad) loads, migrates and plays a week', () => {
@@ -44,9 +46,12 @@ describe('old saves', () => {
     expect(loaded.schemaVersion).toBe(SCHEMA_VERSION);
     expect(loaded.branches).toHaveLength(1);
     expect(loaded.staff.every((x) => typeof x.attrs.quality === 'number')).toBe(true);
+    // Wages were migrated: a v5 cook on 550 is a v8 position on 1,100.
+    expect(loaded.staff.every((x) => x.salary >= 500)).toBe(true);
     const { covers, profit } = week(loaded);
     expect(covers).toBeGreaterThan(400);
-    expect(profit).toBeGreaterThan(0);
+    // It still plays; with position wages, running costs and a manager on the payroll this small restaurant loses money.
+    expect(Number.isFinite(profit)).toBe(true);
   });
 
   test('old history is compacted on load: only the last week keeps its detail', () => {

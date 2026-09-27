@@ -29,10 +29,11 @@ describe('formulas match balance.md', () => {
   });
 
   test('salary (1.10)', () => {
-    // OVR = 10 x the old skill gives the old salaries (staff-management.md 2.2).
-    expect(salaryFor('cook', 40, 0)).toBeCloseTo(484, 2);
-    expect(salaryFor('chef', 80, 1)).toBeCloseTo(1530, 2);
-    expect(salaryFor('dishwasher', 40, 0)).toBeCloseTo(334.4, 2);
+    // A position covering every service (economics check): base x (1 + 0.009 x (OVR - 50) above 50, 0.02 below)
+    // x (1 + 0.25 x fame).
+    expect(salaryFor('cook', 40, 0)).toBeCloseTo(880, 2);
+    expect(salaryFor('chef', 80, 1)).toBeCloseTo(2857.5, 2);
+    expect(salaryFor('dishwasher', 40, 0)).toBeCloseTo(608, 2);
   });
 
   test('starter loan payment is $303.26 a week (1.12)', () => {
@@ -98,8 +99,11 @@ describe('golden starter day (balance.md 2)', () => {
   test('money within tolerance of the worked example', () => {
     expect(r.pnl.sales).toBeGreaterThan(1086 * 0.9);
     expect(r.pnl.sales).toBeLessThan(1086 * 1.1);
-    expect(r.pnl.profit).toBeGreaterThan(0);
-    expect(r.pnl.staff).toBeCloseTo(2214.4 / 7, 2);
+    // Since the economics check (position wages, running costs) a brand new restaurant at Rep 30 about breaks even on a
+    // quiet Thursday (-$34); it turns a profit as reputation and word of mouth grow (AC-162).
+    expect(Math.abs(r.pnl.profit)).toBeLessThan(60);
+    // Five positions (1,100 + 880 + 900 + 720 + 608) less the owner's own shifts (0.8 x a cook position, 880).
+    expect(r.pnl.staff).toBeCloseTo((4208 - 880) / 7, 2);
     expect(r.pnl.rent).toBeCloseTo(1210 / 7, 2);
   });
 

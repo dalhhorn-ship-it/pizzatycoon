@@ -1,8 +1,9 @@
 // Versioned save format with migrations (solution-design.md 8).
 
-import { compactReport, type DayReport, SCHEMA_VERSION, type GameState } from '../sim/state';
+import { compactReport, type DayReport, SCHEMA_VERSION, type GameState, type Staff } from '../sim/state';
 import { DISTRICTS, PREMISES } from '../data/districts';
 import { EQUIPMENT } from '../data/equipment';
+import { POSITION_WAGE_MULT } from '../data/staff';
 import { T } from '../data/tunables';
 import { VENUES, venueFor } from '../data/venues';
 import { ensureEveryRole, withRecipeBook } from '../sim/game';
@@ -92,6 +93,21 @@ const MIGRATIONS: Record<number, (state: Record<string, unknown>) => Record<stri
       b.history = compact(b.history ?? []);
     }
     delete s.ownList;
+    return state;
+  },
+  // v7 to v8: a staff card is a position covering every service (economics check, balance.md 5): wages x2.
+  // Managers were already one salaried person (1,500 against 1,100); riders work the peaks only (520 against 380).
+  7: (state) => {
+    const s = state as unknown as GameState;
+    const scale = (x: Staff): void => {
+      const m = x.role === 'manager' ? 1500 / 1100 : x.role === 'rider' ? 520 / 380 : POSITION_WAGE_MULT;
+      x.salary = Math.round(x.salary * m * 100) / 100;
+      if (x.review) x.review.ask = Math.round(x.review.ask * m * 100) / 100;
+      if (x.offer) x.offer.salary = Math.round(x.offer.salary * m * 100) / 100;
+    };
+    for (const x of s.staff ?? []) scale(x);
+    for (const x of s.candidates ?? []) scale(x);
+    for (const b of s.branches ?? []) for (const x of b.staff ?? []) scale(x);
     return state;
   },
 };

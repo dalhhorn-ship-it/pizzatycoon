@@ -224,7 +224,7 @@ export const T = {
     ordersPerTrip: 2,
     commission: { platform: 0.3, marketplace: 0.14, own: 0 },
     reach: { platform: 1, marketplace: 1, own: 0.4 },
-    fee: 2.5,
+    fee: 3.5,
     packaging: { basic: 0.5, eco: 1.1 },
     travel: 0.92,
     ecoPackaging: 1.04,
@@ -394,7 +394,14 @@ export const T = {
   },
   staff: {
     /** Salary = base x (1 + salaryPerOvr x (OVR - 50)) x (1 + salaryPerFame x fame): the old 0.12 per skill point. */
-    salaryPerOvr: 0.012,
+    salaryPerOvr: 0.009,
+    /** Below OVR 50 the wage falls faster: juniors and apprentices are cheap (economics check, balance.md 5). */
+    salaryPerOvrBelow: 0.02,
+    /**
+     * You work in the restaurant you run yourself, about 60 hours a week: that covers this share of a cook position's
+     * base wage (economics check, balance.md 5). Not at a managed restaurant, nor where a manager runs the place.
+     */
+    ownerShiftShare: 0.8,
     salaryPerFame: 0.25,
     moraleStart: 50,
     raiseMorale: 10,
@@ -561,7 +568,13 @@ export const T = {
     starterLoanWeeks: 52,
     leaseDepositWeeks: 4,
     utilitiesBase: 30,
-    utilitiesPerCover: 0.8,
+    utilitiesPerCover: 0.2,
+    /**
+     * Running costs besides utilities (economics check, balance.md 5): card fees, cleaning, linen and supplies as a share
+     * of dining sales (delivery has its own cost lines), and insurance, licences, accounting and repairs per tile of premises a week. Shown with utilities.
+     */
+    runningShare: 0.11,
+    runningPerTileWeek: 4,
     upkeepBase: 15,
     restructureDays: 7,
     restructureWeeks: 4,

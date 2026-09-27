@@ -409,7 +409,7 @@ Opened from the Money tab ("Marketing") and from any coach advice.
 
 ### 6.2 Delivery modes
 
-| Mode | Reach | Commission | Riders | Delivery fee ($2.50 paid by the guest) | Other costs |
+| Mode | Reach | Commission | Riders | Delivery fee ($3.50 paid by the guest; was $2.50) | Other costs |
 |---|---|---|---|---|---|
 | **Platform** (the Scoot app does it all) | 1.0 | 30% of order value | Platform riders: wait 5 min, ride 14 min | Kept by the platform | none |
 | **Platform, own riders** (marketplace listing) | 1.0 | 14% | Yours (6.8) | Yours | riders and vehicles |
@@ -494,7 +494,7 @@ DRep    += min(1, 0.05 x economy.reputation) x (-10 + 1.1 x S_d - DRep)
 
 ```
 order value  = 1.8 x average main price x (1 + markup) + 0.5 x soft drink price + 0.15 x dessert price
-sales        = delivered orders x order value (+ $2.50 fee per order in own rider modes)
+sales        = delivered orders x order value (+ $3.50 fee per order in own rider modes)
 commission   = 30% / 14% / 0% of order value
 food         = ingredient cost of the dishes sent
 packaging    = per main: basic $0.50, insulated eco $1.10
@@ -571,7 +571,7 @@ Founder request: "more detailed delivery stats in the daily report and also tips
 |---|---|---|---|
 | Second pizza 25% off | about 12% off mains | +0.3 mains | +12% |
 | Second pizza half price | about 22% off mains | +0.45 mains | +20% |
-| Free delivery | the $2.50 fee (own riders lose it; on the app you pay it) | none | +18% |
+| Free delivery | the $3.50 fee (own riders lose it; on the app you pay it) | none | +18% |
 | Meal deal | 15% off everything | +0.5 drinks, +0.5 desserts | +8% |
 | 10% off every order | 10% off everything | none | +5% |
 | Lunch deal (lunch only) | 20% off everything | +0.3 drinks | +25% |
@@ -763,7 +763,7 @@ Schema bump (7 at the time of writing, or the next free number).
 | promise / span / packMinutes | min | 35 / 25 / 3 | 30 to 45 / 15 to 35 / 2 to 5 |
 | platformWait / platformRide / bikeRide / scooterRide | min | 5 / 14 / 16 / 12 | |
 | commission platform / marketplace | share | 0.30 / 0.14 | 0.2 to 0.35 / 0.08 to 0.2 |
-| fee | $ per order | 2.50 | 1.5 to 4 |
+| fee | $ per order | 3.50 (was 2.50) | 1.5 to 5 |
 | packaging basic / eco | $ per main | 0.50 / 1.10 | 0.3 to 0.8 / 0.8 to 1.5 |
 | travel / ecoPackaging | factor | 0.92 / 1.04 | 0.85 to 0.97 / 1.02 to 1.08 |
 | audienceStart / audienceOrganic / audienceFade | share / per day / per day | 0.05 / 0.004 / 0.003 (replaces the 1.2 novelty boost) | 0.02 to 0.1 / 0.002 to 0.008 / 0.001 to 0.006 |

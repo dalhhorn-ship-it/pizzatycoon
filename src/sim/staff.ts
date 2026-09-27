@@ -58,7 +58,8 @@ export function effAttr(s: Staff, a: AttrId, service: Service = 'dinner', day = 
 // ---------- Money ----------
 
 export function salaryFor(role: Role, o: number, fame: number): number {
-  return Math.round(ROLE_BASE_SALARY[role] * (1 + T.staff.salaryPerOvr * (o - 50)) * (1 + T.staff.salaryPerFame * fame) * 100) / 100;
+  const skill = o >= 50 ? T.staff.salaryPerOvr * (o - 50) : T.staff.salaryPerOvrBelow * (o - 50);
+  return Math.round(ROLE_BASE_SALARY[role] * (1 + skill) * (1 + T.staff.salaryPerFame * fame) * 100) / 100;
 }
 
 /** What this person could earn elsewhere (staff-management.md 4.4). */

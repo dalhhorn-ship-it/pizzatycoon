@@ -15,7 +15,7 @@ import { economyOf } from './economy';
 import { addonProduct, addonSum, type Flow, kitchenFlow, plateWalk } from './kitchen';
 import { stateLocation } from './location';
 import { dishWork, type MenuComplexity, menuComplexity } from './menu';
-import { ROLE_AREA } from '../data/staff';
+import { ROLE_AREA, ROLE_BASE_SALARY } from '../data/staff';
 import { effAttr, hasTalent, moraleQuality, onRota, pressureMult, pressureQuality } from './staff';
 import type { GameState, PlacedFurniture, Recipe, Staff } from './state';
 
@@ -221,6 +221,15 @@ function personalSpeed(s: Staff, volumeGear: boolean, ctx: WorkContext): number 
 /** Quality on the old 1 to 10 scale, with pressure and morale (staff-management.md 2.2, 5.3). */
 function personalQuality(s: Staff, ctx: WorkContext): number {
   return (effAttr(s, 'quality', ctx.service, ctx.day) / 10) * pressureQuality(personalPressure(s, ctx)) * moraleQuality(s.morale);
+}
+
+/**
+ * Wages saved by the owner's own shifts: you work about 60 hours a week in the restaurant you run, covering part of a cook
+ * position. Not at a managed restaurant, nor where a restaurant manager runs the place; never more than the wage bill.
+ */
+export function ownerShifts(state: Pick<GameState, 'staff' | 'ownerAway'>): number {
+  if (state.ownerAway || state.staff.some((s) => s.role === 'manager')) return 0;
+  return Math.min(state.staff.reduce((a, s) => a + s.salary, 0), T.staff.ownerShiftShare * ROLE_BASE_SALARY.cook);
 }
 
 /** Guests one cook can cook for in a service: faster, calmer and happier cooks handle more (founder rule). */
@@ -537,7 +546,9 @@ export function serviceStats(state: GameState, kitchen: Record<Service, KitchenS
   const passMult = passE ? (EQUIPMENT[passE.itemId]?.effectMult ?? 1) * addonProduct(passE, 'serveMult') : 1;
   const mk = (f: (sv: Service) => number): Record<Service, number> => ({ lunch: f('lunch'), dinner: f('dinner') });
   const serverSpeed = mk(speedFor);
-  const serverGuests = mk((service) => servers.reduce((x, s) => x + guestsForServer(s, { service, load: load[service], day: state.day }), 0));
+  // A pass lets plates wait for a runner, so each server can look after more guests: x1.2 with a heat lamp pass.
+  const passReach = Math.sqrt(1 / passMult);
+  const serverGuests = mk((service) => passReach * servers.reduce((x, s) => x + guestsForServer(s, { service, load: load[service], day: state.day }), 0));
   const orderTime = mk((sv) => (serverSpeed[sv] > 0 ? T.service.order / serverSpeed[sv] : 99));
   const serveTime = mk((sv) => (serverSpeed[sv] > 0 ? (T.service.serve * passMult) / serverSpeed[sv] : 99));
   const payTime = mk((sv) => (serverSpeed[sv] > 0 ? T.service.payBus / serverSpeed[sv] : 99));
@@ -588,7 +599,7 @@ export function analyse(state: GameState, pressure: Record<Service, AreaLoad> = 
     kitchen: kitchen.dinner,
     room,
     service,
-    weeklySalaries: state.staff.reduce((a, s) => a + s.salary, 0) * economyOf(state).wages,
+    weeklySalaries: Math.max(0, state.staff.reduce((a, s) => a + s.salary, 0) - ownerShifts(state)) * economyOf(state).wages,
     weeklyRent: weeklyRent(state),
     frugal,
   };
