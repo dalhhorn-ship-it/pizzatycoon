@@ -13,7 +13,7 @@ import { stateLocation } from './location';
 import { Rng } from './rng';
 import { hasTalent, onRota } from './staff';
 import { awarenessGain, discountFor, hasLoyalty, mktDelivery, mktFor, runSpendToday } from './marketing';
-import { catchment, dealTerms, deliveryCompetition, type DeliveryInput, deliveryLive, deliveryMinutes, deliveryReachMult, packingOf, ridersToday, rivalDeliveryOrders, settleDelivery } from './delivery';
+import { audienceOf, catchment, dealTerms, deliveryCompetition, type DeliveryInput, deliveryLive, deliveryMinutes, deliveryReachMult, nextAudience, packingOf, ridersToday, rivalDeliveryOrders, settleDelivery } from './delivery';
 import { playerCompetition } from './rivals';
 import { followingDemand, nextFollowing, queueDelay, valueScore } from './formulas';
 
@@ -339,7 +339,10 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const demand = segs.reduce((x, s) => x + s.demand[sv], 0);
     const meal = demand > 0 ? segs.reduce((x, s) => x + s.demand[sv] * (SEGMENTS[s.id].mealLength[sv] + s.extraMeal[sv]), 0) / demand : 45;
     const cycle = a.service.serviceTime[sv] + meal;
-    const seatPerHour = (a.room.seats * T.service.partySizeFit * 60) / cycle;
+    const tablePerHour = (a.room.seats * T.service.partySizeFit * 60) / cycle;
+    // Each server looks after a limited number of guests a service (35 at Speed 50, up to 50): the front of house is the lower of the two.
+    const serverPerHour = a.service.serverGuests[sv] / (hours * T.service.utilisation[sv]);
+    const seatPerHour = Math.min(tablePerHour, serverPerHour);
     const k = kitchenBy[sv];
     // Pasta and secondi skip the oven but ask more of the prep line (menu complexity, balance.md 4.2).
     const mix = (f: (s: SegCalc) => number, fallback: number): number =>
@@ -349,20 +352,22 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const prepPerHour = k.prepPerHour / prepLoad;
     const ovenCoversPerHour = ovenShare > 0 ? k.ovenPerHour / ovenShare : Infinity;
     const plateCap = (a.service.platesPerHour / T.kitchen.platesPerCover) * hours + stations.plateStock / T.kitchen.platesPerCover;
-    const pre = Math.min(Math.min(ovenCoversPerHour, prepPerHour, seatPerHour) * hours * T.service.utilisation[sv], plateCap);
-    return { hours, demand, cycle, seatPerHour, k, ovenShare, prepPerHour, ovenCoversPerHour, plateCap, pizzas: Math.min(demand, pre) * ovenShare, pizzaCap: pre * ovenShare };
+    // Each cook or chef cooks for a limited number of guests a service (50 at Speed 50, up to 75), whatever the stations could do.
+    const cookPerHour = k.cookGuests / (hours * T.service.utilisation[sv]);
+    const pre = Math.min(Math.min(ovenCoversPerHour, prepPerHour, seatPerHour, cookPerHour) * hours * T.service.utilisation[sv], plateCap);
+    return { hours, demand, cycle, seatPerHour, serverPerHour, tablePerHour, k, ovenShare, prepPerHour, ovenCoversPerHour, cookPerHour, plateCap, pizzas: Math.min(demand, pre) * ovenShare, pizzaCap: pre * ovenShare };
   };
   const pre = { lunch: stageOf('lunch'), dinner: stageOf('dinner') };
   // Dough for the day: the fridges hold stations.coldCap pizzas, shared between services as they would be sold.
   const pizzasWanted = pre.lunch.pizzas + pre.dinner.pizzas;
   for (const sv of SERVICES) {
-    const { hours, demand, cycle, seatPerHour, k, ovenShare, prepPerHour, ovenCoversPerHour, plateCap } = pre[sv];
+    const { hours, demand, cycle, seatPerHour, serverPerHour, tablePerHour, k, ovenShare, prepPerHour, ovenCoversPerHour, cookPerHour, plateCap } = pre[sv];
     const coldPizzas = pizzasWanted > 0 ? (stations.coldCap * pre[sv].pizzas) / pizzasWanted : stations.coldCap / 2;
     const coldPerHour = ovenShare > 0 ? coldPizzas / ovenShare / (hours * T.service.utilisation[sv]) : Infinity;
     // For the pipeline: the day's dough spread over the services as the rest of the line could sell it.
     const capWanted = pre.lunch.pizzaCap + pre.dinner.pizzaCap;
     const coldStage = ovenShare > 0 && capWanted > 0 ? (stations.coldCap * pre[sv].pizzaCap) / capWanted / ovenShare / (hours * T.service.utilisation[sv]) : 999;
-    const kitchenPerHour = Math.min(ovenCoversPerHour, prepPerHour, coldPerHour);
+    const kitchenPerHour = Math.min(ovenCoversPerHour, prepPerHour, coldPerHour, cookPerHour);
     // One kitchen, two front doors (competition.md 6.4): the app gets what the throttle leaves, and an overloaded line is shared.
     const U = T.service.utilisation[sv];
     let kitchenForDine = kitchenPerHour;
@@ -394,7 +399,8 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     let bottleneck: ServiceReport['bottleneck'] = 'none';
     if (rho >= 0.85) {
       if (plateCap < serviceCap) bottleneck = 'plates';
-      else if (seatPerHour <= kitchenPerHour) bottleneck = 'seats';
+      else if (seatPerHour <= kitchenPerHour) bottleneck = serverPerHour < tablePerHour ? 'servers' : 'seats';
+      else if (cookPerHour <= Math.min(ovenCoversPerHour, prepPerHour, coldPerHour)) bottleneck = 'cooks';
       else if (coldPerHour <= Math.min(ovenCoversPerHour, prepPerHour)) bottleneck = 'cold';
       else bottleneck = ovenCoversPerHour <= prepPerHour ? 'oven' : 'prep';
     }
@@ -427,6 +433,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
       stages: {
         prep: prepPerHour, oven: Number.isFinite(ovenCoversPerHour) ? ovenCoversPerHour : k.ovenPerHour, seats: seatPerHour, plates: plateCap / (hours * T.service.utilisation[sv]),
         cold: Number.isFinite(coldStage) ? coldStage : 999,
+        cooks: cookPerHour,
         ...(dlv ? { delivery: dServedPH / dt.work } : {}),
       },
       demandPerHour: demand / (hours * T.service.utilisation[sv]),
@@ -554,7 +561,9 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     pnl.ingredients += settled.foodCost;
     pnl.deliveryCosts = settled.deliveryCosts;
     for (const [id, n] of Object.entries(settled.dishSales)) dishSales[id] = (dishSales[id] ?? 0) + n;
-    delivery = settled.day;
+    // The delivery audience grows slowly by word of mouth and fast with delivery campaigns (6.13).
+    const aud = nextAudience(dlv, mktDelivery(campaigns, state.day, district.shares) - 1, settled.day.delivered);
+    delivery = { ...settled.day, audienceBefore: audienceOf(dlv), audienceAfter: aud.after, audienceOrganic: aud.organic, audienceCampaigns: aud.campaigns };
   }
   pnl.profit = profitOf(pnl);
   const market: MarketDay = {
@@ -624,6 +633,8 @@ function tipsFor(services: ServiceReport[], a: Analysis, pnl: PnL, segs: Segment
       );
     }
     if (s.bottleneck === 'plates') tips.push(`You ran out of clean plates at ${name}. A dishwasher, a bigger sink, plate shelving or a dish machine would help.`);
+    if (s.bottleneck === 'servers') tips.push(`Your servers were at their limit at ${name}. Another server, or faster ones, would seat more: a server at Speed 50 looks after 35 guests a service, a top server up to 50.`);
+    if (s.bottleneck === 'cooks') tips.push(`Your cooks were at their limit at ${name}: ${Math.round(s.served)} guests between them. A cook at Speed 50 handles 50 a service, a top cook up to 75. Another cook, or faster ones, would serve more.`);
     if (s.bottleneck === 'cold') tips.push(`The fridges ran out of dough at ${name}. Another fridge or a walk in cooler would help.`);
   }
   if (pnl.sales > 0) {

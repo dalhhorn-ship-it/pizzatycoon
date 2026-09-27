@@ -2,7 +2,7 @@
 
 import { T } from '../data/tunables';
 import { forecastSaturday } from '../sim/forecast';
-import { deliveryMissing, hasPacking, MODE_BLURB, MODE_NAMES, ridersNeeded, ridersToday } from '../sim/delivery';
+import { audienceOf, deliveryMissing, hasPacking, MODE_BLURB, MODE_NAMES, ridersNeeded, ridersToday } from '../sim/delivery';
 import { DELIVERY_DEAL_IDS, DELIVERY_DEALS } from '../data/deliveryDeals';
 import { SEGMENTS } from '../data/segments';
 import type { SegmentId, Service } from '../data/types';
@@ -122,6 +122,8 @@ export function deliveryCard(ctx: PanelCtx): HTMLElement {
     h('h3', null, h('span', null, '🛵 Delivery'), h('span', { class: 'small' }, MODE_NAMES[d.mode])),
     h('div', { class: 'kv' },
       h('span', null, 'Delivery rating'), h('b', null, `${stars(d.drep)} ${d.drep.toFixed(0)} ${trend > 0.05 ? '↑' : trend < -0.05 ? '↓' : ''}`),
+      h('span', null, 'Delivery audience'), h('b', { class: audienceOf(d) < 0.25 ? 'warn' : audienceOf(d) > 0.6 ? 'good' : '' },
+        `${pct(audienceOf(d))} of the neighbourhood${last?.audienceAfter !== undefined && last.audienceBefore !== undefined ? ` (${signed((last.audienceAfter - last.audienceBefore) * 100, 1)} pts a day)` : ''}`),
       h('span', null, 'Top rated on Scoot'), h('b', { class: d.topRated ? 'good' : '' }, d.topRated
         ? `Yes: ${Math.round((T.delivery.topRatedBoost - 1) * 100)}% more orders, lost below ${T.delivery.topRatedLoseBelow}`
         : d.drep >= T.delivery.topRatedDrep ? `${d.topRatedDays} of ${T.delivery.topRatedDays} days at ${T.delivery.topRatedDrep}` : `needs ${T.delivery.topRatedDrep} for ${T.delivery.topRatedDays} days`),
@@ -134,6 +136,7 @@ export function deliveryCard(ctx: PanelCtx): HTMLElement {
         h('span', null, 'Delivery profit'), h('b', { class: last.profit >= 0 ? 'good' : 'bad' }, `${money(last.profit)} a day`),
       ] : [h('span', null, 'Orders'), h('b', null, 'The first orders come in at the next service')])),
     h('div', { class: 'seg wrap' }, ...MODES.map((m) => h('button', { class: d.mode === m ? 'on' : '', title: MODE_BLURB[m], onclick: () => act(ctx, { type: 'setDelivery', mode: m }) }, MODE_NAMES[m]))),
+    h('div', { class: 'small muted' }, 'Only people who know you deliver can order. The audience starts tiny, grows slowly by word of mouth and fast with delivery campaigns, and fades when nobody hears from you.'),
     h('div', { class: 'small muted' }, MODE_BLURB[d.mode]),
     markupRow,
     dealRow,
@@ -191,6 +194,9 @@ export function deliveryDayCard(d: DeliveryDay | undefined, state: GameState): H
       h('span', null, 'Average order'), h('b', null, `${money(d.orderValue ?? 0, true)} · ${(d.mainsPerOrder ?? t.mainsPerOrder).toFixed(1)} mains`),
       h('span', null, 'Profit per order'), h('b', { class: perOrder >= 0 ? 'good' : 'bad' }, money(perOrder, true)),
       h('span', null, 'Kitchen used by delivery'), h('b', null, pct(d.kitchenShare)),
+      d.audienceAfter !== undefined ? h('span', null, 'Delivery audience') : null,
+      d.audienceAfter !== undefined ? h('b', { class: d.audienceAfter < 0.25 ? 'warn' : '' },
+        `${pct(d.audienceBefore ?? d.audienceAfter)} → ${pct(d.audienceAfter)} (word of mouth ${signed((d.audienceOrganic ?? 0) * 100, 1)}, campaigns ${signed((d.audienceCampaigns ?? 0) * 100, 1)} pts)`) : null,
       rivals > 0.5 ? h('span', null, 'Your share of delivery nearby') : null,
       rivals > 0.5 ? h('b', null, `${pct(share)} (rivals ${Math.round(rivals)} orders)`) : null,
       h('span', null, 'Delivery rating'), h('b', { class: d.drepAfter >= d.drepBefore ? 'good' : 'bad' },

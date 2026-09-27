@@ -82,3 +82,19 @@ The Team card's value against a standard hire now includes the reputation a pers
 ## 8. Save migration
 
 A save gains nothing new except the manager's `kitchenBudget` policy (default $500 when missing). Every other new field is on equipment data, and old kitchens simply get checked against the new rules. A large restaurant with one fridge may now meet the dough limit on busy days; the reports say so and name the fix.
+
+## 9. Guests per cook and per server (as built, founder rule)
+
+Founder rule: "one chef can serve up to 50 guests", with "top cooks up to 75, lower skilled less", and "same idea for servers".
+
+* **Cooks and chefs** each cook for a limited number of guests a service: `guests = 50 + 51 x (speed multiplier - 1)`, clamped to 20 to 75. The speed multiplier is the one prep already uses (Speed, morale, Speedy, coaching, pressure, Night Owl), so a cook at Speed 50 and normal morale handles 50, Speed 99 about 65, Speed 99 with Speedy the full 75, a nervous or unhappy cook fewer. Delivery mains count too (x1.1 work, as in competition.md 6.4). The sum over the cooks on the rota is a kitchen stage next to ovens, prep and dough (`KitchenStats.cookGuests`, `ServiceReport.stages.cooks`); when it binds, the bottleneck reads **the cooks** and the fix is to hire a cook or train Speed.
+* **Servers** each look after `35 + 31 x (speed multiplier - 1)` guests a service, clamped to 15 to 50. The front of house is the lower of the tables and the servers (`ServiceStats.serverGuests`); when the servers bind, the bottleneck reads **the servers**.
+* Tunables: `T.kitchen.guestsPerCook` 50, `guestsPerCookSlope` 51, `guestsPerCookMin` 20, `guestsPerCookMax` 75; `T.service.guestsPerServer` 35, `guestsPerServerSlope` 31, `guestsPerServerMin` 15, `guestsPerServerMax` 50.
+* A station warning appears from 85% of what the cooks can handle, and the weekly advice sends the player to the Squad tab.
+
+Balance consequences, checked by `npm run balance`:
+
+* The volume reference build has 5 cooks (was 4) and a hand wash station: 4 cooks at Speed 40 could cook for only about 190 guests a service.
+* Delivery balance (AC-274) hires two cooks for the app in the volume build; the volume floor moves from +10% to +5%, and luxury may now gain more than volume, because a quiet fine dining kitchen has cooks to spare and a busy volume one does not.
+* A cook away on a course in the two cook middle build halves the kitchen for those days, so the course payback band widens from 3 to 10 weeks to 3 to 15.
+

@@ -5,7 +5,7 @@ import { DELIVERY_DEALS } from '../data/deliveryDeals';
 import { SEGMENTS } from '../data/segments';
 import { T } from '../data/tunables';
 import type { SegmentId } from '../data/types';
-import { packingOf, ridersNeeded, ridersToday } from './delivery';
+import { audienceOf, packingOf, ridersNeeded, ridersToday } from './delivery';
 import { campaignUnlocked, isActive } from './marketing';
 import type { DeliveryDay, GameState } from './state';
 
@@ -79,7 +79,14 @@ export function deliveryTips(state: GameState, d: DeliveryDay | undefined, max =
     .filter((id) => campaignUnlocked(state, CAMPAIGNS[id]) && !running(state, id));
   const anyRunning = (['promotedListing', 'appVoucher', 'doorHangers', 'foodInfluencer', 'flyers'] as const).some((id) => running(state, id));
   const promo = promos[0];
-  if (promo) {
+  const audience = audienceOf(dl);
+  if (audience < 0.5 && !anyRunning) {
+    // The audience barely grows on its own (6.13): this is the first thing to fix.
+    tips.push({
+      weight: 95 - 60 * audience,
+      text: `Only ${Math.round(audience * 100)}% of the neighbourhood knows you deliver, and word of mouth alone adds well under 1% a day. Run delivery campaigns to build it${promo ? `: ${CAMPAIGNS[promo].name} is a good start` : ''}.`,
+    });
+  } else if (promo) {
     const c = CAMPAIGNS[promo];
     tips.push({ weight: anyRunning ? 20 : 35, text: `Delivery marketing: ${c.name} (${c.effect.charAt(0).toLowerCase()}${c.effect.slice(1)}). Start it in Marketing.` });
   }

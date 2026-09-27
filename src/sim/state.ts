@@ -88,6 +88,8 @@ export interface DeliveryState {
   topRated: boolean;
   /** A standing offer on every delivery order; missing on older saves. */
   deal?: DeliveryDealId | null;
+  /** Share of the catchment that knows you deliver, 0 to 1; missing on older saves (T.delivery.audienceLegacy). */
+  audience?: number;
 }
 
 export interface RivalCampaign {
@@ -200,6 +202,12 @@ export interface DeliveryDay {
   bySegment?: Partial<Record<SegmentId, number>>;
   /** Orders rivals nearby delivered on their last day, weighted by distance. */
   rivalOrders?: number;
+  /** Delivery audience before and after the day. */
+  audienceBefore?: number;
+  audienceAfter?: number;
+  /** Of the day's audience growth: word of mouth and campaigns. */
+  audienceOrganic?: number;
+  audienceCampaigns?: number;
 }
 
 /** One line of the mood breakdown on the player card (staff-management.md 5). */
@@ -281,13 +289,13 @@ export interface ServiceReport {
   capacity: number;
   rho: number;
   queueDelay: number;
-  bottleneck: 'seats' | 'oven' | 'prep' | 'plates' | 'cold' | 'none';
+  bottleneck: 'seats' | 'servers' | 'oven' | 'prep' | 'plates' | 'cold' | 'cooks' | 'none';
   tableCycle: number;
   /** Minutes from order to plate: cook time plus queueing when the kitchen runs near capacity. */
   ticketTime: number;
   /** Service pipeline in covers per hour (kitchen-builder.md 6). */
   /** Guests per hour each stage handles; cold is the fridges' dough for the day spread over the service. */
-  stages: { prep: number; oven: number; seats: number; plates: number; cold?: number; delivery?: number };
+  stages: { prep: number; oven: number; seats: number; plates: number; cold?: number; cooks?: number; delivery?: number };
   /** Demand per hour of effective service time. */
   demandPerHour: number;
 }

@@ -10,6 +10,7 @@ type StageId = keyof ServiceReport['stages'];
 const STAGES: { id: StageId; name: string; icon: string; tip: string }[] = [
   { id: 'prep', name: 'Prep and stove', icon: '🫓', tip: 'Add a prep station or sheeter, bring stations closer to an oven, or trim a crowded menu.' },
   { id: 'oven', name: 'Oven', icon: '🔥', tip: 'Add or upgrade an oven, or offer primi and secondi that skip it.' },
+  { id: 'cooks', name: 'Cooks', icon: '👩‍🍳', tip: 'Hire another cook, or faster ones: Speed 50 serves 50 guests a service, a top cook up to 75.' },
   { id: 'seats', name: 'Tables and serving', icon: '🍽', tip: 'Add tables or a host, or a heat lamp pass.' },
   { id: 'plates', name: 'Dishwashing', icon: '🫧', tip: 'A dishwasher with room at the sink, a Double Sink or Dish Machine, Plate Shelving, or a sink nearer the pass.' },
   { id: 'cold', name: 'Dough in the fridges', icon: '🧊', tip: 'A Reach in Fridge or a Walk in Cooler holds dough for more pizzas a day.' },

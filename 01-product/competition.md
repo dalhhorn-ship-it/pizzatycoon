@@ -421,12 +421,12 @@ The mode can be changed any morning. Switching away from own riders does not let
 
 ```
 catchment    = traffic_v + 0.5 x sum of foot traffic of adjacent districts
-orders_day   = catchment x orderRate (0.005; draft 0.004) x sum over s of share_v,s x affinity_s x priceMult_s(r_d) x budgetMult_s(p_d) x qualityMult_s
-               x repMult(DRep) x weekdayMult x reach_mode x mktD x novelty x (1 - 0.5 x Cd_eff) x economy.demand
+orders_day   = catchment x audience x orderRate (0.0065; was 0.005, draft 0.004) x sum over s of share_v,s x affinity_s x priceMult_s(r_d) x budgetMult_s(p_d) x qualityMult_s
+               x repMult(DRep) x weekdayMult x reach_mode x mktD x (1 - 0.5 x Cd_eff) x economy.demand
 r_d          = r x (1 + markup)        markup is the delivery price markup, 0% to 20%, default 10%
 p_d          = average main price x (1 + markup)
 affinity     = students 1.4, families 1.2, professionals 1.1, foodies 0.3, seniors 0.4, tourists 0.15   (draft: foodies 0.5, tourists 0.3)
-novelty      = 1.2 for the first 14 days after delivery starts ("New on Scoot"), then 1.0
+audience     = share of the catchment that knows you deliver (6.13): starts at 0.05, grows slowly by word of mouth and fast with delivery campaigns (replaces the old 1.2 novelty boost)
 Cd_eff       = min(0.9, 0.3 + sum over rivals with delivery of 0.1 x prox_d x rel_d,s)   prox_d: same district 1.0, adjacent 0.5
 split        = lunch 30%, dinner 70%
 per order    = 1.8 mains, 0.5 soft drinks, 0.15 desserts; no wine, aperitivi or digestivi
@@ -581,6 +581,18 @@ Deals pay when the kitchen has room. With a full kitchen the app turns the extra
 **Delivery marketing**: three campaigns in the Marketing sheet besides the promoted listing (table in 5.1): Welcome voucher on the app (+25%), Door hanger menus (+15%, any mode) and Food influencer unboxing (+35% for one week, any mode). `deliveryLiftCap` rises from 0.6 to 0.8 so three delivery campaigns can stack.
 
 **Delivery day report**: the day report's delivery card folds open with orders wanted and delivered, average order and mains per order, profit per order, kitchen share, share of delivery nearby (against rivals' last day, weighted like 6.3), a lunch and dinner table (wanted, out, refused, time, order value), food, time and value scores, the money lines (sales, deal discounts, refunds, commission, food, packaging, riders, vehicles and utilities), who ordered, and **How to grow delivery**: up to four tips from `src/sim/deliveryAdvice.ts`, ranked (riders missing, refused orders, late orders, the weakest score, a deal, delivery marketing, mode, Top rated progress, the main crowd). The same tips sit in the Delivery panel with a Delivery marketing button.
+
+### 6.14 The delivery audience: slow to build, needs campaigns (as built)
+
+Founder rule: "delivery audience build up should go way slower, in the beginning hardly anyone will notice, requires active campaigning."
+
+* `DeliveryState.audience`, 0 to 1: the share of the catchment that knows the restaurant delivers. Orders scale with it (6.3). It replaces the 1.2 novelty boost of the first 14 days.
+* A new delivery starts at **5%**. Each day: `audience += (0.004 x DRep/100 [x1.5 when Top rated, and only when an order went out] + campaign delivery lift / 7) x (1 - audience) - 0.003 x audience`.
+* Word of mouth alone at DRep 60 takes a month to reach about 10% and settles near 45% after many months. A promoted listing with door hangers (+45% delivery lift) takes it past 60% within four weeks. Stop campaigning and it slowly fades back.
+* `orderRate` rises from 0.005 to 0.0065 so an established, well marketed restaurant (audience about 75%) sees about the orders the old model gave everyone from day one.
+* Older saves that already deliver start at 50%.
+* The Delivery panel and the day report show the audience, its change and how much came from word of mouth and from campaigns; the top tip while it is under 50% with no delivery campaign running is to start one.
+* Delivery balance (AC-274, AC-286) is measured for an established business at a 70% audience.
 
 ## 7. Competition analytics and the coach
 
@@ -744,7 +756,7 @@ Schema bump (7 at the time of writing, or the next free number).
 | Tunable (`T.delivery`) | Unit | Start | Safe range |
 |---|---|---|---|
 | unlockRep / unlockDays | Rep / days | 60 / 28 | 50 to 70 / 14 to 56 |
-| orderRate | orders per catchment person | 0.005 (draft 0.004) | 0.002 to 0.006 |
+| orderRate | orders per catchment person who knows you deliver | 0.0065 (was 0.005, draft 0.004) | 0.003 to 0.008 |
 | adjacentWeight | share | 0.5 | 0.3 to 0.7 |
 | lunchShare | share | 0.4 (draft 0.30) | 0.2 to 0.4 |
 | mainsPerOrder / work | mains / factor | 1.8 / 1.1 | 1.5 to 2.2 / 1.0 to 1.3 |
@@ -754,7 +766,7 @@ Schema bump (7 at the time of writing, or the next free number).
 | fee | $ per order | 2.50 | 1.5 to 4 |
 | packaging basic / eco | $ per main | 0.50 / 1.10 | 0.3 to 0.8 / 0.8 to 1.5 |
 | travel / ecoPackaging | factor | 0.92 / 1.04 | 0.85 to 0.97 / 1.02 to 1.08 |
-| novelty / noveltyDays | factor / days | 1.2 / 14 | 1.0 to 1.4 / 7 to 28 |
+| audienceStart / audienceOrganic / audienceFade | share / per day / per day | 0.05 / 0.004 / 0.003 (replaces the 1.2 novelty boost) | 0.02 to 0.1 / 0.002 to 0.008 / 0.001 to 0.006 |
 | background | competition | 0.3 | 0.2 to 0.5 |
 | throttleDefault | kitchen load | 0.8 | 0.7 to 0.9 |
 | refusePenalty / cancelPenalty / cancelThreshold | Rep / Rep / share | 0.2 / 2 / 0.05 (draft 0.5 / 1) | 0.2 to 1 / 0.5 to 2 / 0.03 to 0.1 |

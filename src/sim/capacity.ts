@@ -11,7 +11,7 @@ import type { DayReport, GameState, ServiceReport } from './state';
 import { dayRun } from './team';
 
 export interface StationIssue {
-  id: 'tend' | 'washStrain' | 'idleWashers' | 'crowd' | 'cold' | 'plates';
+  id: 'tend' | 'washStrain' | 'idleWashers' | 'crowd' | 'cold' | 'plates' | 'cooks';
   /** What is wrong, in plain words. */
   text: string;
   /** What fixes it. */
@@ -60,6 +60,16 @@ export function stationIssues(state: GameState, a: Analysis = analyse(state), la
       id: 'cold', severity: Math.min(1, pizzas / st.coldCap - 0.85),
       text: `The fridges hold dough for ${st.coldCap} pizzas a day; the last day sold ${Math.round(pizzas)}.`,
       fix: 'A Reach in Fridge (350 a day) or a Walk in Cooler (700 a day).',
+    });
+  }
+  // Cooks cook for a limited number of guests a service (founder rule): warn from 85% of what they can handle.
+  const busiest = lastDay?.open ? Math.max(0, ...lastDay.services.map((s) => s.served)) : 0;
+  const cookCap = a.kitchen.cookGuests;
+  if (cookCap > 0 && busiest > 0.85 * cookCap) {
+    out.push({
+      id: 'cooks', severity: Math.min(1, busiest / cookCap - 0.85 + 0.2),
+      text: `${a.kitchen.kitchenStaff} cook${a.kitchen.kitchenStaff === 1 ? '' : 's'} cooked for ${Math.round(busiest)} guests at the busiest service; together they handle about ${Math.round(cookCap)}.`,
+      fix: 'Hire another cook, or train Speed: a cook at Speed 50 handles 50 guests a service, a top cook up to 75.',
     });
   }
   const platesRan = lastDay?.services.some((s) => s.bottleneck === 'plates');

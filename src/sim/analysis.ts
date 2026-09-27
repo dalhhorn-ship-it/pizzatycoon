@@ -94,6 +94,8 @@ export interface KitchenStats {
   /** Station bottlenecks between equipment and staff. */
   stations: Stations;
   kitchenStaff: number;
+  /** Guests the cooks on the rota can cook for in this service (founder rule: 50 each at Speed 50, up to 75). */
+  cookGuests: number;
   avgSkill: number;
   kitchenSkillK: number;
   equipmentE: number;
@@ -139,6 +141,8 @@ export interface ServiceStats {
   servers: number;
   hasHost: boolean;
   serverSpeed: Record<Service, number>;
+  /** Guests the servers on the rota can look after in a service (founder rule: 35 each at Speed 50, up to 50). */
+  serverGuests: Record<Service, number>;
   loadMult: number;
   seatTime: number;
   orderTime: Record<Service, number>;
@@ -217,6 +221,18 @@ function personalSpeed(s: Staff, volumeGear: boolean, ctx: WorkContext): number 
 /** Quality on the old 1 to 10 scale, with pressure and morale (staff-management.md 2.2, 5.3). */
 function personalQuality(s: Staff, ctx: WorkContext): number {
   return (effAttr(s, 'quality', ctx.service, ctx.day) / 10) * pressureQuality(personalPressure(s, ctx)) * moraleQuality(s.morale);
+}
+
+/** Guests one cook can cook for in a service: faster, calmer and happier cooks handle more (founder rule). */
+function guestsFor(c: Staff, ctx: WorkContext): number {
+  const k = T.kitchen;
+  return clamp(k.guestsPerCook + k.guestsPerCookSlope * (personalSpeed(c, false, ctx) * nightOwlMult(c, ctx.service) - 1), k.guestsPerCookMin, k.guestsPerCookMax);
+}
+
+/** Guests one server can look after in a service: faster, calmer and happier servers handle more (founder rule). */
+function guestsForServer(s: Staff, ctx: WorkContext): number {
+  const t = T.service;
+  return clamp(t.guestsPerServer + t.guestsPerServerSlope * (personalSpeed(s, false, ctx) * nightOwlMult(s, ctx.service) - 1), t.guestsPerServerMin, t.guestsPerServerMax);
 }
 
 export const kitchenCrew = (state: Pick<GameState, 'staff' | 'day'>): Staff[] => onRota(state.staff, state.day).filter((s) => s.role === 'chef' || s.role === 'cook');
@@ -409,6 +425,7 @@ export function kitchenStats(state: GameState, service: Service = 'dinner', load
   const premises = PREMISES[state.premisesId];
   return {
     kitchenStaff: cooks.length,
+    cookGuests: cooks.reduce((x, c) => x + guestsFor(c, ctx), 0),
     avgSkill,
     kitchenSkillK: K,
     equipmentE: E,
@@ -520,6 +537,7 @@ export function serviceStats(state: GameState, kitchen: Record<Service, KitchenS
   const passMult = passE ? (EQUIPMENT[passE.itemId]?.effectMult ?? 1) * addonProduct(passE, 'serveMult') : 1;
   const mk = (f: (sv: Service) => number): Record<Service, number> => ({ lunch: f('lunch'), dinner: f('dinner') });
   const serverSpeed = mk(speedFor);
+  const serverGuests = mk((service) => servers.reduce((x, s) => x + guestsForServer(s, { service, load: load[service], day: state.day }), 0));
   const orderTime = mk((sv) => (serverSpeed[sv] > 0 ? T.service.order / serverSpeed[sv] : 99));
   const serveTime = mk((sv) => (serverSpeed[sv] > 0 ? (T.service.serve * passMult) / serverSpeed[sv] : 99));
   const payTime = mk((sv) => (serverSpeed[sv] > 0 ? T.service.payBus / serverSpeed[sv] : 99));
@@ -542,7 +560,7 @@ export function serviceStats(state: GameState, kitchen: Record<Service, KitchenS
   const washAddon = Math.max(1, ...state.equipment.filter((e) => ['sink', 'dishMachine'].includes(EQUIPMENT[e.itemId]?.role ?? '')).map((e) => addonProduct(e, 'washMult')));
   const platesPerHour =
     dishwashers.reduce((a, d) => a + T.kitchen.dishwasherRate * personalSpeed(d, false, dinner), 0) * machine * kitchen.dinner.flow.washMult * washAddon * st.crowdMult;
-  return { servers: servers.length, hasHost, serverSpeed, loadMult, seatTime, orderTime, serveTime, payTime, serviceTime, serviceScore, platesPerHour };
+  return { servers: servers.length, hasHost, serverSpeed, serverGuests, loadMult, seatTime, orderTime, serveTime, payTime, serviceTime, serviceScore, platesPerHour };
 }
 
 export function weeklyRent(state: GameState): number {

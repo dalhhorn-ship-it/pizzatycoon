@@ -118,6 +118,14 @@ export const T = {
     platesPerCover: 3,
     dishwasherRate: 60,
     plateStock: 90,
+    /**
+     * Guests one cook or chef can cook for in a service (founder rule): 50 for a cook at Speed 50, up to 75 for a top cook,
+     * fewer for a slow or nervous one. guests = guestsPerCook + guestsPerCookSlope x (speed multiplier - 1), clamped.
+     */
+    guestsPerCook: 50,
+    guestsPerCookSlope: 51,
+    guestsPerCookMin: 20,
+    guestsPerCookMax: 75,
     resale: 0.8,
   },
   /** Live rivals (competition.md 2, 3, 11.1). */
@@ -198,7 +206,7 @@ export const T = {
   delivery: {
     unlockRep: 60,
     unlockDays: 28,
-    orderRate: 0.005,
+    orderRate: 0.0065,
     adjacentWeight: 0.5,
     lunchShare: 0.4,
     mainsPerOrder: 1.8,
@@ -220,8 +228,18 @@ export const T = {
     packaging: { basic: 0.5, eco: 1.1 },
     travel: 0.92,
     ecoPackaging: 1.04,
-    novelty: 1.2,
-    noveltyDays: 14,
+    /**
+     * Delivery audience (founder rule: it builds slowly and needs campaigns): the share of the catchment that knows you
+     * deliver. Orders scale with it. It starts at audienceStart, grows by word of mouth at audienceOrganic x DRep/100 a day,
+     * much faster with delivery campaigns (audienceFromLift x the campaign's delivery lift a week), and fades by
+     * audienceFade a day. Older saves that already deliver start at audienceLegacy.
+     */
+    audienceStart: 0.05,
+    audienceOrganic: 0.004,
+    audienceFromLift: 1,
+    audienceFade: 0.003,
+    audienceTopRated: 1.5,
+    audienceLegacy: 0.5,
     background: 0.3,
     throttleDefault: 0.8,
     refusePenalty: 0.2,
@@ -287,6 +305,11 @@ export const T = {
     serve: 1.5,
     payBus: 4,
     tablesPerServer: 5,
+    /** Guests one server looks after in a service (founder rule): 35 at Speed 50, up to 50 for a top server, fewer for a slow one. */
+    guestsPerServer: 35,
+    guestsPerServerSlope: 31,
+    guestsPerServerMin: 15,
+    guestsPerServerMax: 50,
     loadPenalty: 0.15,
     loadFloor: 0.4,
     partySizeFit: 0.75,

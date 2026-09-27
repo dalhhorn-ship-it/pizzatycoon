@@ -73,7 +73,7 @@ export function newDelivery(day: number, mode: DeliveryMode): DeliveryState {
   const d = T.delivery;
   return {
     on: true, mode, markup: d.markupDefault, packaging: 'basic', throttle: d.throttleDefault, drep: d.startDRep, since: day,
-    vehicles: { bike: 0, scooter: 0 }, topRatedDays: 0, topRated: false, deal: null,
+    vehicles: { bike: 0, scooter: 0 }, topRatedDays: 0, topRated: false, deal: null, audience: d.audienceStart,
   };
 }
 
@@ -99,11 +99,29 @@ export function deliveryCompetition(state: GameState, districtId: string, drep: 
   return Math.min(0.9, c);
 }
 
-/** Orders a day multiplier from everything but the menu (6.3, 6.12). */
-export function deliveryReachMult(d: DeliveryState, day: number): number {
+/** Share of the catchment that knows this restaurant delivers (6.13). */
+export const audienceOf = (d: Pick<DeliveryState, 'audience'> | null | undefined): number => clamp(d?.audience ?? T.delivery.audienceLegacy, 0, 1);
+
+/** Orders a day multiplier from everything but the menu (6.3, 6.12, 6.13): only the people who know you deliver order. */
+export function deliveryReachMult(d: DeliveryState, _day: number): number {
   const t = T.delivery;
-  const novelty = day - d.since < t.noveltyDays ? t.novelty : 1;
-  return t.reach[d.mode] * novelty * (d.topRated ? t.topRatedBoost : 1) * (T.demand.repMultBase + T.demand.repMultSlope * d.drep);
+  return t.reach[d.mode] * audienceOf(d) * (d.topRated ? t.topRatedBoost : 1) * (T.demand.repMultBase + T.demand.repMultSlope * d.drep);
+}
+
+/**
+ * The delivery audience after a day (6.13): word of mouth from a good delivery rating grows it slowly, delivery campaigns
+ * grow it fast, and it fades a little every day. Growth only fills the part of the catchment that does not know you yet.
+ */
+export function nextAudience(d: DeliveryState, campaignLift: number, delivered: number): { after: number; organic: number; campaigns: number } {
+  const t = T.delivery;
+  const a = audienceOf(d);
+  const room = 1 - a;
+  // Word of mouth needs orders going out: nobody talks about a restaurant they never ordered from.
+  const talk = delivered >= 1 ? t.audienceOrganic * (d.drep / 100) * (d.topRated ? t.audienceTopRated : 1) : 0;
+  const organic = talk * room;
+  const campaigns = ((t.audienceFromLift * campaignLift) / 7) * room;
+  const after = clamp(a + organic + campaigns - t.audienceFade * a, 0, 1);
+  return { after, organic, campaigns };
 }
 
 export interface Riders {
@@ -166,6 +184,7 @@ export function nextDrep(d: DeliveryState, S: number, accepted: number, cancelle
 export function applyDeliveryDay(d: DeliveryState | null | undefined, day: DeliveryDay | undefined): void {
   if (!d || !day) return;
   d.drep = day.drepAfter;
+  if (day.audienceAfter !== undefined) d.audience = day.audienceAfter;
   d.topRated = day.topRated;
   d.topRatedDays = day.topRatedDays ?? d.topRatedDays;
 }

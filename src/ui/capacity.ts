@@ -7,15 +7,17 @@ import type { DayReport, GameState, ServiceReport } from '../sim/state';
 import { h, signed } from './dom';
 
 export const LIMIT_NAMES: Record<ServiceReport['bottleneck'], string> = {
-  seats: 'tables and serving', oven: 'the ovens', prep: 'the prep line', plates: 'clean plates', cold: 'dough in the fridges', none: 'nothing',
+  seats: 'tables and serving', servers: 'the servers (35 guests each a service, up to 50 for a top server)', oven: 'the ovens', prep: 'the prep line', plates: 'clean plates', cold: 'dough in the fridges', cooks: 'the cooks (50 guests each a service, up to 75 for a top cook)', none: 'nothing',
 };
 
 export const LIMIT_FIX: Record<ServiceReport['bottleneck'], string> = {
   seats: 'More tables, a host or a heat lamp pass.',
+  servers: 'Hire another server, or faster ones: a server at Speed 50 looks after 35 guests a service, a top server up to 50.',
   oven: 'Another or a bigger oven, a cook to tend them, or primi and secondi that skip the oven.',
   prep: 'Another prep station or a sheeter, a cook, a hand wash station, or a shorter menu.',
   plates: 'A dishwasher with room at the sink, a Double Sink or Dish Machine, or Plate Shelving.',
   cold: 'A Reach in Fridge or a Walk in Cooler.',
+  cooks: 'Hire another cook, or faster ones: a cook at Speed 50 serves 50 guests a service, a top cook up to 75.',
   none: '',
 };
 

@@ -39,7 +39,9 @@ export function allAdvice(reports: readonly DayReport[], state: GameState, ctx: 
   if (top && w.turnedAway > 5) {
     const k = top[0] as ServiceReport['bottleneck'];
     const name = LIMIT_NAMES[k];
-    out.push({ source: k === 'seats' ? 'Room' : 'Kitchen', text: `${name.charAt(0).toUpperCase()}${name.slice(1)} held back ${top[1]} of ${w.services} services and ${Math.round(w.turnedAway)} guests were turned away. ${LIMIT_FIX[k]}`, perWeek: w.turnedAway * margin * 0.5, act: { label: k === 'seats' ? 'Room' : 'Kitchen', run: () => nav.tab(k === 'seats' ? 'room' : 'kitchen') } });
+    // Cooks and servers are hired in the Squad tab; tables in the Room; stations in the Kitchen.
+    const [label, tab] = k === 'seats' ? ['Room', 'room'] as const : k === 'cooks' || k === 'servers' ? ['Squad', 'staff'] as const : ['Kitchen', 'kitchen'] as const;
+    out.push({ source: label, text: `${name.charAt(0).toUpperCase()}${name.slice(1)} held back ${top[1]} of ${w.services} services and ${Math.round(w.turnedAway)} guests were turned away. ${LIMIT_FIX[k]}`, perWeek: w.turnedAway * margin * 0.5, act: { label, run: () => nav.tab(tab) } });
   }
   const last = [...reports].reverse().find((r) => r.open);
   for (const i of stationIssues(state, analyse(state), last).slice(0, 2)) {

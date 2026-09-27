@@ -108,9 +108,9 @@ function ratingsStrip(w: Where, state: GameState): HTMLElement {
   const bn = new Set(last?.services.map((x) => x.bottleneck) ?? []);
   const items: [string, number, boolean][] = [
     ['Kitchen Quality', avg(kitchen, 'quality'), false],
-    ['Kitchen Speed', avg(kitchen, 'speed'), bn.has('oven') || bn.has('prep')],
+    ['Kitchen Speed', avg(kitchen, 'speed'), bn.has('oven') || bn.has('prep') || bn.has('cooks')],
     ['Floor Quality', avg(floor, 'quality'), false],
-    ['Floor Speed', avg(floor, 'speed'), bn.has('seats')],
+    ['Floor Speed', avg(floor, 'speed'), bn.has('seats') || bn.has('servers')],
     ['Composure', avg(on.filter((s) => s.role !== 'manager'), 'composure'), false],
     ['Team Morale', Math.round(mean(w.staff.map((s) => s.morale))), false],
   ];
