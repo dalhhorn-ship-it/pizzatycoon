@@ -306,6 +306,23 @@
 | F-201 | Business review | 6 or 12 weeks, all restaurants or one: KPI table with week on week and vs average, trend bars, call outs, per restaurant tables, copy as text | Must | Built |
 | F-202 | Week card on the Money tab | Six headline KPIs against the 6 week average and the worst call out | Should | Built |
 
+## W. Systems specified in the balance log (M0.1 and M0.2; spec: `balance.md` section 4)
+
+These shipped with their numbers in the balance tuning log; the log section is the spec and the test file the acceptance check.
+
+| ID | Feature | Description | Priority | Status | Spec | Tests |
+|---|---|---|---|---|---|---|
+| F-203 | Primi and secondi | Pasta and main courses that skip the oven but load the prep line | Should | Built | balance.md 4.2 | tests/menu.test.ts |
+| F-204 | Menu complexity | A wide or fancy menu slows prep and lengthens tickets unless the cooks are skilled | Should | Built | balance.md 4.2 | tests/menu.test.ts |
+| F-205 | Local following and visibility | A new restaurant starts unknown and earns regulars by word of mouth; small shopfronts are seen by fewer passers by | Must | Built | balance.md 4.3 | tests/following.test.ts |
+| F-206 | Fire safety upgrades | Upgrades that raise the seat limit and a kitchen guests can feel | Should | Built | balance.md 4.4 | tests/fireSafety.test.ts |
+| F-207 | Reputation follows satisfaction | Stricter reviews: reputation settles at -10 + 1.1 x satisfaction | Must | Built | balance.md 4.6 | tests/formulas.test.ts |
+| F-208 | The bar | Italian wine list, aperitivi and digestivi; a longer list sells second glasses | Should | Built | balance.md 4.7, 4.9 | tests/barAndDecor.test.ts |
+| F-209 | Room touches | Wall, table and ceiling decoration that takes no floor tile | Should | Built | balance.md 4.8 | tests/barAndDecor.test.ts |
+| F-210 | Reputation price premium | A good name lets you charge more before guests find it steep | Should | Built | balance.md 4.10 | tests/formulas.test.ts |
+| F-211 | Fast forward | Run a week without watching service; stops when something needs the player | Must | Built | prd.md 4, game.ts `runWeek` | tests/game.test.ts |
+| F-212 | Cloud saves and device linking | Local first saves with cloud sync, a 6 character link code and a conflict chooser | Must | Built | solution-design.md 8 | worker tests (manual) |
+
 ## Dependency map (critical path)
 
 ```
