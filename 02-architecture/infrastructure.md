@@ -24,7 +24,7 @@
 |---|---|---|
 | Local game only | `npm run dev` (saves stay local) | Developer |
 | Local with Worker and D1 | `npm run build && npm run worker:dev` | Developer |
-| Production | Cloudflare Worker `pizza-d` | Merge to main (when the secrets are set) |
+| Production | Cloudflare Worker `pizzatycoon` (the name Workers Builds is connected to; it must match `name` in wrangler.jsonc) | Merge to main (when the secrets are set) |
 
 ## CI pipeline (`.github/workflows/ci.yml`)
 
