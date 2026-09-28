@@ -7,9 +7,9 @@ import { T } from '../data/tunables';
 import type { Controller } from '../game/controller';
 import { fromSaveCode, toSaveCode } from '../save/saveFile';
 import { analyse } from '../sim/analysis';
-import { type GameEvent, moveQuote, newGameAt, RANK_NAMES, venueDeposit } from '../sim/game';
+import { type GameEvent, moveQuote, newGameAt, RANK_NAMES, venueDeposit, venueDepositInfo } from '../sim/game';
 import { locationName, managerOf } from '../sim/chain';
-import { ECONOMY_LABELS, ECONOMY_RANGE, type Economy, type EconomyKey, economyOf, PRESETS, presetName, RIVAL_OPTIONS, RIVAL_PRESETS, rivalSettingsOf, type RivalSettings } from '../sim/economy';
+import { DOWN_PAYMENT_OPTIONS, downPaymentOf, ECONOMY_LABELS, ECONOMY_RANGE, type Economy, type EconomyKey, economyOf, PRESETS, presetName, RIVAL_OPTIONS, RIVAL_PRESETS, rivalSettingsOf, type RivalSettings } from '../sim/economy';
 import { outlook } from './impact';
 import type { DayReport, GameState } from '../sim/state';
 import { h, modal, money, signed, stars, toast } from './dom';
@@ -258,7 +258,7 @@ export class App {
     let close = (): void => {};
     close = modal(h('div', { class: 'stack' },
       h('h2', null, `Open ${v.name}?`),
-      h('div', { class: 'muted' }, `You pay a deposit of ${money(venueDeposit(venueId))} and start ${v.name} from an empty room. ${locationName(state)} stays open under ${managerOf(state.staff)?.name ?? 'its manager'}; its profit keeps coming into your cash.`),
+      h('div', { class: 'muted' }, `You pay ${venueDepositInfo(venueId, state).downPayment ? 'a down payment' : 'a deposit'} of ${money(venueDeposit(venueId, state))} and start ${v.name} from an empty room. ${locationName(state)} stays open under ${managerOf(state.staff)?.name ?? 'its manager'}; its profit keeps coming into your cash.`),
       h('div', { class: 'row', style: 'justify-content:flex-end' },
         h('button', { class: 'ghost', onclick: () => close() }, 'Not yet'),
         h('button', { class: 'primary', onclick: () => {
@@ -791,6 +791,22 @@ export class App {
         : h('div', { class: 'small muted' }, 'Off: competition is a steady background number per neighbourhood, as before.'));
   }
 
+  /** Larger restaurants (fresh-start.md 13): a down payment for venues from a floor area up. */
+  private downPaymentCard(st: GameState, setEco: (e: Partial<Economy>) => void): HTMLElement {
+    const dp = downPaymentOf(st);
+    const seg = (items: [number, string][], cur: number, pick: (x: number) => void): HTMLElement =>
+      h('div', { class: 'seg wrap' }, ...items.map(([v, label]) => h('button', { class: cur === v ? 'on' : '', 'aria-pressed': cur === v ? 'true' : 'false', onclick: () => pick(v) }, label)));
+    const large = Object.values(VENUES).map((v) => venueDepositInfo(v.id, st)).filter((x) => x.downPayment);
+    return h('div', { class: 'card' },
+      h('h3', null, h('span', null, 'Larger restaurants'), h('span', { class: 'small' }, dp.amount ? `${money(dp.amount)} down from ${dp.minSqm} m²` : 'no down payment')),
+      h('div', { class: 'small muted' }, 'Landlords of larger places want real money down before they sign. The deposit for a venue of this size and up is at least the down payment, for a new game, a move and a new restaurant. You get it back when you move out, like any deposit.'),
+      h('span', null, 'Down payment'), seg(DOWN_PAYMENT_OPTIONS.amount, dp.amount, (v) => setEco({ downPayment: v })),
+      h('span', null, 'From a floor area of'), seg(DOWN_PAYMENT_OPTIONS.sqm, dp.minSqm, (v) => setEco({ downPaymentSqm: v })),
+      h('div', { class: 'small muted' }, dp.amount
+        ? `${large.length} of ${Object.keys(VENUES).length} venues ask more down than their rent deposit. The hole in the wall (120 m²) never does, so a new game can always start small.`
+        : 'Off: every venue asks the usual deposit of a few weeks of rent.'));
+  }
+
   private showSettings(): void {
     let close = (): void => {};
     const body = h('div', { class: 'stack' });
@@ -855,6 +871,8 @@ export class App {
           o.covers > 0
             ? h('div', { class: 'impact' }, 'With these settings an average day earns about ', h('b', { class: o.profit >= 0 ? 'good' : 'bad' }, money(o.profit)), ` from ${o.covers.toFixed(0)} guests (at your current reputation).`)
             : h('div', { class: 'impact' }, 'Set up and open your pizzeria to see what these settings do to a day\'s profit.')),
+
+        this.downPaymentCard(st, setEco),
 
         this.competitionCard(st, setEco),
 

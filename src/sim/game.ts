@@ -15,7 +15,7 @@ import { T } from '../data/tunables';
 import { VENUES, venueFor } from '../data/venues';
 import { occupiedTiles } from './analysis';
 import type { DayOptions } from './day';
-import { buyPrice, clampEconomy, type Economy, economyOf, sellPrice, startFollowing } from './economy';
+import { buyPrice, clampEconomy, downPaymentOf, type Economy, economyOf, sellPrice, startFollowing } from './economy';
 import { autoLayout, bestSpot, kitchenDims, layoutProblem, rectOf } from './kitchen';
 import { locationFacts } from './location';
 import { applyLocation, bestRep, extractLocation, locationName, managerOf, ownedVenues } from './chain';
@@ -96,10 +96,19 @@ export function depositFor(districtId: string, premisesId: string, venueId: stri
   return locationFacts(districtId, premisesId, venueId).weeklyRent * T.finance.leaseDepositWeeks;
 }
 
-/** Deposit for a venue on the city map (city-map.md 6). */
-export function venueDeposit(venueId: string): number {
+/** Deposit for a venue on the city map (city-map.md 6), and the down payment floor for a large one (fresh-start.md 13). */
+export function venueDepositInfo(venueId: string, state?: Pick<GameState, 'economy'> | null): { deposit: number; base: number; downPayment: boolean; sqm: number } {
   const v = VENUES[venueId];
-  return v ? depositFor(v.districtId, v.premisesId, v.id) : 0;
+  if (!v) return { deposit: 0, base: 0, downPayment: false, sqm: 0 };
+  const base = depositFor(v.districtId, v.premisesId, v.id);
+  const sqm = locationFacts(v.districtId, v.premisesId, v.id).sqm;
+  const dp = downPaymentOf(state);
+  const floor = dp.amount > 0 && sqm >= dp.minSqm ? dp.amount : 0;
+  return { deposit: Math.max(base, floor), base, downPayment: floor > base, sqm };
+}
+
+export function venueDeposit(venueId: string, state?: Pick<GameState, 'economy'> | null): number {
+  return venueDepositInfo(venueId, state).deposit;
 }
 
 export function seatLimit(premisesId: string, fireSafety: readonly string[] = []): number {
@@ -124,7 +133,7 @@ export function newGame(seed: number, districtId: string, premisesId = 'hole', e
     id: t.id, name: t.name, kind: t.kind, lines: makeLines(t.ingredients), price: t.price, onMenu: false,
     extraTags: [...(t.tags ?? [])], custom: false,
   }));
-  const deposit = depositFor(districtId, premisesId, venueId);
+  const deposit = venueId ? venueDeposit(venueId, { economy }) : depositFor(districtId, premisesId, venueId);
   const state: GameState = {
     schemaVersion: SCHEMA_VERSION, seed, day: 1, districtId, premisesId, venueId,
     cash: Math.round(T.finance.startingCash * (economy?.startingCash ?? 1)) - deposit, deposit,
@@ -412,7 +421,7 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       if (cmd.districtId === state.districtId && cmd.premisesId === state.premisesId) return fail(input, 'You already rent this place.');
       const venueId = venueFor(cmd.districtId, cmd.premisesId);
       const sameDistrictMove = cmd.districtId === state.districtId;
-      const newDeposit = depositFor(cmd.districtId, cmd.premisesId, venueId);
+      const newDeposit = venueId ? venueDeposit(venueId, state) : depositFor(cmd.districtId, cmd.premisesId, venueId);
       if (!newDeposit) return fail(input, 'Unknown premises.');
       if (state.cash + state.deposit < newDeposit) return fail(input, `You need ${Math.ceil(newDeposit - state.deposit - state.cash).toLocaleString('en-US')} more for the deposit.`);
       state.cash += state.deposit - newDeposit;
@@ -738,7 +747,7 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       }
       if (!managerOf(state.staff)) return fail(input, `Hire a restaurant manager for ${here} first, so it keeps running while you open the new one.`);
       const held = state.venueHold?.venueId === venue.id && state.venueHold.untilDay > state.day ? state.venueHold.fee : 0;
-      const deposit = venueDeposit(venue.id);
+      const deposit = venueDeposit(venue.id, state);
       if (state.cash < deposit - held) return fail(input, `The deposit is ${money0(deposit - held)}; you need ${money0(deposit - held - state.cash)} more.`);
       state.branches.push(extractLocation(state));
       const id = Math.max(state.locationId, ...state.branches.map((b) => b.id)) + 1;
@@ -832,7 +841,7 @@ export function moveQuote(state: GameState, venueId: string): MoveQuote | null {
   const venue = VENUES[venueId];
   if (!venue || !PREMISES[venue.premisesId]) return null;
   const refund = state.deposit;
-  const newDeposit = venueDeposit(venueId);
+  const newDeposit = venueDeposit(venueId, state);
   const dining = moveDining(state, venue.premisesId);
   const kitchen = moveKitchen(state, venue.premisesId);
   const resale =

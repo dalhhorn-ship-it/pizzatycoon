@@ -7,10 +7,10 @@ import type { SegmentId, Venue } from '../data/types';
 import { T } from '../data/tunables';
 import { VENUES } from '../data/venues';
 import { bestRep, CARETAKER_TEXT, locationName, managerOf, ownedVenues } from '../sim/chain';
-import { type Command, moveQuote, seatLimit, venueDeposit } from '../sim/game';
+import { type Command, moveQuote, seatLimit, venueDeposit, venueDepositInfo } from '../sim/game';
 import { ARCHETYPES } from '../data/rivals';
 import { activeRivals, archetypeKnown, proximity, proximityLabel, rivalAt, rivalLocations, viewerOf } from '../sim/rivals';
-import { economyOf } from '../sim/economy';
+import { downPaymentOf, economyOf } from '../sim/economy';
 import { bestFor, type LocationFacts, locationFacts, stateLocation } from '../sim/location';
 import type { GameState } from '../sim/state';
 import { h, money, pct, signed } from './dom';
@@ -331,16 +331,19 @@ export class CityView {
     const occupant = this.market ? rivalAt(this.market, v.id) : undefined;
     if (occupant && !here) return h('div', { class: 'card rentbox' }, h('div', { class: 'small muted' }, `${occupant.name} has the lease here. If they close, the venue comes back on the market.`));
     if (ctx.mode === 'new' || !ctx.state) {
-      const deposit = venueDeposit(v.id);
+      const info = venueDepositInfo(v.id, ctx.preview);
+      const deposit = info.deposit;
       const left = (ctx.startCash ?? T.finance.startingCash) - deposit;
       return h('div', { class: 'card rentbox' },
         h('div', { class: 'kv' },
           h('span', null, 'Rent'), h('b', null, `${money(f.weeklyRent)}/week`),
           h('span', null, 'Seats allowed'), h('b', null, String(seatLimit(v.premisesId))),
-          h('span', null, `Deposit (${T.finance.leaseDepositWeeks} weeks rent)`), h('b', null, money(deposit)),
+          h('span', null, info.downPayment ? `Down payment (${downPaymentOf(ctx.preview).minSqm} m² and up)` : `Deposit (${T.finance.leaseDepositWeeks} weeks rent)`), h('b', null, money(deposit)),
           h('span', null, 'Left to set up with'), h('b', { class: left < 0 ? 'bad' : left < FIT_OUT_MIN ? 'warn' : 'good' }, money(left))),
         left < 0
-          ? h('div', { class: 'small bad' }, `You need ${money(-left)} more. Start in a hole in the wall and move here later.`)
+          ? h('div', { class: 'small bad' }, info.downPayment
+            ? `Landlords ask a ${money(deposit)} down payment for ${downPaymentOf(ctx.preview).minSqm} m² and up; you need ${money(-left)} more. Start in a hole in the wall and grow into a place like this. You can change this rule under ⚙ Settings.`
+            : `You need ${money(-left)} more. Start in a hole in the wall and move here later.`)
           : left < FIT_OUT_MIN
             ? h('div', { class: 'small warn' }, `The cheapest working pizzeria costs about ${money(FIT_OUT_MIN)} to fit out. You could borrow, but a smaller place is the cosy way to start.`)
             : null,
@@ -366,7 +369,7 @@ export class CityView {
     return h('div', { class: 'card rentbox' },
       h('h3', null, 'Cost to move here'),
       h('div', { class: 'pnl' },
-        h('span', null, `New deposit (${T.finance.leaseDepositWeeks} weeks)`), h('b', null, money(-q.newDeposit)),
+        h('span', null, venueDepositInfo(v.id, ctx.state).downPayment ? `Down payment (${downPaymentOf(ctx.state).minSqm} m² and up)` : `New deposit (${T.finance.leaseDepositWeeks} weeks)`), h('b', null, money(-q.newDeposit)),
         h('span', null, 'Old deposit back'), h('b', null, money(q.refund)),
         h('span', null, 'Moving van and fit out'), h('b', null, money(-q.movingFee)),
         q.resale > 0 ? h('span', null, 'Items that do not fit, sold at 80%') : null, q.resale > 0 ? h('b', null, money(q.resale)) : null,
@@ -399,14 +402,14 @@ export class CityView {
   private openBox(v: Venue): HTMLElement {
     const ctx = this.ctx as CityCtx;
     const state = ctx.state as GameState;
-    const deposit = venueDeposit(v.id);
+    const deposit = venueDeposit(v.id, state);
     const manager = managerOf(state.staff);
     const short = state.cash < deposit;
     const rep = bestRep(state);
     const repOk = rep >= T.manager.openRep;
     return h('div', { class: 'stack', style: 'margin-top:10px' },
       h('h3', null, 'Or open it as a new restaurant'),
-      h('div', { class: 'small muted' }, `Keep ${locationName(state)} and open here as well. The new place starts empty, with your recipe book; you choose its own menu. Deposit ${money(deposit)}; the rest comes from shared cash.`),
+      h('div', { class: 'small muted' }, `Keep ${locationName(state)} and open here as well. The new place starts empty, with your recipe book; you choose its own menu. ${venueDepositInfo(v.id, state).downPayment ? 'Down payment' : 'Deposit'} ${money(deposit)}; the rest comes from shared cash.`),
       repOk
         ? null
         : h('div', { class: 'small warn' }, `Build your name first: you need reputation ${T.manager.openRep} (${(T.manager.openRep / 20).toFixed(1)} stars) at a restaurant you run before a landlord takes you on for a second one. Now ${Math.floor(rep)}.`),

@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'vitest';
+import { DOWN_PAYMENT, PRESETS } from '../src/sim/economy';
 import { DISTRICTS, PREMISES } from '../src/data/districts';
 import { FURNITURE } from '../src/data/furniture';
 import { SEGMENT_IDS } from '../src/data/segments';
 import { T } from '../src/data/tunables';
 import { VENUES } from '../src/data/venues';
 import { deserialise, serialise } from '../src/save/saveFile';
-import { apply, moveQuote, newGame, newGameAt, seatLimit, venueDeposit, withStarterKit } from '../src/sim/game';
+import { apply, moveQuote, newGame, newGameAt, seatLimit, venueDeposit, venueDepositInfo, withStarterKit } from '../src/sim/game';
 import { layoutProblem, kitchenDims } from '../src/sim/kitchen';
 import { locationFacts } from '../src/sim/location';
 import type { GameState } from '../src/sim/state';
@@ -65,8 +66,11 @@ describe('city map venues (city-map.md)', () => {
     expect(f.weeklyRent).toBe((12 * 8 + 30) * 19);
     expect(f.footTraffic).toBeCloseTo(4200 * 1.15);
     expect(f.sqm).toBe((12 * 8 + 14 * 6) * T.city.sqmPerTile);
-    expect(s.deposit).toBe(f.weeklyRent * T.finance.leaseDepositWeeks);
+    // A corner venue is over 150 m²: the down payment floor applies (fresh-start.md 13).
+    expect(s.deposit).toBe(Math.max(f.weeklyRent * T.finance.leaseDepositWeeks, DOWN_PAYMENT.amount));
     expect(s.cash).toBe(T.finance.startingCash - s.deposit);
+    const off = newGameAt(3, v.id, { ...PRESETS.normal, downPayment: 0 });
+    expect(off.deposit).toBe(f.weeklyRent * T.finance.leaseDepositWeeks);
   });
 
   test('every venue can run a day and makes sales', () => {
@@ -82,7 +86,7 @@ describe('rentVenue (city-map.md 6)', () => {
   test('AC-297, AC-301: charges the quote and keeps team, menu and loan', () => {
     let s = withStarterKit(newGameAt(9, 'lockKeeper'));
     s = apply(s, { type: 'takeLoan', amount: 5000 }).state;
-    s = { ...s, cash: s.cash + 5000 };
+    s = { ...s, cash: s.cash + 25000 };
     const q = moveQuote(s, 'bridgeStreet')!;
     expect(q.total).toBeCloseTo(q.newDeposit - q.refund + T.city.movingFee - q.resale);
     const r = apply(s, { type: 'rentVenue', venueId: 'bridgeStreet' });
@@ -164,5 +168,38 @@ describe('save migration v2 to v4', () => {
     expect(loaded.state.venueId).toBe('quaysideNook');
     expect(loaded.state.deposit).toBeGreaterThan(0);
     expect(run(loaded.state, 2).day).toBe(3);
+  });
+});
+
+describe('down payment for larger restaurants (fresh-start.md 13)', () => {
+  test('AC-342: venues of 150 m² and up ask at least $20,000 down; the hole in the wall never does', () => {
+    for (const v of Object.values(VENUES)) {
+      const info = venueDepositInfo(v.id, null);
+      if (info.sqm >= DOWN_PAYMENT.minSqm) expect(info.deposit, v.id).toBeGreaterThanOrEqual(DOWN_PAYMENT.amount);
+      else expect(info.deposit, v.id).toBe(info.base);
+      if (v.premisesId === 'hole') expect(info.downPayment, v.id).toBe(false);
+    }
+  });
+
+  test('AC-343: the settings switch it off, change the amount and the floor area, and snap to the offered steps', () => {
+    let s = newGameAt(9, 'towpathKiosk');
+    const big = Object.values(VENUES).find((v) => v.premisesId === 'medium')!;
+    s = apply(s, { type: 'setEconomy', economy: { downPayment: 0 } }).state;
+    expect(venueDepositInfo(big.id, s).downPayment).toBe(false);
+    s = apply(s, { type: 'setEconomy', economy: { downPayment: 48000, downPaymentSqm: 260 } }).state;
+    expect(s.economy?.downPayment).toBe(50000);
+    expect(s.economy?.downPaymentSqm).toBe(250);
+    expect(venueDeposit(big.id, s)).toBe(50000);
+    // Other settings keep the rule.
+    s = apply(s, { type: 'setEconomy', economy: { demand: 1.1 } }).state;
+    expect(s.economy?.downPayment).toBe(50000);
+  });
+
+  test('AC-344: moving from a small venue to a large one needs the down payment in cash', () => {
+    const s = { ...withStarterKit(newGameAt(9, 'towpathKiosk')), cash: 5000 };
+    expect(VENUES.towpathKiosk?.premisesId).toBe('hole');
+    const q = moveQuote(s, 'bridgeStreet')!;
+    expect(q.newDeposit).toBeGreaterThanOrEqual(DOWN_PAYMENT.amount);
+    expect(apply(s, { type: 'rentVenue', venueId: 'bridgeStreet' }).error).toBeTruthy();
   });
 });

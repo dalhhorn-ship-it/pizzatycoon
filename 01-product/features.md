@@ -345,6 +345,7 @@ These shipped with their numbers in the balance tuning log; the log section is t
 | F-233 | Delivery summary in Money | One line and a button to the Delivery tab | Must | Built | delivery-tab.md 4 | manual |
 | F-234 | Standard delivery menu | The best selling mains, a slider for how many: more orders and audience, more kitchen work | Should | Built | delivery-tab.md 5.2 | tests/deliveryTab.test.ts |
 | F-235 | Delivery counts for cooks and capacity | Delivery load on the capacity cards and in the cooks warning | Must | Built | delivery-tab.md 5.3 | tests/deliveryTab.test.ts |
+| F-236 | Down payment for larger restaurants | At least $20,000 down for venues of 150 m² and up; amount and floor area in settings | Must | Built | fresh-start.md 13 | tests/city.test.ts |
 
 ## Dependency map (critical path)
 
