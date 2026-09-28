@@ -4,7 +4,7 @@ import type { SegmentId, Unlock } from './types';
 
 export type CampaignId =
   | 'flyers' | 'social' | 'studentDeal' | 'familySundays' | 'lunchClub' | 'tourGuide' | 'foodiePress' | 'loyalty' | 'radio' | 'promotedListing'
-  | 'appVoucher' | 'doorHangers' | 'foodInfluencer';
+  | 'appVoucher' | 'doorHangers' | 'foodInfluencer' | 'lunchFlyers' | 'lunchCoupons';
 
 export interface Campaign {
   id: CampaignId;
@@ -34,6 +34,8 @@ export interface Campaign {
   lunchOnly?: boolean;
   /** Extra lift on Sundays. */
   sundayLift?: number;
+  /** Lunch coupons: guests it reaches pay this share less for mains at lunch (already weighted by how many redeem). */
+  lunchDiscount?: number;
   /** Students pay this much less for mains. */
   discount?: { segment: SegmentId; share: number };
   /** Loyalty cards: share of dining sales, following decline x0.5 and target +0.05. */
@@ -102,6 +104,16 @@ export const CAMPAIGNS: Record<CampaignId, Campaign> = {
     id: 'foodInfluencer', name: 'Food influencer unboxing', cost: 600, scaled: false, runDays: 7, renews: false, lift: 0.04,
     audience: { students: 1, professionals: 0.6, foodies: 0.5 }, deliveryLift: 0.35, awareness: 0.03,
     unlock: 'deliveryAny', effect: '+35% delivery orders for a week, a little buzz in the room too', blurb: 'A local foodie opens your box on camera. One week of fame.', rivals: false,
+  },
+  lunchFlyers: {
+    id: 'lunchFlyers', name: 'Lunch flyers', cost: 80, scaled: true, runDays: 7, renews: true, lift: 0.12, lunchOnly: true,
+    audience: { professionals: 1, students: 0.7, seniors: 0.5, tourists: 0.4, families: 0.3, foodies: 0.3 }, deliveryLift: 0, awareness: 0.015,
+    unlock: { kind: 'start' }, effect: '+12% lunch guests, most of all from the offices', blurb: 'Today\'s lunch menu on every desk in the office blocks nearby.', rivals: false,
+  },
+  lunchCoupons: {
+    id: 'lunchCoupons', name: 'Lunch coupons', cost: 60, scaled: true, runDays: 7, renews: true, lift: 0.25, lunchOnly: true, lunchDiscount: 0.07,
+    audience: { students: 1, professionals: 0.9, seniors: 0.9, families: 0.7, tourists: 0.4, foodies: 0.2 }, deliveryLift: 0, awareness: 0.01,
+    unlock: { kind: 'day', day: 8 }, effect: '+25% lunch guests; coupon holders pay 20% less for mains at lunch (about 7% across lunch)', blurb: '20% off your pizza before 3pm. Cheap to print, paid for in margin.', rivals: false,
   },
 };
 

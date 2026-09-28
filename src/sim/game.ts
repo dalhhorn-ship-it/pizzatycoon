@@ -8,6 +8,7 @@ import { ROOM_TOUCHES } from '../data/roomTouches';
 import { FURNITURE, fireSeats } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
 import { menuSection, PIZZA_BASE, PRIMO_BASES, RECIPE_BOOK } from '../data/recipes';
+import { SERVICE_DEALS } from '../data/serviceDeals';
 import { ROLE_NAMES } from '../data/staff';
 import { COURSES } from '../data/training';
 import type { MainKind, TierId } from '../data/types';
@@ -34,6 +35,7 @@ export { isUnlocked, loanPayment, RANK_NAMES, unlockText } from './progress';
 import { type Command, fail, type GameEvent, type Result } from './commands';
 import { isUnlocked, unlockText } from './progress';
 import { runDay, runWeek } from './settle';
+import { dealMissing, missingText } from './serviceDeals';
 import { marketCommand } from './marketCommands';
 
 // ---------- Helpers ----------
@@ -377,6 +379,13 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
     case 'setFloorPolicy': {
       const now = floorOf(state);
       state.floorPolicy = { style: cmd.style ?? now.style, bookings: cmd.bookings ?? now.bookings };
+      break;
+    }
+    case 'setServiceDeal': {
+      const deal = cmd.deal ? SERVICE_DEALS[cmd.deal] : null;
+      if (cmd.deal && (!deal || deal.service !== cmd.service)) return fail(input, 'That set menu is not for this service.');
+      if (cmd.deal && dealMissing(state, cmd.deal).length) return fail(input, `${missingText(dealMissing(state, cmd.deal))}.`);
+      state.serviceDeals = { ...(state.serviceDeals ?? { lunch: null, dinner: null }), [cmd.service]: cmd.deal };
       break;
     }
     case 'removeFurniture': {

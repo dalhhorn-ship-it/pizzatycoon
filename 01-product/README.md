@@ -19,6 +19,7 @@ What each document is the authority for. When two documents disagree, the newer 
 | `business-review.md` | M0.6 | Built | Weekly KPIs and the business review |
 | `delivery-tab.md` | M0.7 | Built; balance notes open (section 9) | Two layers of tabs, the Delivery tab (promotion, menu and deals, fleet, scorecard), zone, vehicles, delivery menu, minimum order, deal days |
 | `floor-service.md` | M0.7 | Built | Counter service, bookings and standing places for quick bites |
+| `service-deals.md` | M0.7 | Built | The restaurant scorecard for lunch and dinner, set menus, lunch flyers and coupons |
 | `../cleanup-sprints.md` | M0.6 | In progress | The cleanup backlog and sprint scope |
 
-Numbering: feature IDs run F-01 to F-236 and ACs AC-01 to AC-344 across all documents, with no reuse (the city map moved to F-191 to F-199 and AC-293 to AC-310). A new addendum takes the next free numbers.
+Numbering: feature IDs run F-01 to F-239 and ACs AC-01 to AC-350 across all documents, with no reuse (the city map moved to F-191 to F-199 and AC-293 to AC-310). A new addendum takes the next free numbers.

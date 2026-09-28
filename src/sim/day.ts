@@ -13,7 +13,9 @@ import { economyOf } from './economy';
 import { stateLocation } from './location';
 import { Rng } from './rng';
 import { hasTalent, onRota } from './staff';
-import { awarenessGain, discountFor, hasLoyalty, mktDelivery, mktFor, runSpendToday } from './marketing';
+import { awarenessGain, discountFor, hasLoyalty, lunchDiscountFor, mktDelivery, mktFor, runSpendToday } from './marketing';
+import { COUNTER_TAKE, MAX_TAKE, roomFit } from '../data/serviceDeals';
+import { liveDeal } from './serviceDeals';
 import { audienceOf, catchment, dealTerms, deliveryMenu, menuEffectOf, minOrderOf, zoneOf, deliveryCompetition, type DeliveryInput, deliveryLive, deliveryMinutes, deliveryReachMult, nextAudience, packingOf, ridersToday, rivalDeliveryOrders, settleDelivery } from './delivery';
 import { playerCompetition } from './rivals';
 import { followingDemand, nextFollowing, queueDelay, valueScore } from './formulas';
@@ -205,13 +207,23 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     sides: Record<string, Choice | null>;
     /** Side orders per guest by kind, for this segment. */
     sideAttach: Record<SideKind, number>;
-    /** Extra minutes at the table from aperitivi and digestivi. */
+    /** Extra minutes at the table from aperitivi, digestivi and set menus. */
     extraMeal: Record<Service, number>;
     r: number;
     demand: Record<Service, number>;
     check: number;
     costPerCover: number;
     wastePerCover: number;
+    /** Check and food cost per cover at each service, after set menus and lunch coupons (service-deals.md 3). */
+    svCheck: Record<Service, number>;
+    svCost: Record<Service, number>;
+    /** Share of guests on the set menu, money given away per cover, extra prep work per cover, and courses sold. */
+    take: Record<Service, number>;
+    given: Record<Service, number>;
+    dealLoad: Record<Service, number>;
+    /** Share off the price of a main, as guests feel it (set menu and coupons), for value for money. */
+    valueCut: Record<Service, number>;
+    extraDishes: Record<Service, { c: Choice; n: number }[]>;
   }
   const segs: SegCalc[] = [];
   // Every segment's pull first (competition.md 2.2), then the competition it meets, then demand.
@@ -245,6 +257,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     segPre.push({ id, choice, r, fit, priceMult, budgetMult, qualityMult, speedMult, discount });
   }
   const competition = playerCompetition(state, district, pull, opts.live !== false);
+  const dealBy = { lunch: liveDeal(state, 'lunch'), dinner: liveDeal(state, 'dinner') };
   for (const { id, choice, r, fit, priceMult, budgetMult, qualityMult, speedMult, discount } of segPre) {
     const cEff = competition.cEff[id];
     const fameMult = id === 'foodies' ? 1 + T.demand.chefFameFoodieBonus * chefFame : 1;
@@ -278,10 +291,59 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
       cost += sideAttach[k] * c.avgCost;
       waste += sideAttach[k] * c.wasteCost;
     }
+    // Set menus and lunch coupons (service-deals.md 3): per service, on top of the plain check.
+    const extraMeal = { lunch: barMinutes('lunch'), dinner: barMinutes('dinner') };
+    const svCheck = { lunch: check, dinner: check };
+    const svCost = { lunch: cost, dinner: cost };
+    const take = { lunch: 0, dinner: 0 };
+    const given = { lunch: 0, dinner: 0 };
+    const dealLoad = { lunch: 0, dinner: 0 };
+    const valueCut = { lunch: 0, dinner: 0 };
+    const extraDishes: Record<Service, { c: Choice; n: number }[]> = { lunch: [], dinner: [] };
+    const coupon = lunchDiscountFor(campaigns, id, state.day);
+    let primi: Choice | null | undefined;
+    if (coupon > 0) {
+      const off = coupon * choice.avgPrice * (1 - discount);
+      svCheck.lunch -= off;
+      given.lunch += off;
+      valueCut.lunch += coupon;
+    }
+    for (const sv of SERVICES) {
+      const deal = dealBy[sv];
+      if (!deal) continue;
+      const appeal = (deal.appeal[id] ?? 0) * (floor.style === 'counter' ? COUNTER_TAKE : 1) * roomFit(deal, ambience);
+      const t = Math.min(MAX_TAKE, deal.take * appeal);
+      if (t <= 0) continue;
+      demandBy[sv] *= 1 + deal.lift * appeal;
+      let full = choice.avgPrice;
+      let normal = choice.avgPrice * (1 - discount) - (sv === 'lunch' ? coupon * choice.avgPrice * (1 - discount) : 0);
+      let extraCost = 0;
+      let load = 0;
+      for (const k of deal.courses) {
+        const c = k === 'primo' ? (primi ??= chooseDishes(onMenu.filter((r) => r.kind === 'primo'), a, id, district.wealth)) : sides[k] ?? null;
+        if (!c) continue;
+        const had = k === 'primo' ? 0 : k === 'aperitivo' || k === 'digestivo' ? attach[k] * affinity * (sv === 'lunch' ? T.attach.barLunch : 1) : sideAttach[k];
+        const more = Math.max(0, 1 - had);
+        full += c.avgPrice;
+        normal += had * c.avgPrice;
+        extraCost += more * c.avgCost;
+        load += k === 'primo' ? c.avgWork : k === 'starter' || k === 'dessert' ? T.kitchen.prepLoadFactor * more : 0;
+        extraDishes[sv].push({ c, n: t * more });
+      }
+      const paid = full * (1 - deal.discount);
+      svCheck[sv] += t * (paid - normal);
+      svCost[sv] += t * extraCost;
+      given[sv] += t * full * deal.discount;
+      take[sv] = t;
+      dealLoad[sv] = t * load;
+      extraMeal[sv] += t * deal.minutes;
+      valueCut[sv] += t * deal.discount;
+    }
     segs.push({
-      id, choice, sides, sideAttach, extraMeal: { lunch: barMinutes('lunch'), dinner: barMinutes('dinner') }, r,
+      id, choice, sides, sideAttach, extraMeal, r,
       demand: demandBy,
       check, costPerCover: cost, wastePerCover: waste,
+      svCheck, svCost, take, given, dealLoad, valueCut, extraDishes,
     });
   }
 
@@ -372,7 +434,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const mix = (f: (s: SegCalc) => number, fallback: number): number =>
       demand > 0 ? segs.reduce((x, s) => x + s.demand[sv] * f(s), 0) / demand : fallback;
     const ovenShare = mix((s) => s.choice.ovenShare, 1);
-    const prepLoad = mix((s) => s.choice.avgWork, 1) + sideLoad;
+    const prepLoad = mix((s) => s.choice.avgWork + s.dealLoad[sv], 1) + sideLoad;
     const prepPerHour = k.prepPerHour / prepLoad;
     const ovenCoversPerHour = ovenShare > 0 ? k.ovenPerHour / ovenShare : Infinity;
     const plateCap = (a.service.platesPerHour / T.kitchen.platesPerCover) * hours + stations.plateStock / T.kitchen.platesPerCover;
@@ -477,6 +539,9 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   let covers = 0;
   let satWeighted = 0;
   const dishSales: Record<string, number> = {};
+  const svMoney: Record<Service, { sales: number; food: number; dealGuests: number; given: number }> = {
+    lunch: { sales: 0, food: 0, dealGuests: 0, given: 0 }, dinner: { sales: 0, food: 0, dealGuests: 0, given: 0 },
+  };
   const foodBy: Partial<Record<SegmentId, number>> = {};
   for (const s of segs) {
     const seg = SEGMENTS[s.id];
@@ -490,7 +555,8 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
       1,
     );
     foodBy[s.id] = food;
-    const value = valueScore(s.r, seg.elasticity);
+    const cut = n > 0 ? SERVICES.reduce((x, sv) => x + ((served[s.id]?.[sv] ?? 0) / n) * s.valueCut[sv], 0) : 0;
+    const value = valueScore(s.r * (1 - cut), seg.elasticity);
     let wait = 0;
     for (const sv of SERVICES) {
       const tol = seg.waitTolerance[sv];
@@ -505,8 +571,17 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
       (T.satisfaction.wFood * food + T.satisfaction.wService * scores.service + T.satisfaction.wAmbience * scores.ambience +
         T.satisfaction.wValue * value + T.satisfaction.wWait * wait);
     segmentReports.push({ segment: s.id, demand: s.demand.lunch + s.demand.dinner, served: n, satisfaction: S, scores });
-    sales += n * s.check;
-    ingredients += n * s.costPerCover;
+    for (const sv of SERVICES) {
+      const m = served[s.id]?.[sv] ?? 0;
+      const b = svMoney[sv];
+      b.sales += m * s.svCheck[sv];
+      b.food += m * s.svCost[sv];
+      b.dealGuests += m * s.take[sv];
+      b.given += m * s.given[sv];
+      for (const x of s.extraDishes[sv]) for (const p of x.c.probs) dishSales[p.recipe.id] = (dishSales[p.recipe.id] ?? 0) + m * x.n * p.p;
+    }
+    sales += SERVICES.reduce((x, sv) => x + (served[s.id]?.[sv] ?? 0) * s.svCheck[sv], 0);
+    ingredients += SERVICES.reduce((x, sv) => x + (served[s.id]?.[sv] ?? 0) * s.svCost[sv], 0);
     waste += n * s.wastePerCover;
     covers += n;
     satWeighted += n * S;
@@ -518,6 +593,10 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     }
   }
   const satisfaction = covers > 0 ? satWeighted / covers : 0;
+  for (const r of services) {
+    const b = svMoney[r.service];
+    Object.assign(r, { sales: b.sales, food: b.food, dealGuests: b.dealGuests, dealGiven: b.given, deal: dealBy[r.service]?.id ?? null });
+  }
 
   // ---- Reviews and reputation (prd.md 5.10) ----
   const reviews: Review[] = [];

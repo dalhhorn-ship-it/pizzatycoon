@@ -78,7 +78,7 @@ async function openTab(group, tab) {
 }
 
 await step('every tab opens', async () => {
-  for (const tab of ['Menu', 'Kitchen', 'Room', 'Squad']) await openTab('Restaurant', tab);
+  for (const tab of ['Menu', 'Kitchen', 'Room', 'Squad', 'Scorecard']) await openTab('Restaurant', tab);
   for (const tab of ['Promotion', 'Menu & deals', 'Fleet', 'Scorecard']) await openTab('Delivery', tab);
   await openTab('Business', 'Money');
   await page.getByText('Demand and capacity').first().waitFor({ state: 'attached', timeout: 1 }).catch(() => undefined);
@@ -104,6 +104,14 @@ await step('a week runs and the report shows the top 3', async () => {
   await page.getByRole('button', { name: /Run a week/ }).click();
   await page.getByText('Top 3 this week').waitFor({ timeout: 20000 });
   await dismiss();
+});
+
+await step('the restaurant scorecard grades lunch and dinner', async () => {
+  await dismiss();
+  await openTab('Restaurant', 'Scorecard');
+  await page.getByText('Restaurant score').first().waitFor({ timeout: 5000 });
+  await page.getByText('Lunch promotions').first().waitFor({ timeout: 5000 });
+  if (process.env.SMOKE_SHOTS) await page.screenshot({ path: `${process.env.SMOKE_SHOTS}/scorecard.png`, fullPage: true });
 });
 
 await step('the Rivals tab and the Marketing sheet', async () => {

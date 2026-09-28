@@ -1,5 +1,6 @@
 import type { CampaignId } from '../data/campaigns';
 import type { DeliveryDealId } from '../data/deliveryDeals';
+import type { ServiceDealId } from '../data/serviceDeals';
 import type { ArchetypeId, RivalTier } from '../data/rivals';
 import type { AttrId, DishKind, PersonalityId, RankId, Role, SegmentId, Service, TalentId, TierId } from '../data/types';
 
@@ -315,6 +316,14 @@ export interface ServiceReport {
   /** Delivery load at this service in guest equivalents (a main x kitchen work): wanted per hour, and taken in all. */
   deliveryPerHour?: number;
   deliveryCovers?: number;
+  /** Dining sales and food cost at this service (service-deals.md 4); missing on older reports. */
+  sales?: number;
+  food?: number;
+  /** Guests on the set menu, and money the set menu and lunch coupons gave away. */
+  dealGuests?: number;
+  dealGiven?: number;
+  /** The set menu running at this service. */
+  deal?: ServiceDealId | null;
 }
 
 export interface SegmentReport {
@@ -466,6 +475,12 @@ export interface FloorPolicy {
 export const DEFAULT_FLOOR: FloorPolicy = { style: 'table', bookings: 'mixed' };
 export const floorOf = (s: Pick<GameState, 'floorPolicy'>): FloorPolicy => ({ ...DEFAULT_FLOOR, ...(s.floorPolicy ?? {}) });
 
+/** The set menu at each service (service-deals.md 2). */
+export interface ServiceDeals {
+  lunch: ServiceDealId | null;
+  dinner: ServiceDealId | null;
+}
+
 /** How the manager runs the team at a restaurant (staff-management.md 8.1). */
 export interface StaffPolicy {
   budget: number;
@@ -493,7 +508,7 @@ export interface ManagerLog {
 export const LOCATION_KEYS = [
   'districtId', 'premisesId', 'venueId', 'deposit', 'rep', 'following', 'recipes', 'furniture', 'equipment', 'staff',
   'daysOpen', 'fireSafety', 'roomTouches', 'history', 'departures', 'staffPolicy', 'delegateStaff', 'managerLog', 'campaigns', 'delivery', 'kpis',
-  'floorPolicy',
+  'floorPolicy', 'serviceDeals',
 ] as const;
 export type LocationKey = (typeof LOCATION_KEYS)[number];
 
@@ -511,6 +526,7 @@ export const KEY_SCOPE: Record<keyof GameState, 'shared' | 'location' | 'transie
   recipes: 'location', furniture: 'location', equipment: 'location', staff: 'location', daysOpen: 'location', fireSafety: 'location',
   roomTouches: 'location', history: 'location', departures: 'location', staffPolicy: 'location', delegateStaff: 'location',
   managerLog: 'location', campaigns: 'location', delivery: 'location', kpis: 'location', floorPolicy: 'location',
+  serviceDeals: 'location',
   ownList: 'transient', ownerAway: 'transient',
 };
 export type Location = Pick<GameState, LocationKey> & { id: number };
@@ -578,6 +594,8 @@ export interface GameState {
   delivery: DeliveryState | null;
   /** Table or counter service, and bookings (floor-service.md); missing means table service with mixed bookings. */
   floorPolicy?: FloorPolicy;
+  /** The set menu at lunch and at dinner (service-deals.md 2); missing means none. */
+  serviceDeals?: ServiceDeals;
   /** Weekly KPI rows for the business review, newest last (src/sim/kpi.ts). */
   kpis: import('./kpi').WeekKpi[];
   /** Live rival pizzerias in the city (competition.md 3). */

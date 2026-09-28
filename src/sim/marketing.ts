@@ -103,6 +103,17 @@ export function discountFor(campaigns: readonly ActiveCampaign[] | undefined, s:
   return d;
 }
 
+/** Lunch coupons: the share of a segment's main price given away at lunch. */
+export function lunchDiscountFor(campaigns: readonly ActiveCampaign[] | undefined, s: SegmentId, day: number): number {
+  let d = 0;
+  for (const a of campaigns ?? []) {
+    if (!isActive(a, day)) continue;
+    const c = CAMPAIGNS[a.id];
+    if (c?.lunchDiscount) d = Math.max(d, c.lunchDiscount * audienceWeight(c, a.audience, s));
+  }
+  return d;
+}
+
 export const hasLoyalty = (campaigns: readonly ActiveCampaign[] | undefined, day: number): boolean =>
   (campaigns ?? []).some((a) => a.id === 'loyalty' && isActive(a, day));
 

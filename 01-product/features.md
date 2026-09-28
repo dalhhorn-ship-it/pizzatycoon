@@ -346,6 +346,9 @@ These shipped with their numbers in the balance tuning log; the log section is t
 | F-234 | Standard delivery menu | The best selling mains, a slider for how many: more orders and audience, more kitchen work | Should | Built | delivery-tab.md 5.2 | tests/deliveryTab.test.ts |
 | F-235 | Delivery counts for cooks and capacity | Delivery load on the capacity cards and in the cooks warning | Must | Built | delivery-tab.md 5.3 | tests/deliveryTab.test.ts |
 | F-236 | Down payment for larger restaurants | At least $20,000 down for venues of 150 m² and up; amount and floor area in settings | Must | Built | fresh-start.md 13 | tests/city.test.ts |
+| F-237 | Restaurant scorecard | Lunch and dinner graded side by side on five KPIs, a focus and a daily split | Must | Built | service-deals.md 5 | tests/serviceDeals.test.ts |
+| F-238 | Set menus | Two or three course lunch; 3, 4 or 5 course dinner; lift, take, longer tables | Should | Built | service-deals.md 2, 3 | tests/serviceDeals.test.ts |
+| F-239 | Lunch flyers and coupons | Lunch only campaigns; coupons trade margin for guests | Should | Built | service-deals.md 4 | tests/serviceDeals.test.ts |
 
 ## Dependency map (critical path)
 

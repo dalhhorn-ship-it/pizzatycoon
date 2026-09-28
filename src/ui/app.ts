@@ -26,15 +26,16 @@ import { ROLE_NAMES } from '../data/staff';
 import type { TeamLine } from '../sim/state';
 import { lossLine, rivalsInReach } from '../sim/market';
 import { deliveryUnlocked } from '../sim/delivery';
+import { scorecardPanel } from './services';
 import { DELIVERY_TABS, deliveryDayCard, deliveryPanel, type DeliveryTabId, deliveryWeek } from './delivery';
 import { openBusinessReview } from './review';
 import { type Nav, openMarketing, rivalsPanel, weekCompetitionCard } from './rivals';
 
-type Tab = 'menu' | 'kitchen' | 'room' | 'staff' | 'rivals' | 'money' | `d:${DeliveryTabId}`;
+type Tab = 'menu' | 'kitchen' | 'room' | 'staff' | 'score' | 'rivals' | 'money' | `d:${DeliveryTabId}`;
 type Group = 'restaurant' | 'delivery' | 'business';
 /** Two layers of tabs (delivery-tab.md 4): groups on top, their tabs below. */
 const GROUPS: { id: Group; label: string; tabs: [Tab, string][] }[] = [
-  { id: 'restaurant', label: '🍕 Restaurant', tabs: [['menu', 'Menu'], ['kitchen', 'Kitchen'], ['room', 'Room'], ['staff', 'Squad']] },
+  { id: 'restaurant', label: '🍕 Restaurant', tabs: [['menu', 'Menu'], ['kitchen', 'Kitchen'], ['room', 'Room'], ['staff', 'Squad'], ['score', 'Scorecard']] },
   { id: 'delivery', label: '🛵 Delivery', tabs: DELIVERY_TABS.map(([id, label]): [Tab, string] => [`d:${id}`, label]) },
   { id: 'business', label: '📈 Business', tabs: [['rivals', 'Rivals'], ['money', 'Money']] },
 ];
@@ -531,6 +532,7 @@ export class App {
       case 'kitchen': content = kitchenPanel(ctx, this.kitchen); break;
       case 'room': content = roomPanel(ctx); break;
       case 'staff': content = squadPanel(ctx); break;
+      case 'score': content = scorecardPanel(ctx, (t) => this.switchTab(t)); break;
       case 'rivals': content = rivalsPanel(ctx, this.nav()); break;
       case 'money': content = moneyPanel(ctx, h('div', { class: 'row' },
         h('button', { class: 'small', onclick: () => openBusinessReview(ctx) }, '📊 Business review'),
