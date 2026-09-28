@@ -198,3 +198,13 @@ The v1.0 expansion loan (Rep 50) shortens the last two rows by about a third. `p
 | FS-Q1 | Is 180 dinner covers a typical day cap or an absolute cap including Saturdays? | Founder |
 | FS-Q2 | Should menu_fit count missing dishes as zero, so a one pizza menu attracts fewer guests? | Game design lead |
 | FS-Q3 | Does Rep carry over in full on a move to another district, or halve? | Game design lead, after playtest |
+
+## 13. Down payment for larger restaurants (M0.7)
+
+Founder rule: a larger restaurant needs real money down, so a new player starts small and grows into a big room.
+
+* **Rule:** for a venue of 150 m² or more (dining plus kitchen floor area), the deposit is at least $20,000: `deposit = max(weeks of rent x T.finance.leaseDepositWeeks, down payment)`. It applies to a new game, a move and opening another restaurant. It is refunded on a move like any deposit, so moving between two large venues costs little extra.
+* **Effect:** every venue except the hole in the wall (120 m²) is 150 m² or more, and their rent deposits run from about $3,000 to $15,700. With $7,000 of starting money, a new game starts in a hole in the wall; the larger rooms open up once the player has $20,000 in cash.
+* **Settings (Economy, "Larger restaurants"):** down payment Off, $10,000, $20,000 (default), $30,000 or $50,000; from 150 m² (default), 250 m² or 400 m². Stored in `economy.downPayment` and `economy.downPaymentSqm`; missing means the default, so older saves get the rule too. The difficulty presets leave it alone.
+* **City map:** the lease box shows "Down payment (150 m² and up)" instead of "Deposit" where the rule applies, and says how much more is needed.
+* F-236. AC-342: venues of 150 m² and up ask at least $20,000 down, the hole in the wall never does. AC-343: settings switch it off, change amount and floor area, and snap to the offered steps. AC-344: moving from a small venue to a large one needs the down payment in cash.

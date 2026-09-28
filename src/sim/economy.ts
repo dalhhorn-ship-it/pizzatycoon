@@ -26,6 +26,23 @@ export interface Economy {
   start: StartPace;
   /** Live rival pizzerias (competition.md 9). Missing means off: old saves and the balance harness. */
   rivals?: RivalSettings;
+  /** Down payment for large venues (fresh-start.md 13): the deposit is at least this much; 0 is off. Missing: DOWN_PAYMENT. */
+  downPayment?: number;
+  /** Floor area (m², dining plus kitchen) from which the down payment applies. */
+  downPaymentSqm?: number;
+}
+
+/** A larger restaurant needs real money down (founder rule): at least $20,000 for 150 m² and up, unless changed in settings. */
+export const DOWN_PAYMENT = { amount: 20000, minSqm: 150 } as const;
+
+export const DOWN_PAYMENT_OPTIONS = {
+  amount: [[0, 'Off'], [10000, '$10,000'], [20000, '$20,000'], [30000, '$30,000'], [50000, '$50,000']] as [number, string][],
+  sqm: [[150, '150 m²'], [250, '250 m²'], [400, '400 m²']] as [number, string][],
+} as const;
+
+/** The down payment rule in play for a game. */
+export function downPaymentOf(state: Pick<GameState, 'economy'> | null | undefined): { amount: number; minSqm: number } {
+  return { amount: state?.economy?.downPayment ?? DOWN_PAYMENT.amount, minSqm: state?.economy?.downPaymentSqm ?? DOWN_PAYMENT.minSqm };
 }
 
 export type StartPace = 'slow' | 'normal';
@@ -70,7 +87,7 @@ const sameRivals = (a: RivalSettings | undefined, b: RivalSettings | undefined):
   JSON.stringify({ ...RIVALS_OFF, ...(a ?? {}) }) === JSON.stringify({ ...RIVALS_OFF, ...(b ?? {}) });
 
 /** The multiplier settings (sliders); `start` is a separate choice. */
-export type EconomyKey = Exclude<keyof Economy, 'start' | 'rivals'>;
+export type EconomyKey = Exclude<keyof Economy, 'start' | 'rivals' | 'downPayment' | 'downPaymentSqm'>;
 const KEYS: EconomyKey[] = ['demand', 'ingredients', 'wages', 'rent', 'equipment', 'reputation', 'startingCash'];
 
 export const ECONOMY_RANGE = { min: 0.5, max: 1.5, step: 0.05 } as const;
@@ -118,6 +135,16 @@ export function clampEconomy(e: Partial<Economy>): Economy {
   out.start = out.start === 'normal' ? 'normal' : 'slow';
   if (e.rivals) out.rivals = clampRivals(e.rivals);
   else delete out.rivals;
+  const pick = (v: unknown, options: readonly [number, string][]): number | undefined => {
+    const n = Number(v);
+    return v === undefined || !Number.isFinite(n) ? undefined : options.reduce((a, [o]) => (Math.abs(o - n) < Math.abs(a - n) ? o : a), options[0]?.[0] ?? 0);
+  };
+  const dp = pick(e.downPayment, DOWN_PAYMENT_OPTIONS.amount);
+  const dps = pick(e.downPaymentSqm, DOWN_PAYMENT_OPTIONS.sqm);
+  if (dp === undefined) delete out.downPayment;
+  else out.downPayment = dp;
+  if (dps === undefined) delete out.downPaymentSqm;
+  else out.downPaymentSqm = dps;
   for (const k of KEYS) {
     const v = Number(out[k]);
     out[k] = Number.isFinite(v) ? Math.min(ECONOMY_RANGE.max, Math.max(ECONOMY_RANGE.min, Math.round(v / ECONOMY_RANGE.step) * ECONOMY_RANGE.step)) : 1;

@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "pizza-d",
+  "name": "pizzatycoon",
   "main": "worker/src/index.ts",
   // `wrangler deploy` builds the game first, so Cloudflare Workers Builds needs no separate build command.
   "build": { "command": "npm run build" },
