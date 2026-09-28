@@ -8,7 +8,8 @@ import type { Controller } from '../game/controller';
 import { fromSaveCode, toSaveCode } from '../save/saveFile';
 import { analyse } from '../sim/analysis';
 import { type GameEvent, moveQuote, newGameAt, RANK_NAMES, venueDeposit, venueDepositInfo } from '../sim/game';
-import { locationName, managerOf } from '../sim/chain';
+import { bestRep, locationName, managerOf } from '../sim/chain';
+import { talentCap } from '../sim/staff';
 import { DOWN_PAYMENT_OPTIONS, downPaymentOf, ECONOMY_LABELS, ECONOMY_RANGE, type Economy, type EconomyKey, economyOf, PRESETS, presetName, RIVAL_OPTIONS, RIVAL_PRESETS, rivalSettingsOf, type RivalSettings } from '../sim/economy';
 import { outlook } from './impact';
 import type { DayReport, GameState } from '../sim/state';
@@ -862,6 +863,10 @@ export class App {
             h('button', { class: preset === p ? 'on' : '', onclick: () => setEco({ ...PRESETS[p], ...(rivalSettingsOf(st).on ? { rivals: RIVAL_PRESETS[p] } : {}) }) }, p[0]?.toUpperCase() + p.slice(1))),
             h('button', { class: preset === 'custom' ? 'on' : '', disabled: true }, 'Custom')),
           h('div', { class: 'sliders' }, ...(Object.keys(ECONOMY_LABELS) as EconomyKey[]).map(slider)),
+          h('div', { class: 'small muted' },
+            `Skilled staff on the market: good cooks and chefs want a restaurant with a name. With this setting the best people who apply are about OVR ${talentCap(bestRep(st), eco.talent)} now, ` +
+            `${talentCap(50, eco.talent)} at reputation 50 and ${talentCap(70, eco.talent)} at 70. Mediocre cooks cook slower, plainer food; courses, coaching and shifts on the job make them better. ` +
+            'Lower makes training matter more; people already on your team keep their skills.'),
           h('div', { class: 'stack', style: 'gap:6px' },
             h('span', null, 'New restaurants'),
             h('div', { class: 'seg' },

@@ -20,6 +20,11 @@ export interface Economy {
   /** Starting money, used when a new game starts. */
   startingCash: number;
   /**
+   * Skilled staff on the market: scales the talent ceiling (T.market.talentCap). At 100% the best cooks and chefs
+   * are mediocre until the restaurant earns a reputation; lower is scarcer, higher lets good people in sooner.
+   */
+  talent: number;
+  /**
    * How a new restaurant starts (balance.md 4.3): 'slow' has to earn its local following by word of mouth,
    * 'normal' is known in the neighbourhood from day one. Applies to new games, fresh starts and moves.
    */
@@ -88,16 +93,18 @@ const sameRivals = (a: RivalSettings | undefined, b: RivalSettings | undefined):
 
 /** The multiplier settings (sliders); `start` is a separate choice. */
 export type EconomyKey = Exclude<keyof Economy, 'start' | 'rivals' | 'downPayment' | 'downPaymentSqm'>;
-const KEYS: EconomyKey[] = ['demand', 'ingredients', 'wages', 'rent', 'equipment', 'reputation', 'startingCash'];
+const KEYS: EconomyKey[] = ['demand', 'ingredients', 'wages', 'rent', 'equipment', 'reputation', 'startingCash', 'talent'];
+/** Keys a save made before the talent setting has: it takes the talent of the preset those match. */
+const OLD_KEYS: EconomyKey[] = KEYS.filter((k) => k !== 'talent');
 
 export const ECONOMY_RANGE = { min: 0.5, max: 1.5, step: 0.05 } as const;
 
 export const PRESETS: Record<'easy' | 'normal' | 'hard', Economy> = {
   // Narrowed after the economics check: at realistic margins (about 15% on Normal) the old Hard (guests x0.85, costs x1.15
   // to 1.2) left nothing. Easy lands near 21%, Hard near 7% for a well run medium restaurant.
-  easy: { demand: 1.1, ingredients: 0.92, wages: 0.92, rent: 0.9, equipment: 0.8, reputation: 1.3, startingCash: 1.5, start: 'normal' },
-  normal: { demand: 1, ingredients: 1, wages: 1, rent: 1, equipment: 1, reputation: 1, startingCash: 1, start: 'slow' },
-  hard: { demand: 0.93, ingredients: 1.06, wages: 1.06, rent: 1.1, equipment: 1.2, reputation: 0.8, startingCash: 0.75, start: 'slow' },
+  easy: { demand: 1.1, ingredients: 0.92, wages: 0.92, rent: 0.9, equipment: 0.8, reputation: 1.3, startingCash: 1.5, talent: 1.2, start: 'normal' },
+  normal: { demand: 1, ingredients: 1, wages: 1, rent: 1, equipment: 1, reputation: 1, startingCash: 1, talent: 1, start: 'slow' },
+  hard: { demand: 0.93, ingredients: 1.06, wages: 1.06, rent: 1.1, equipment: 1.2, reputation: 0.8, startingCash: 0.75, talent: 0.9, start: 'slow' },
 };
 
 export const ECONOMY_LABELS: Record<EconomyKey, { name: string; easier: 'up' | 'down' }> = {
@@ -108,14 +115,20 @@ export const ECONOMY_LABELS: Record<EconomyKey, { name: string; easier: 'up' | '
   equipment: { name: 'Equipment and furniture prices', easier: 'down' },
   reputation: { name: 'Reputation speed', easier: 'up' },
   startingCash: { name: 'Starting money (new games)', easier: 'up' },
+  talent: { name: 'Skilled staff on the market', easier: 'up' },
 };
 
 export function economyOf(state: Pick<GameState, 'economy'>): Economy {
   const e = { ...PRESETS.normal, ...(state.economy ?? {}) };
   // Settings saved before the start choice existed take the start of the preset they match.
   if (state.economy && !state.economy.start) {
-    const match = Object.values(PRESETS).find((p) => KEYS.every((k) => Math.abs(p[k] - e[k]) < 1e-9));
+    const match = Object.values(PRESETS).find((p) => OLD_KEYS.every((k) => Math.abs(p[k] - e[k]) < 1e-9));
     if (match) e.start = match.start;
+  }
+  // Settings saved before the talent setting existed take the talent of the preset they match.
+  if (state.economy && state.economy.talent === undefined) {
+    const match = Object.values(PRESETS).find((p) => OLD_KEYS.every((k) => Math.abs(p[k] - e[k]) < 1e-9));
+    e.talent = match?.talent ?? 1;
   }
   return e;
 }

@@ -263,6 +263,8 @@ export interface Staff {
   offUntil: number | null;
   lastCourseDay: number | null;
   certs: string[];
+  /** Courses finished, for learning paths (a course that requires another). Missing on older saves. */
+  done?: string[];
   nextReviewDay: number;
   /** A contract review waiting for an answer: they ask this salary. */
   review: { ask: number; untilDay: number } | null;

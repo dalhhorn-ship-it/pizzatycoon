@@ -70,9 +70,9 @@ describe('fresh start', () => {
     }
   });
 
-  test('the cheapest opening in Canal Quarter costs $5,296 including the deposit (AC-161)', () => {
+  test('the cheapest opening in Canal Quarter costs $6,196 including the deposit (AC-161, ovens at double price)', () => {
     const s = cheapestOpening();
-    expect(T.finance.startingCash - s.cash).toBeCloseTo(5296, 0);
+    expect(T.finance.startingCash - s.cash).toBeCloseTo(6196, 0);
   });
 
   test('opening day: nobody knows the place yet, a handful of guests and a loss (balance.md 4.3)', () => {
@@ -86,8 +86,9 @@ describe('fresh start', () => {
     expect(r?.followingAfter).toBeGreaterThan(r?.followingBefore ?? 1);
   });
 
-  test('the first weeks lose money, word of mouth turns it around, cash stays above zero (AC-162)', () => {
-    let s = cheapestOpening();
+  test('the first weeks lose money, word of mouth turns it around, cash stays above zero with the starter loan (AC-162)', () => {
+    // Ovens cost double: a rookie crew on the cheapest opening leans on the starter loan through the quiet first weeks.
+    let s = apply(cheapestOpening(), { type: 'takeLoan', amount: T.finance.starterLoanMax }).state;
     let lowest = s.cash;
     const weekly: number[] = [];
     for (let i = 0; i < 56; i++) {

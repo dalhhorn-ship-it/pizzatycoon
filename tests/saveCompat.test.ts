@@ -38,7 +38,8 @@ describe('old saves', () => {
     const { s, covers, profit } = week(loaded);
     expect(covers).toBeCloseTo(511.91, 1);
     expect(profit).toBeCloseTo(-1571.29, 0);
-    expect(s.cash).toBeCloseTo(70718.1, 0);
+    // $120 less than before the broader course catalogue: the manager books the new Food Safety course with the training budget.
+    expect(s.cash).toBeCloseTo(70598.1, 0);
   });
 
   test('a schema 5 save (before the Squad) loads, migrates and plays a week', () => {

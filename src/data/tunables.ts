@@ -79,6 +79,9 @@ export const T = {
     maxExtrasBeforePenaltyNonPizza: 5,
     kitchenBase: 30,
     kitchenPerSkill: 7,
+    /** Rookie mistakes: every Quality point a cook is below rookieBelow costs this much more kitchen skill (uneven bases, split sauces). */
+    rookieK: 0.3,
+    rookieBelow: 40,
     chefSpecialty: 5,
     perfectionistK: 8,
     eMin: -6,
@@ -113,6 +116,8 @@ export const T = {
     volumeSpeedBase: 0.9,
     volumeSpeedPerSkill: 0.02,
     underSkillSpeed: 0.9,
+    /** Rookie hands: every Speed point below quality.rookieBelow slows a person by this share on top (hunting for things, remakes). */
+    rookieSpeed: 0.005,
     speedyBonus: 0.15,
     perfectionistCookTime: 1.1,
     platesPerCover: 3,
@@ -572,7 +577,27 @@ export const T = {
     newPerWeek: 8,
     stayDays: 21,
     apprenticesPerWeek: 2,
-    apprenticeSalary: 0.6,
+    /** Apprentices earn half the role's base wage until their first review or until they reach Silver. */
+    apprenticeSalary: 0.5,
+    /** Apprentice cooks always on the market, so there is cheap cover when cooks go on a course. */
+    apprenticeCooks: 2,
+    /**
+     * Talent ceiling (founder rule): nobody good wants to work for an unknown pizzeria. The best OVR on the market
+     * rises with reputation, interpolated between these points, times the "Skilled staff on the market" setting.
+     * At the start (reputation 30) the best cooks and chefs are mediocre, so training and experience are what build a team.
+     */
+    talentCap: [
+      { rep: 0, cap: 45 },
+      { rep: 35, cap: 46 },
+      { rep: 45, cap: 56 },
+      { rep: 55, cap: 66 },
+      { rep: 65, cap: 78 },
+      { rep: 75, cap: 92 },
+    ] as readonly { rep: number; cap: number }[],
+    /** No attribute on the market above the ceiling plus this. */
+    talentAttrSlack: 8,
+    /** The agency searches wider than the open market: its guarantee is at most the ceiling plus this. */
+    agencyReach: 15,
     apprenticeOvr: [25, 40] as readonly [number, number],
     apprenticePot: [60, 88] as readonly [number, number],
     /** Tier mix by best reputation: [bronze, silver, gold, elite]. */

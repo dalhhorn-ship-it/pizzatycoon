@@ -15,8 +15,9 @@ import { deliveryUnlocked } from './delivery';
 import { Rng } from './rng';
 import {
   coachRate, courseGains, courseProblem, type DaySignals, effAttr, formOf, growthAttr, hasPersonality, interestProblem, isOff,
-  makeCandidate, managerOf, marketValue, moodOf, onRota, ovr, peopleSkill, standardReplacement, stepMorale,
+  makeCandidate, managerOf, marketValue, moodOf, onRota, ovr, peopleSkill, standardReplacement, stepMorale, talentCap,
 } from './staff';
+import { economyOf } from './economy';
 import type { DayReport, GameState, ManagerLog, Staff, StaffPolicy, TeamLine } from './state';
 
 /** Events the team produces; game.ts turns them into GameEvents. */
@@ -241,6 +242,7 @@ export function teamDay(state: GameState, report: DayReport, a: Analysis, opts: 
       }
       if (gained.length) s.lastDevelopedDay = day;
       if (c?.cert && !s.certs.includes(c.cert)) s.certs.push(c.cert);
+      if (c && !(s.done ?? []).includes(c.id)) s.done = [...(s.done ?? []), c.id];
       s.course = null;
       if (ovr(s) - o0 >= T.training.reviewLift) s.nextReviewDay = Math.min(s.nextReviewDay, day + 1);
       events.push({ kind: 'info', text: `${s.name} finished ${c?.name ?? 'a course'}: ${gained.join(', ') || 'no change'}.` });
@@ -632,38 +634,58 @@ export function managerWeek(state: GameState): { line: string; proposal: string 
 
 const ROLE_DRAW: Role[] = ['cook', 'cook', 'cook', 'server', 'server', 'server', 'chef', 'host', 'dishwasher', 'manager'];
 export const HIREABLE_ROLES: readonly Role[] = ['chef', 'cook', 'server', 'host', 'dishwasher', 'manager'];
+const APPRENTICE_DRAW: Role[] = ['cook', 'server', 'cook', 'chef'];
 
-/** Adds a candidate for every role missing from the market. */
+/** Best OVR on the market for this game at this reputation: the talent ceiling times the setting. */
+export function marketCap(state: Pick<GameState, 'economy'>, bestRep: number): number {
+  return talentCap(bestRep, economyOf(state).talent);
+}
+
+/** The best key attribute the agency can promise right now. */
+export function agencyMax(state: Pick<GameState, 'economy'>, bestRep: number): number {
+  return marketCap(state, bestRep) + T.market.agencyReach;
+}
+
+/** Adds a candidate for every role missing from the market, and keeps apprentice cooks on it. */
 export function ensureEveryRole(state: GameState, bestRep: number): void {
+  const cap = marketCap(state, bestRep);
   // A rider joins the market once any restaurant may deliver (competition.md 6.8).
   const riders = deliveryUnlocked(state) || (state.branches ?? []).some((b) => deliveryUnlocked(b));
   for (const role of riders ? [...HIREABLE_ROLES, 'rider' as Role] : HIREABLE_ROLES) {
     if (state.candidates.some((x) => x.role === role)) continue;
     const rng = Rng.stream(state.seed, state.day, `refill-${state.nextUid}`);
-    state.candidates.push(makeCandidate(rng, state.nextUid++, role, state.day, bestRep, { tier: bestRep >= T.market.goldRep ? undefined : 'bronze' }));
+    state.candidates.push(makeCandidate(rng, state.nextUid++, role, state.day, bestRep, { tier: bestRep >= T.market.goldRep ? undefined : 'bronze', cap }));
+  }
+  // Apprentice cooks at half wage: cheap cover while cooks are away on a course.
+  while (state.candidates.filter((x) => x.apprentice && x.role === 'cook').length < T.market.apprenticeCooks) {
+    const rng = Rng.stream(state.seed, state.day, `apprentice-${state.nextUid}`);
+    state.candidates.push(makeCandidate(rng, state.nextUid++, 'cook', state.day, bestRep, { apprentice: true }));
   }
 }
 
 /** The day 1 market: 2 cooks, 2 servers and a dishwasher to start with (fresh-start.md 4), then the rest. */
 export function firstMarket(state: GameState): void {
   const rng = Rng.stream(state.seed, state.day, 'market');
+  const cap = marketCap(state, state.rep);
   const out: Staff[] = [];
   for (const role of ['cook', 'cook', 'server', 'server', 'dishwasher'] as Role[]) {
-    out.push(makeCandidate(rng, state.nextUid++, role, state.day, state.rep, { ovr: rng.int(25, 44), tier: 'bronze' }));
+    out.push(makeCandidate(rng, state.nextUid++, role, state.day, state.rep, { ovr: Math.min(rng.int(25, 44), cap), tier: 'bronze', cap }));
   }
-  while (out.length < T.market.pool - T.market.apprenticesPerWeek) out.push(makeCandidate(rng, state.nextUid++, rng.pick(ROLE_DRAW), state.day, state.rep));
-  for (let i = 0; i < T.market.apprenticesPerWeek; i++) out.push(makeCandidate(rng, state.nextUid++, rng.pick(['cook', 'server', 'cook', 'chef'] as Role[]), state.day, state.rep, { apprentice: true }));
+  while (out.length < T.market.pool - T.market.apprenticesPerWeek) out.push(makeCandidate(rng, state.nextUid++, rng.pick(ROLE_DRAW), state.day, state.rep, { cap }));
+  for (let i = 0; i < T.market.apprenticesPerWeek; i++) out.push(makeCandidate(rng, state.nextUid++, rng.pick(APPRENTICE_DRAW), state.day, state.rep, { apprentice: true }));
   state.candidates = out;
   ensureEveryRole(state, state.rep);
   trimPool(state);
 }
 
-/** Keep the pool at its size: the oldest go first, but never the last one of a role. */
+/** Keep the pool at its size: the oldest go first, but never the last one of a role nor the last apprentice cooks. */
 function trimPool(state: GameState): void {
   while (state.candidates.length > T.market.pool) {
     const counts = new Map<Role, number>();
     for (const c of state.candidates) counts.set(c.role, (counts.get(c.role) ?? 0) + 1);
-    const victim = [...state.candidates].sort((a, b) => a.hiredDay - b.hiredDay || b.id - a.id).find((c) => (counts.get(c.role) ?? 0) > 1);
+    const apprenticeCooks = state.candidates.filter((c) => c.apprentice && c.role === 'cook').length;
+    const victim = [...state.candidates].sort((a, b) => a.hiredDay - b.hiredDay || b.id - a.id)
+      .find((c) => (counts.get(c.role) ?? 0) > 1 && !(c.apprentice && c.role === 'cook' && apprenticeCooks <= T.market.apprenticeCooks));
     if (!victim) break;
     state.candidates = state.candidates.filter((c) => c !== victim);
   }
@@ -673,11 +695,12 @@ function trimPool(state: GameState): void {
 export function refreshMarket(state: GameState, bestRep: number, day: number = state.day + 1): void {
   const m = T.market;
   const rng = Rng.stream(state.seed, day, 'market');
+  const cap = marketCap(state, bestRep);
   const pool = state.candidates.filter((c) => day - c.hiredDay < m.stayDays);
   const fresh: Staff[] = [];
   let fameUsed = false;
   for (let i = 0; i < m.newPerWeek; i++) {
-    const c = makeCandidate(rng, state.nextUid++, rng.pick(ROLE_DRAW), day, bestRep);
+    const c = makeCandidate(rng, state.nextUid++, rng.pick(ROLE_DRAW), day, bestRep, { cap });
     if (!fameUsed && bestRep >= T.staff.fameCandidateRep && ovr(c) >= 70 && rng.chance(0.5)) {
       c.fame = 1;
       c.salary = marketValue(c);
@@ -685,7 +708,7 @@ export function refreshMarket(state: GameState, bestRep: number, day: number = s
     }
     fresh.push(c);
   }
-  for (let i = 0; i < m.apprenticesPerWeek; i++) fresh.push(makeCandidate(rng, state.nextUid++, rng.pick(['cook', 'server', 'cook', 'chef'] as Role[]), day, bestRep, { apprentice: true }));
+  for (let i = 0; i < m.apprenticesPerWeek; i++) fresh.push(makeCandidate(rng, state.nextUid++, rng.pick(APPRENTICE_DRAW), day, bestRep, { apprentice: true }));
   state.candidates = [...pool, ...fresh];
   ensureEveryRole(state, bestRep);
   trimPool(state);
@@ -697,10 +720,13 @@ export function deliverAgency(state: GameState, bestRep: number): TeamEvent[] {
   const due = (state.agencyOrders ?? []).filter((o) => state.day + 1 >= o.readyDay);
   if (!due.length) return events;
   state.agencyOrders = (state.agencyOrders ?? []).filter((o) => !due.includes(o));
+  const cap = marketCap(state, bestRep);
   for (const o of due) {
     const rng = Rng.stream(state.seed, state.day, `agency-${state.nextUid}`);
+    // The agency searches wider than the open market, but even it cannot find stars for an unknown pizzeria.
+    const min = Math.min(o.min, agencyMax(state, bestRep));
     for (let i = 0; i < 3; i++) {
-      const c = makeCandidate(rng, state.nextUid++, o.role, state.day + 1, bestRep, { keyMin: o.min, tier: o.min >= 70 ? 'gold' : 'silver' });
+      const c = makeCandidate(rng, state.nextUid++, o.role, state.day + 1, bestRep, { keyMin: min, tier: min >= 70 ? 'gold' : 'silver', cap: cap + T.market.agencyReach - T.market.talentAttrSlack });
       c.scouted = true;
       state.candidates.push(c);
     }

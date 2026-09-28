@@ -2,7 +2,7 @@
 
 import { PERSONALITIES } from '../data/personalities';
 import { AREA_NAMES, ATTR_IDS, ATTR_NAMES, ATTR_SHORT, type Area, ROLE_AREA, ROLE_NAMES, TALENTS } from '../data/staff';
-import { COURSE_IDS, COURSES } from '../data/training';
+import { COURSE_IDS, COURSES, type Track, TRACK_NAMES } from '../data/training';
 import type { AttrId, Role } from '../data/types';
 import { T } from '../data/tunables';
 import { bestRep, locationName, managerEffect } from '../sim/chain';
@@ -12,7 +12,7 @@ import {
   potRange, scoutRange, type Tier, TIER_NAMES, tierOf,
 } from '../sim/staff';
 import type { GameState, Location, Staff, StaffPolicy } from '../sim/state';
-import { courseOptions, HIREABLE_ROLES, isUnlockedFor, policyOf, unlockLabel, weekNumber } from '../sim/team';
+import { agencyMax, courseOptions, HIREABLE_ROLES, marketCap, isUnlockedFor, policyOf, unlockLabel, weekNumber } from '../sim/team';
 import { act, h, modal, money, signed } from './dom';
 import { compare } from './impact';
 import type { PanelCtx } from './panels';
@@ -287,7 +287,9 @@ function trainingSheet(state: GameState, w: Where, s: Staff, book: (courseId: st
     }
     return awayCost;
   };
-  const rows = COURSE_IDS.map((id) => COURSES[id]).filter((c): c is NonNullable<typeof c> => !!c && c.roles.includes(s.role)).map((c) => {
+  const done = s.done ?? [];
+  const courses = COURSE_IDS.map((id) => COURSES[id]).filter((c): c is NonNullable<typeof c> => !!c && c.roles.includes(s.role));
+  const row = (c: (typeof courses)[number]): HTMLElement => {
     const unlocked = isUnlockedFor(state, c.unlock, rep);
     const problem = courseProblem(state, s, c, unlocked);
     const gains = courseGains(s, c.id);
@@ -305,9 +307,11 @@ function trainingSheet(state: GameState, w: Where, s: Staff, book: (courseId: st
         `${signed(d)} $/day after · ${payback <= 52 ? `pays back in about ${payback.toFixed(1)} weeks` : 'pays back over the long run, not straight away'} · ` +
         `will then ask about ${money(marketValue(after))}/week`);
     }
+    const needs = c.requires && !done.includes(c.requires) ? COURSES[c.requires]?.name : null;
     return h('div', { class: 'line' },
       h('div', null,
-        h('div', null, h('b', null, c.name), h('span', { class: 'small muted' }, ` · ${money(c.price)}`)),
+        h('div', null, h('b', null, c.name), h('span', { class: 'small muted' }, ` · ${money(c.price)}${done.includes(c.id) ? ' · ✓ taken before' : ''}`)),
+        needs ? h('div', { class: 'small warn' }, `After: ${needs}`) : null,
         h('div', { class: 'small' }, `${ATTR_IDS.filter((a) => gains[a]).map((a) => `+${gains[a]} ${ATTR_SHORT[a]}`).join(', ') || 'no gain'} · OVR ${ovr(s)} → ${newOvr}`),
         h('div', { class: 'small muted' }, c.blurb),
         preview),
@@ -315,11 +319,16 @@ function trainingSheet(state: GameState, w: Where, s: Staff, book: (courseId: st
         class: 'small primary', disabled: !!problem || state.cash < c.price,
         title: problem ?? (state.cash < c.price ? 'Not enough cash' : ''),
         onclick: () => book(c.id),
-      }, problem ? (unlocked ? 'Not now' : unlockLabel(c.unlock)) : state.cash < c.price ? `Need ${money(c.price - state.cash)} more` : 'Book'));
-  });
+      }, problem ? (!unlocked ? unlockLabel(c.unlock) : needs ? 'Path' : 'Not now') : state.cash < c.price ? `Need ${money(c.price - state.cash)} more` : 'Book'));
+  };
+  const tracks = [...new Set(courses.map((c) => c.track))] as Track[];
+  const cover = ROLE_AREA[s.role] === 'kitchen'
+    ? h('div', { class: 'small muted' }, `Short of hands while ${s.name} is away? Apprentice cooks on the market earn half a cook's wage and can cover.`)
+    : null;
   return h('div', { class: 'card' }, h('h3', null, 'Training'),
-    h('div', { class: 'small muted' }, `One course every ${T.training.cooldownDays} days. Gains shrink near potential; Eager Learners learn 25% faster; unhappy people learn less.`),
-    ...rows);
+    h('div', { class: 'small muted' }, `One course every ${T.training.cooldownDays} days. Gains shrink near potential; Eager Learners learn 25% faster; unhappy people learn less. Some courses build on another one: finish the first step of a path to open the next.`),
+    cover,
+    ...tracks.flatMap((t) => [h('div', { class: 'small', style: 'margin-top:8px' }, h('b', null, TRACK_NAMES[t])), ...courses.filter((c) => c.track === t).map(row)]));
 }
 
 /** Pick a trainee and an attribute (F-131, 3.2). */
@@ -420,14 +429,15 @@ function marketSection(ctx: PanelCtx, state: GameState): HTMLElement {
     h('div', { class: 'row' },
       seg([['ovr', 'Best'], ['price', 'Cheapest'], ['pot', 'Potential']], ui.sort, (x) => (ui.sort = x)),
       seg([['all', 'All tiers'], ['bronze', 'Bronze'], ['silver', 'Silver'], ['gold', 'Gold'], ['elite', 'Elite']] as [Tier | 'all', string][], ui.tier, (x) => (ui.tier = x))),
+    h('div', { class: 'small muted' }, `At your reputation the best people who apply are about OVR ${marketCap(state, bestRep(state))}. Good cooks and chefs want a restaurant with a name: train your team and let experience do the rest. A better reputation opens the market (the ceiling is a setting under ⚙ Settings).`),
     showCompare ? null : h('div', { class: 'small muted' }, 'Pick a role to compare each candidate with the weakest person you have in that role.'),
     h('div', { class: 'card' }, h('h3', null, 'Recruitment agency'),
       h('div', { class: 'small muted' }, `Three candidates of one role, strong where it counts, in ${m.agencyDays} days.`),
       h('div', { class: 'row' },
         h('select', { 'aria-label': 'Role for the agency', onchange: (e: Event) => (ui.agencyRole = (e.target as HTMLSelectElement).value as Role) },
           ...HIREABLE_ROLES.map((r) => h('option', { value: r, selected: ui.agencyRole === r }, ROLE_NAMES[r]))),
-        h('button', { class: 'small', disabled: state.cash < m.agencyPrice, onclick: () => act(ctx, { type: 'agency', role: ui.agencyRole }) }, `60+ for ${money(m.agencyPrice)}`),
-        h('button', { class: 'small', disabled: state.cash < m.agencyPricePlus, onclick: () => act(ctx, { type: 'agency', role: ui.agencyRole, plus: true }) }, `70+ for ${money(m.agencyPricePlus)}`)),
+        h('button', { class: 'small', disabled: state.cash < m.agencyPrice || agencyMax(state, bestRep(state)) < 60, onclick: () => act(ctx, { type: 'agency', role: ui.agencyRole }) }, `60+ for ${money(m.agencyPrice)}`),
+        h('button', { class: 'small', disabled: state.cash < m.agencyPricePlus || agencyMax(state, bestRep(state)) < 70, onclick: () => act(ctx, { type: 'agency', role: ui.agencyRole, plus: true }) }, `70+ for ${money(m.agencyPricePlus)}`)),
       (state.agencyOrders ?? []).length ? h('div', { class: 'small' }, `On the way: ${(state.agencyOrders ?? []).map((o) => `${ROLE_NAMES[o.role]} (day ${o.readyDay})`).join(', ')}`) : null),
     ...(pool.length ? pool.map((c) => candidateCard(ctx, state, c, showCompare)) : [h('div', { class: 'small muted' }, 'Nobody like that on the market this week.')]));
 }

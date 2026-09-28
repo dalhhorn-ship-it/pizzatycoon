@@ -218,7 +218,9 @@ function personalSpeed(s: Staff, volumeGear: boolean, ctx: WorkContext): number 
   const base = volumeGear
     ? T.kitchen.volumeSpeedBase + T.kitchen.volumeSpeedPerSkill * skill
     : T.kitchen.speedBase + T.kitchen.speedPerSkill * skill;
-  return base * moraleMult(s) * (hasTalent(s, 'speedy') ? 1 + T.kitchen.speedyBonus : 1) *
+  // Volume gear is built for juniors: no rookie slowdown on a conveyor or a sheeter line.
+  const rookie = volumeGear ? 1 : 1 - T.kitchen.rookieSpeed * Math.max(0, T.quality.rookieBelow - effAttr(s, 'speed', ctx.service, ctx.day));
+  return base * rookie * moraleMult(s) * (hasTalent(s, 'speedy') ? 1 + T.kitchen.speedyBonus : 1) *
     (s.coaching ? T.training.coachSpeed : 1) * personalPressure(s, ctx);
 }
 
@@ -339,7 +341,8 @@ export function kitchenStats(state: GameState, service: Service = 'dinner', load
   const avgSkill = mean(cooks.map((c) => effAttr(c, 'quality', service, state.day) / 10));
   const hasChef = cooks.some((c) => c.role === 'chef');
   const K = cooks.length
-    ? mean(cooks.map((c) => T.quality.kitchenBase + T.quality.kitchenPerSkill * personalQuality(c, ctx) + (hasTalent(c, 'perfectionist') ? T.quality.perfectionistK : 0))) +
+    ? mean(cooks.map((c) => T.quality.kitchenBase + T.quality.kitchenPerSkill * personalQuality(c, ctx) + (hasTalent(c, 'perfectionist') ? T.quality.perfectionistK : 0) -
+      T.quality.rookieK * Math.max(0, T.quality.rookieBelow - effAttr(c, 'quality', service, state.day)))) +
       (hasChef ? T.quality.chefSpecialty : 0)
     : T.quality.kitchenBase;
   const items = state.equipment.map((e) => EQUIPMENT[e.itemId]).filter((e): e is EquipmentItem => !!e);

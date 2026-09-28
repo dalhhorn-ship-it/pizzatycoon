@@ -26,7 +26,7 @@ import { rivalSettingsOf } from './economy';
 import { applyRivalToggle, rivalAt, seedRivals } from './rivals';
 import { cloneState, floorOf, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION } from './state';
 import {
-  bookCourse, ensureEveryRole as fillRoles, firstMarket, HIREABLE_ROLES, hiredFromMarket, policyOf, recordDeparture, weekNumber,
+  agencyMax, bookCourse, ensureEveryRole as fillRoles, firstMarket, HIREABLE_ROLES, hiredFromMarket, policyOf, recordDeparture, weekNumber,
 } from './team';
 
 export { HIREABLE_ROLES };
@@ -559,6 +559,8 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       const m = T.market;
       const price = cmd.plus ? m.agencyPricePlus : m.agencyPrice;
       if (state.cash < price) return fail(input, `The agency charges $${price}.`);
+      const reach = agencyMax(state, bestRep(state));
+      if (reach < (cmd.plus ? 70 : 60)) return fail(input, `Nobody that good wants to work for a pizzeria this unknown yet: the agency can promise about ${reach} now. Build your reputation first.`);
       state.cash -= price;
       state.agencyOrders = [...(state.agencyOrders ?? []), { role: cmd.role, min: cmd.plus ? 70 : 60, readyDay: state.day + m.agencyDays }];
       events.push({ kind: 'info', text: `The agency is looking for ${ROLE_NAMES[cmd.role].toLowerCase()}s. Three candidates arrive in ${m.agencyDays} days.` });

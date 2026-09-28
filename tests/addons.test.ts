@@ -60,7 +60,7 @@ describe('add-ons', () => {
     const removed = apply(s, { type: 'removeAddon', uid: oven, addonId: 'pizzaStone' }).state;
     expect(removed.cash - s.cash).toBe(400);
     const sold = apply(s, { type: 'sellEquipment', uid: oven }).state;
-    expect(sold.cash - s.cash).toBe(400 + 1920);
+    expect(sold.cash - s.cash).toBe(400 + 3840);
   });
 
   test('wash, serve and waste add-ons move their numbers', () => {
@@ -97,8 +97,8 @@ describe('add-ons', () => {
     expect(after.itemId).toBe('stoneHearthOven');
     expect([after.x, after.y]).toEqual([before.x, before.y]);
     expect(after.addons?.map((a) => a.id)).toEqual(['thermostatTune']);
-    // $6,000 minus 80% of the $2,400 oven minus 80% of the $500 stone.
-    expect(s.cash - r.state.cash).toBe(6000 - 1920 - 400);
+    // $12,000 minus 80% of the $4,800 oven minus 80% of the $500 stone.
+    expect(s.cash - r.state.cash).toBe(12000 - 3840 - 400);
     expect(apply(s, { type: 'upgradeStation', uid: oven, toItemId: 'woodFiredOven' }).error).toMatch(/not an upgrade/);
   });
 

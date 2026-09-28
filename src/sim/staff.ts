@@ -175,6 +175,7 @@ export function onRota(staff: readonly Staff[], day: number): Staff[] {
 export function courseProblem(state: Pick<GameState, 'day' | 'cash'>, s: Staff, course: Course, unlocked: boolean): string | null {
   if (!course.roles.includes(s.role)) return `${course.name} is not for a ${s.role}.`;
   if (!unlocked) return 'Locked.';
+  if (course.requires && !(s.done ?? []).includes(course.requires)) return `Finish ${COURSES[course.requires]?.name ?? 'the course before'} first.`;
   if (s.course && state.day < s.course.endsDay) return `${s.name} is already on a course.`;
   if (s.lastCourseDay !== null && state.day - s.lastCourseDay < T.training.cooldownDays) {
     return `One course per ${T.training.cooldownDays} days: ${s.name} can go again on day ${s.lastCourseDay + T.training.cooldownDays}.`;
@@ -383,6 +384,27 @@ export interface CandidateOpts {
   apprentice?: boolean;
   keyMin?: number;
   fame?: number;
+  /** Talent ceiling: no OVR above this, no attribute above it plus T.market.talentAttrSlack (see talentCap). */
+  cap?: number;
+}
+
+/** Best OVR the market offers at this reputation, before the setting (T.market.talentCap). */
+export function talentCapAt(bestRep: number): number {
+  const pts = T.market.talentCap;
+  const first = pts[0];
+  if (!first) return 99;
+  if (bestRep <= first.rep) return first.cap;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1] as { rep: number; cap: number };
+    const b = pts[i] as { rep: number; cap: number };
+    if (bestRep <= b.rep) return a.cap + ((b.cap - a.cap) * (bestRep - a.rep)) / (b.rep - a.rep);
+  }
+  return (pts[pts.length - 1] as { cap: number }).cap;
+}
+
+/** The talent ceiling with the "Skilled staff on the market" setting (1 = normal). */
+export function talentCap(bestRep: number, talent = 1): number {
+  return clamp(Math.round(talentCapAt(bestRep) * talent), 30, 95);
 }
 
 export function makeCandidate(rng: Rng, id: number, role: Role, day: number, bestRep: number, o: CandidateOpts = {}): Staff {
@@ -396,9 +418,17 @@ export function makeCandidate(rng: Rng, id: number, role: Role, day: number, bes
     const tier = o.tier ?? pickWeighted(rng, ['bronze', 'silver', 'gold', 'elite'] as Tier[], tierMix(bestRep));
     const [lo, hi] = TIER_RANGE[tier];
     target = o.ovr ?? rng.int(lo, hi);
+    // Above the ceiling nobody applies: they land a little under it instead.
+    if (o.cap !== undefined && target > o.cap) target = Math.max(lo > o.cap ? 25 : lo, o.cap - rng.int(0, 6));
     potential = clamp(target + rng.int(0, 20), 30, 95);
   }
   const attrs = attrsFor(rng, role, target, o.keyMin);
+  if (o.cap !== undefined) {
+    const top = o.cap + T.market.talentAttrSlack;
+    const key = keyAttr(role);
+    // The agency's promised key attribute stands; everything else stays under the ceiling.
+    for (const a of ATTR_IDS) if (!(a === key && o.keyMin !== undefined)) attrs[a] = Math.min(attrs[a], top);
+  }
   const talentIds = Object.keys(TALENTS) as TalentId[];
   const talent = rng.chance(0.6) ? rng.pick(talentIds) : null;
   const personality: PersonalityId[] = [pickPersonality(rng)];
