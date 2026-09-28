@@ -4,7 +4,7 @@ import type { CampaignId } from '../data/campaigns';
 import type { DeliveryDealId } from '../data/deliveryDeals';
 import type { AttrId, MainKind, Role, SegmentId, TierId } from '../data/types';
 import type { Economy } from './economy';
-import type { DayReport, DeliveryMode, GameState, StaffPolicy } from './state';
+import type { Bookings, DayReport, DeliveryMode, GameState, ServiceStyle, StaffPolicy } from './state';
 
 export type Command =
   | { type: 'setTier'; recipeId: string; ingredientId: string; tier: TierId }
@@ -18,6 +18,8 @@ export type Command =
   | { type: 'placeFurniture'; itemId: string; x: number; y: number }
   | { type: 'moveFurniture'; uid: number; x: number; y: number }
   | { type: 'removeFurniture'; uid: number }
+  /** Table or counter service, and bookings (floor-service.md 2). */
+  | { type: 'setFloorPolicy'; style?: ServiceStyle; bookings?: Bookings }
   | { type: 'buyEquipment'; itemId: string; x?: number; y?: number; rot?: 0 | 1 }
   | { type: 'moveEquipment'; uid: number; x: number; y: number; rot: 0 | 1 }
   | { type: 'sellEquipment'; uid: number }

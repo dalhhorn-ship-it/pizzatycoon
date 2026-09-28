@@ -320,6 +320,44 @@ export const T = {
     walkAwayThreshold: 1.5,
     nightOwl: 0.1,
   },
+  /**
+   * How the dining room runs (floor-service.md). The defaults (table service, mixed bookings, no standing places) change
+   * nothing; every other choice trades comfort for pace or the other way round.
+   */
+  floor: {
+    /** Counter service: guests order and pay at the till, servers bring the food and clear. */
+    counterOrderMult: 0.35,
+    counterPayMult: 0.5,
+    /** Each server looks after this many times as many guests. */
+    counterServerReach: 1.4,
+    counterServiceScore: -0.08,
+    /** Guests linger less without a server at their elbow. */
+    counterMealMult: 0.85,
+    /** Fewer starters and desserts, far fewer aperitivi and digestivi, when nobody suggests them. */
+    counterSideAttach: 0.8,
+    counterBarAttach: 0.6,
+    /** Reservations: tables are held for bookings, so fewer seats fit the party in front of them. */
+    reservationsTableFit: -0.05,
+    /** Share of the door queue guests feel, and how quickly they give up, compared with mixed bookings. */
+    reservationsQueueShare: 0.6,
+    reservationsWalkAway: 0.5,
+    /** No reservations: every table turns straight away, but the queue at the door is longer and felt. */
+    walkInTableFit: 0.1,
+    walkInQueueShare: 1.15,
+    /** Demand per segment: planners like to book, the spontaneous like to walk in. */
+    reservationsDemand: { students: 0.9, families: 1.0, professionals: 1.05, foodies: 1.1, seniors: 1.08, tourists: 0.95 } as Record<string, number>,
+    walkInDemand: { students: 1.08, families: 0.97, professionals: 1.02, foodies: 0.9, seniors: 0.92, tourists: 1.06 } as Record<string, number>,
+    /** Standing places: guests eat in this share of their usual meal time, and skip being seated. */
+    standingMealMult: 0.5,
+    standingFit: 0.95,
+    /** A standing place counts as this share of a seat against the fire safety limit. */
+    standingFireShare: 0.5,
+    /** Share of each segment happy to eat standing, at lunch and at dinner. */
+    standingAffinity: {
+      lunch: { students: 0.6, families: 0.05, professionals: 0.5, foodies: 0.15, seniors: 0.02, tourists: 0.4 },
+      dinner: { students: 0.35, families: 0.02, professionals: 0.15, foodies: 0.1, seniors: 0.01, tourists: 0.25 },
+    } as Record<'lunch' | 'dinner', Record<string, number>>,
+  },
   satisfaction: {
     wFood: 0.4,
     wService: 0.2,

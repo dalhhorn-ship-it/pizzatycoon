@@ -55,6 +55,8 @@ export class KitchenView {
         steelPrepTable: 'prepCounter', graniteBench: 'marbleBench', olivewoodBench: 'marbleBench', refrigeratedMakeLine: 'prepFridge',
         precisionSheeter: 'doughSheeter', doughDivider: 'doughSheeter', retarderProver: 'provingCabinet', heatedStonePass: 'heatLampPass',
         hoodDishwasher: 'dishMachine', blastChiller: 'fridge', doubleDoorFridge: 'fridge',
+        airImpingerOven: 'conveyorOven', dualFuelOven: 'woodFiredOven', doubleMakeTable: 'prepCounter', pizzaioloStation: 'prepFridge',
+        coldPressSheeter: 'doughSheeter', expoPass: 'heatLampPass', conveyorDishwasher: 'dishMachine', motherDoughCellar: 'provingCabinet',
       };
       drawEquipment(g, alias[itemId] ?? itemId, x, y, w, h, tile, active, performance.now() / 1000);
       return true;

@@ -5,7 +5,7 @@ import { ADDONS, type AddonItem, UPGRADE_PATHS } from '../data/addons';
 import { EQUIPMENT } from '../data/equipment';
 import { FIRE_SAFETY } from '../data/fireSafety';
 import { ROOM_TOUCHES } from '../data/roomTouches';
-import { FURNITURE } from '../data/furniture';
+import { FURNITURE, fireSeats } from '../data/furniture';
 import { INGREDIENTS, SUPPLIERS, TIERS } from '../data/ingredients';
 import { menuSection, PIZZA_BASE, PRIMO_BASES, RECIPE_BOOK } from '../data/recipes';
 import { ROLE_NAMES } from '../data/staff';
@@ -23,7 +23,7 @@ import { Rng } from './rng';
 import { coachProblem, hasPersonality, interestProblem, ovr, salaryFor, staffFromSkill } from './staff';
 import { rivalSettingsOf } from './economy';
 import { applyRivalToggle, rivalAt, seedRivals } from './rivals';
-import { cloneState, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION } from './state';
+import { cloneState, floorOf, type GameState, type OwnedEquipment, type Recipe, type RecipeLine, SCHEMA_VERSION } from './state';
 import {
   bookCourse, ensureEveryRole as fillRoles, firstMarket, HIREABLE_ROLES, hiredFromMarket, policyOf, recordDeparture, weekNumber,
 } from './team';
@@ -197,15 +197,16 @@ function relayoutDining(furniture: GameState['furniture'], premisesId: string): 
   const W = p?.diningWidth ?? 10;
   const H = p?.diningHeight ?? 8;
   const limit = seatLimit(premisesId);
-  const sorted = [...furniture].sort((a, b) => Number(FURNITURE[b.itemId]?.kind === 'table') - Number(FURNITURE[a.itemId]?.kind === 'table'));
+  const seated = (id: string): boolean => (FURNITURE[id]?.kind ?? 'decor') !== 'decor';
+  const sorted = [...furniture].sort((a, b) => Number(seated(b.itemId)) - Number(seated(a.itemId)));
   const placed: GameState['furniture'] = [];
   const unplaced: GameState['furniture'] = [];
   let seats = 0;
   for (const f of sorted) {
     const it = FURNITURE[f.itemId];
     if (!it) continue;
-    const table = it.kind === 'table';
-    if (table && seats + it.seats > limit) {
+    const table = it.kind !== 'decor';
+    if (table && seats + fireSeats(it) > limit) {
       unplaced.push(f);
       continue;
     }
@@ -221,7 +222,7 @@ function relayoutDining(furniture: GameState['furniture'], premisesId: string): 
     }
     if (spot) {
       placed.push({ ...f, ...spot });
-      if (table) seats += it.seats;
+      if (table) seats += fireSeats(it);
     } else unplaced.push(f);
   }
   return { placed, unplaced };
@@ -348,10 +349,10 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
       for (let dx = 0; dx < item.w; dx++) for (let dy = 0; dy < item.h; dy++) {
         if (occ.has(`${cmd.x + dx},${cmd.y + dy}`)) return fail(input, 'Something is already there.');
       }
-      if (!existing && item.kind === 'table') {
-        const seats = state.furniture.reduce((a, f) => a + (FURNITURE[f.itemId]?.seats ?? 0), 0);
+      if (!existing && item.kind !== 'decor') {
+        const seats = state.furniture.reduce((a, f) => a + fireSeats(FURNITURE[f.itemId]), 0);
         const limit = seatLimit(state.premisesId, state.fireSafety);
-        if (seats + item.seats > limit) return fail(input, `Fire safety: at most ${limit} seats in this room.`);
+        if (seats + fireSeats(item) > limit) return fail(input, `Fire safety: at most ${limit} seats in this room${item.kind === 'standing' ? ' (a standing place counts as half a seat)' : ''}.`);
       }
       if (existing) {
         existing.x = cmd.x;
@@ -362,6 +363,11 @@ export function apply(input: GameState, cmd: Command, opts: DayOptions = { noise
         state.cash -= cost;
         state.furniture.push({ uid: state.nextUid++, itemId, x: cmd.x, y: cmd.y, paid: cost });
       }
+      break;
+    }
+    case 'setFloorPolicy': {
+      const now = floorOf(state);
+      state.floorPolicy = { style: cmd.style ?? now.style, bookings: cmd.bookings ?? now.bookings };
       break;
     }
     case 'removeFurniture': {
@@ -799,7 +805,7 @@ export interface MoveQuote {
 /** Keep the player's own dining layout when it fits the new room; otherwise lay it out again. */
 function moveDining(state: GameState, premisesId: string): { placed: GameState['furniture']; unplaced: GameState['furniture'] } {
   const p = PREMISES[premisesId];
-  const seats = state.furniture.reduce((a, f) => a + (FURNITURE[f.itemId]?.seats ?? 0), 0);
+  const seats = state.furniture.reduce((a, f) => a + fireSeats(FURNITURE[f.itemId]), 0);
   const fits = !!p && seats <= seatLimit(premisesId) && state.furniture.every((f) => {
     const it = FURNITURE[f.itemId];
     return !!it && f.x + it.w <= p.diningWidth && f.y + it.h <= p.diningHeight;

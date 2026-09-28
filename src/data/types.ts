@@ -166,7 +166,8 @@ export interface EquipmentItem {
   short: string;
 }
 
-export type FurnitureKind = 'table' | 'decor';
+/** Standing places (a bar counter, a window ledge) hold guests who eat quickly on their feet (floor-service.md 3). */
+export type FurnitureKind = 'table' | 'standing' | 'decor';
 
 export interface FurnitureItem {
   id: string;
@@ -175,6 +176,7 @@ export interface FurnitureItem {
   w: number;
   h: number;
   price: number;
+  /** Seats at a table, or standing places at a bar. */
   seats: number;
   decorPoints: number;
   lighting: number;

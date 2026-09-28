@@ -11,7 +11,7 @@ export const LIMIT_NAMES: Record<ServiceReport['bottleneck'], string> = {
 };
 
 export const LIMIT_FIX: Record<ServiceReport['bottleneck'], string> = {
-  seats: 'More tables, a host or a heat lamp pass.',
+  seats: 'More tables, a host, a heat lamp pass, a standing bar or counter service.',
   servers: 'Hire another server, or faster ones: a server at Speed 50 looks after 35 guests a service, a top server up to 50.',
   oven: 'Another or a bigger oven, a cook to tend them, or primi and secondi that skip the oven.',
   prep: 'Another prep station or a sheeter, a cook, a hand wash station, or a shorter menu.',

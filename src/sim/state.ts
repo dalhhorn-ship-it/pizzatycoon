@@ -438,6 +438,17 @@ export interface TeamLine {
   reason: string;
 }
 
+/** How guests order: at the table from a server, or at the counter (floor-service.md 2). */
+export type ServiceStyle = 'table' | 'counter';
+/** Whether guests can book a table (floor-service.md 2). */
+export type Bookings = 'mixed' | 'reservations' | 'walkIn';
+export interface FloorPolicy {
+  style: ServiceStyle;
+  bookings: Bookings;
+}
+export const DEFAULT_FLOOR: FloorPolicy = { style: 'table', bookings: 'mixed' };
+export const floorOf = (s: Pick<GameState, 'floorPolicy'>): FloorPolicy => ({ ...DEFAULT_FLOOR, ...(s.floorPolicy ?? {}) });
+
 /** How the manager runs the team at a restaurant (staff-management.md 8.1). */
 export interface StaffPolicy {
   budget: number;
@@ -465,6 +476,7 @@ export interface ManagerLog {
 export const LOCATION_KEYS = [
   'districtId', 'premisesId', 'venueId', 'deposit', 'rep', 'following', 'recipes', 'furniture', 'equipment', 'staff',
   'daysOpen', 'fireSafety', 'roomTouches', 'history', 'departures', 'staffPolicy', 'delegateStaff', 'managerLog', 'campaigns', 'delivery', 'kpis',
+  'floorPolicy',
 ] as const;
 export type LocationKey = (typeof LOCATION_KEYS)[number];
 
@@ -481,7 +493,7 @@ export const KEY_SCOPE: Record<keyof GameState, 'shared' | 'location' | 'transie
   districtId: 'location', premisesId: 'location', venueId: 'location', deposit: 'location', rep: 'location', following: 'location',
   recipes: 'location', furniture: 'location', equipment: 'location', staff: 'location', daysOpen: 'location', fireSafety: 'location',
   roomTouches: 'location', history: 'location', departures: 'location', staffPolicy: 'location', delegateStaff: 'location',
-  managerLog: 'location', campaigns: 'location', delivery: 'location', kpis: 'location',
+  managerLog: 'location', campaigns: 'location', delivery: 'location', kpis: 'location', floorPolicy: 'location',
   ownList: 'transient', ownerAway: 'transient',
 };
 export type Location = Pick<GameState, LocationKey> & { id: number };
@@ -547,6 +559,8 @@ export interface GameState {
   campaigns: ActiveCampaign[];
   /** Food delivery at this restaurant (competition.md 6). */
   delivery: DeliveryState | null;
+  /** Table or counter service, and bookings (floor-service.md); missing means table service with mixed bookings. */
+  floorPolicy?: FloorPolicy;
   /** Weekly KPI rows for the business review, newest last (src/sim/kpi.ts). */
   kpis: import('./kpi').WeekKpi[];
   /** Live rival pizzerias in the city (competition.md 3). */

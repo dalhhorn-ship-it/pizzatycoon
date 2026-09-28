@@ -17,7 +17,7 @@ import { stateLocation } from './location';
 import { dishWork, type MenuComplexity, menuComplexity } from './menu';
 import { ROLE_AREA, ROLE_BASE_SALARY } from '../data/staff';
 import { effAttr, hasTalent, moraleQuality, onRota, pressureMult, pressureQuality } from './staff';
-import type { GameState, PlacedFurniture, Recipe, Staff } from './state';
+import { floorOf, type GameState, type PlacedFurniture, type Recipe, type Staff } from './state';
 
 export const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 const mean = (xs: number[]): number => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
@@ -130,6 +130,10 @@ export interface KitchenStats {
 export interface RoomStats {
   seats: number;
   tables: number;
+  /** Standing places at bar counters, ledges and high tables (floor-service.md 3). */
+  standing: number;
+  /** Standing pieces: a server covers each like a table. */
+  bars: number;
   diningTiles: number;
   decorPoints: number;
   lighting: number;
@@ -483,6 +487,8 @@ export function roomStats(state: GameState): RoomStats {
   const occupied = occupiedTiles(state.furniture);
   let seats = 0;
   let tables = 0;
+  let standing = 0;
+  let bars = 0;
   let decorPoints = 0;
   let lighting = 0;
   let comfort = 0;
@@ -500,6 +506,11 @@ export function roomStats(state: GameState): RoomStats {
     decorPoints += item.decorPoints;
     lighting += item.lighting;
     comfort += item.comfort;
+    if (item.kind === 'standing') {
+      standing += item.seats;
+      bars += 1;
+      continue;
+    }
     if (item.kind !== 'table') continue;
     seats += item.seats;
     tables += 1;
@@ -526,7 +537,7 @@ export function roomStats(state: GameState): RoomStats {
     0,
     100,
   );
-  return { seats, tables, diningTiles, decorPoints, lighting, crowdedTables: crowded, ambience };
+  return { seats, tables, standing, bars, diningTiles, decorPoints, lighting, crowdedTables: crowded, ambience };
 }
 
 // ---------- Service ----------
@@ -535,6 +546,9 @@ export function serviceStats(state: GameState, kitchen: Record<Service, KitchenS
   const crew = onRota(state.staff, state.day);
   const servers = crew.filter((s) => s.role === 'server');
   const hasHost = crew.some((s) => s.role === 'host');
+  // Counter service (floor-service.md 2): guests order and pay at the till, so servers only carry plates and clear.
+  const counter = floorOf(state).style === 'counter';
+  const F = T.floor;
   const dinner: WorkContext = { service: 'dinner', load: load.dinner, day: state.day };
   const avgServerSkill = mean(servers.map((s) => personalQuality(s, dinner)));
   const extra = servers.length ? Math.max(0, tables / servers.length - T.service.tablesPerServer) : 0;
@@ -548,16 +562,17 @@ export function serviceStats(state: GameState, kitchen: Record<Service, KitchenS
   const serverSpeed = mk(speedFor);
   // A pass lets plates wait for a runner, so each server can look after more guests: x1.2 with a heat lamp pass.
   const passReach = Math.sqrt(1 / passMult);
-  const serverGuests = mk((service) => passReach * servers.reduce((x, s) => x + guestsForServer(s, { service, load: load[service], day: state.day }), 0));
-  const orderTime = mk((sv) => (serverSpeed[sv] > 0 ? T.service.order / serverSpeed[sv] : 99));
+  const serverGuests = mk((service) => passReach * (counter ? F.counterServerReach : 1) * servers.reduce((x, s) => x + guestsForServer(s, { service, load: load[service], day: state.day }), 0));
+  const orderTime = mk((sv) => (serverSpeed[sv] > 0 ? (T.service.order * (counter ? F.counterOrderMult : 1)) / serverSpeed[sv] : 99));
   const serveTime = mk((sv) => (serverSpeed[sv] > 0 ? (T.service.serve * passMult) / serverSpeed[sv] : 99));
-  const payTime = mk((sv) => (serverSpeed[sv] > 0 ? T.service.payBus / serverSpeed[sv] : 99));
+  const payTime = mk((sv) => (serverSpeed[sv] > 0 ? (T.service.payBus * (counter ? F.counterPayMult : 1)) / serverSpeed[sv] : 99));
   const serviceTime = mk((sv) => seatTime + orderTime[sv] + kitchen[sv].cookTime + serveTime[sv] + payTime[sv]);
   const serviceScore = clamp(
     T.satisfaction.serviceBase +
       T.satisfaction.servicePerSkill * avgServerSkill +
       (hasHost ? T.satisfaction.hostBonus : 0) +
-      (servers.some((s) => hasTalent(s, 'charmer')) ? T.satisfaction.charmerBonus : 0),
+      (servers.some((s) => hasTalent(s, 'charmer')) ? T.satisfaction.charmerBonus : 0) +
+      (counter ? F.counterServiceScore : 0),
     0,
     1,
   );
@@ -583,7 +598,7 @@ export function weeklyRent(state: GameState): number {
 export function analyse(state: GameState, pressure: Record<Service, AreaLoad> = NO_PRESSURE, opts: { menuOnly?: boolean } = {}): Analysis {
   const kitchen = { lunch: kitchenStats(state, 'lunch', pressure.lunch), dinner: kitchenStats(state, 'dinner', pressure.dinner) };
   const room = roomStats(state);
-  const service = serviceStats(state, kitchen, room.tables, pressure);
+  const service = serviceStats(state, kitchen, room.tables + room.bars, pressure);
   const crew = onRota(state.staff, state.day);
   const frugal = crew.some((s) => s.role === 'chef' && hasTalent(s, 'frugal'));
   const dishes: Record<string, DishStats> = {};

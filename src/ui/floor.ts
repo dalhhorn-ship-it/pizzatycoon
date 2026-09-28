@@ -5,6 +5,7 @@ import { PREMISES } from '../data/districts';
 import { EQUIPMENT } from '../data/equipment';
 import { FURNITURE } from '../data/furniture';
 import { SEGMENTS } from '../data/segments';
+import { T } from '../data/tunables';
 import type { SegmentId } from '../data/types';
 import { occupiedTiles } from '../sim/analysis';
 import { Rng } from '../sim/rng';
@@ -39,8 +40,8 @@ function css(name: string): string {
 export function partiesFor(state: GameState, report: DayReport): Party[] {
   const rng = Rng.stream(state.seed, report.day, 'playback');
   const tables = state.furniture
-    .filter((f) => FURNITURE[f.itemId]?.kind === 'table')
-    .map((f) => ({ uid: f.uid, seats: FURNITURE[f.itemId]?.seats ?? 2, freeAt: 0 }))
+    .filter((f) => FURNITURE[f.itemId]?.kind === 'table' || FURNITURE[f.itemId]?.kind === 'standing')
+    .map((f) => ({ uid: f.uid, seats: FURNITURE[f.itemId]?.seats ?? 2, freeAt: 0, standing: FURNITURE[f.itemId]?.kind === 'standing' }))
     .sort((a, b) => a.seats - b.seats);
   const out: Party[] = [];
   for (const sv of report.services) {
@@ -69,12 +70,15 @@ export function partiesFor(state: GameState, report: DayReport): Party[] {
         out.push(p);
         continue;
       }
-      const t = tables.filter((x) => x.seats >= p.size).sort((a, b) => a.freeAt - b.freeAt || a.seats - b.seats)[0]
-        ?? [...tables].sort((a, b) => b.seats - a.seats)[0];
+      // Guests who like a quick bite take a standing place when one is free first (floor-service.md 3).
+      const stands = rng.chance(T.floor.standingAffinity[sv.service]?.[p.segment] ?? 0);
+      const fits = tables.filter((x) => x.seats >= p.size && (stands || !x.standing));
+      const t = fits.sort((a, b) => a.freeAt - b.freeAt || a.seats - b.seats)[0]
+        ?? [...tables].filter((x) => !x.standing).sort((a, b) => b.seats - a.seats)[0];
       if (!t) continue;
       p.size = Math.min(p.size, t.seats);
       p.seat = Math.max(p.arrive, t.freeAt);
-      const meal = SEGMENTS[p.segment].mealLength[sv.service];
+      const meal = SEGMENTS[p.segment].mealLength[sv.service] * (t.standing ? T.floor.standingMealMult : 1);
       p.leave = p.seat + sv.tableCycle - meal + meal * (0.9 + 0.2 * rng.next());
       t.freeAt = p.leave + 2;
       p.tableUid = t.uid;

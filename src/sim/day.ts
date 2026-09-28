@@ -20,7 +20,7 @@ import { followingDemand, nextFollowing, queueDelay, valueScore } from './formul
 
 // Moved to formulas.ts (no import cycles, TD5); re-exported for existing callers.
 export { followingDemand, followingTarget, nextFollowing, queueDelay, valueScore } from './formulas';
-import { type DayReport, type DeliveryDay, type GameState, type MarketDay, type PnL, profitOf, type Recipe, type Review, type SegmentReport, type ServiceReport } from './state';
+import { type DayReport, type DeliveryDay, floorOf, type GameState, type MarketDay, type PnL, profitOf, type Recipe, type Review, type SegmentReport, type ServiceReport } from './state';
 
 export interface DayOptions {
   /** Daily randomness on demand (plus or minus a few percent). Off for balance tests. */
@@ -107,7 +107,7 @@ export function menuFit(mains: Recipe[], a: Analysis, segment: SegmentId, crowdP
 export function closedReason(state: GameState, a: Analysis): string | null {
   const onMenu = state.recipes.filter((r) => r.onMenu);
   if (!onMenu.some((r) => r.kind === 'pizza')) return 'There is no pizza on the menu.';
-  if (a.room.tables === 0) return 'There are no tables in the dining room.';
+  if (a.room.tables === 0 && a.room.standing === 0) return 'There are no tables in the dining room.';
   if (a.kitchen.ovens === 0) return 'The kitchen has no oven.';
   if (a.kitchen.counters === 0) return 'The kitchen has no prep station.';
   if (!a.kitchen.hasCold) return 'The kitchen needs a fridge to keep the dough cold.';
@@ -168,6 +168,20 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   >;
   const ambience = a.room.ambience;
   const attach = Object.fromEntries(SIDE_KINDS.map((k) => [k, sidesByKind[k].length ? attachRate(k, ambience) : 0])) as Record<SideKind, number>;
+  // How the room runs (floor-service.md): at the counter nobody suggests a starter or a digestivo.
+  const floor = floorOf(state);
+  const F = T.floor;
+  if (floor.style === 'counter') {
+    attach.starter *= F.counterSideAttach;
+    attach.dessert *= F.counterSideAttach;
+    attach.aperitivo *= F.counterBarAttach;
+    attach.digestivo *= F.counterBarAttach;
+  }
+  const bookingDemand = floor.bookings === 'reservations' ? F.reservationsDemand : floor.bookings === 'walkIn' ? F.walkInDemand : null;
+  const tableFit = T.service.partySizeFit + (floor.bookings === 'reservations' ? F.reservationsTableFit : floor.bookings === 'walkIn' ? F.walkInTableFit : 0);
+  const queueShareMult = floor.bookings === 'reservations' ? F.reservationsQueueShare : floor.bookings === 'walkIn' ? F.walkInQueueShare : 1;
+  const walkAwayMult = floor.bookings === 'reservations' ? F.reservationsWalkAway : 1;
+  const mealMult = floor.style === 'counter' ? F.counterMealMult : 1;
   // A wider wine list: more guests order a second glass (balance.md 4.7).
   const wineList = sidesByKind.drink.filter((r) => WINE_IDS.has(r.id));
   attach.drink *= 1 + Math.min(T.attach.wineListCap, T.attach.wineListPerWine * Math.max(0, wineList.length - 1));
@@ -237,7 +251,8 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const noise = opts.noise ? clamp(1 + 0.06 * rng.normal(), 0.8, 1.2) : 1;
     const base =
       district.footTraffic * district.visibility * district.shares[id] * T.demand.captureBase * repMult * weekdayMult *
-      fit * priceMult * budgetMult * qualityMult * fameMult * followMult * (1 + (T.attach.wineDemand[id] ?? 0) * wine) * (1 - T.demand.competitionFactor * cEff) * noise * economyOf(state).demand;
+      fit * priceMult * budgetMult * qualityMult * fameMult * followMult * (1 + (T.attach.wineDemand[id] ?? 0) * wine) * (1 - T.demand.competitionFactor * cEff) * noise * economyOf(state).demand *
+      (bookingDemand?.[id] ?? 1);
     const sides: Record<string, Choice | null> = {};
     const demandBy = {
       lunch: base * district.lunchShare * speedMult * mktFor(campaigns, id, state.day, 'lunch'),
@@ -338,9 +353,13 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   const stageOf = (sv: Service) => {
     const hours = sv === 'lunch' ? T.time.lunchHours : T.time.dinnerHours;
     const demand = segs.reduce((x, s) => x + s.demand[sv], 0);
-    const meal = demand > 0 ? segs.reduce((x, s) => x + s.demand[sv] * (SEGMENTS[s.id].mealLength[sv] + s.extraMeal[sv]), 0) / demand : 45;
+    const meal = mealMult * (demand > 0 ? segs.reduce((x, s) => x + s.demand[sv] * (SEGMENTS[s.id].mealLength[sv] + s.extraMeal[sv]), 0) / demand : 45);
     const cycle = a.service.serviceTime[sv] + meal;
-    const tablePerHour = (a.room.seats * T.service.partySizeFit * 60) / cycle;
+    // Standing places (floor-service.md 3): no seating, half the meal, but only for guests happy to stand.
+    const standCycle = a.service.serviceTime[sv] - a.service.seatTime + meal * F.standingMealMult;
+    const standWilling = segs.reduce((x, s) => x + s.demand[sv] * (F.standingAffinity[sv]?.[s.id] ?? 0), 0) / (hours * T.service.utilisation[sv]);
+    const standPerHour = a.room.standing > 0 ? Math.min((a.room.standing * F.standingFit * 60) / standCycle, standWilling) : 0;
+    const tablePerHour = (a.room.seats * tableFit * 60) / cycle + standPerHour;
     // Each server looks after a limited number of guests a service (35 at Speed 50, up to 50): the front of house is the lower of the two.
     const serverPerHour = a.service.serverGuests[sv] / (hours * T.service.utilisation[sv]);
     const seatPerHour = Math.min(tablePerHour, serverPerHour);
@@ -406,12 +425,12 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
       else bottleneck = ovenCoversPerHour <= prepPerHour ? 'oven' : 'prep';
     }
     let walk = demand - servedTotal;
-    const share = T.service.perceivedQueueShare[sv];
+    const share = T.service.perceivedQueueShare[sv] * queueShareMult;
     for (const s of segs) {
       const tol = SEGMENTS[s.id].waitTolerance[sv];
       const pq = q * share;
       const limit = T.service.walkAwayThreshold * tol;
-      const leaveFrac = pq > limit ? Math.min(0.5, (pq - limit) / limit) : 0;
+      const leaveFrac = walkAwayMult * (pq > limit ? Math.min(0.5, (pq - limit) / limit) : 0);
       const got = s.demand[sv] * fill;
       const stays = got * (1 - leaveFrac);
       walk += got - stays;
@@ -629,7 +648,7 @@ function tipsFor(services: ServiceReport[], a: Analysis, pnl: PnL, segs: Segment
   for (const s of services) {
     const pct = Math.round(Math.min(1, s.rho) * 100);
     const name = s.service === 'lunch' ? 'lunch' : 'dinner';
-    if (s.bottleneck === 'seats') tips.push(`Seats were full ${pct}% of ${name}. More tables or a host (faster seating) would help.`);
+    if (s.bottleneck === 'seats') tips.push(`Seats were full ${pct}% of ${name}. More tables, a host (faster seating), standing places for quick bites or counter service would help.`);
     if (s.bottleneck === 'oven') tips.push(`The oven was the limit at ${name}. A bigger or faster oven would serve more guests.`);
     if (s.bottleneck === 'prep') {
       tips.push(

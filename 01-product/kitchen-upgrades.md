@@ -179,3 +179,40 @@ Guardrail kept: the artisan Neapolitan Dome bakes about 17 pizzas an hour at ski
 
 **UI.** The Add equipment list, Your equipment and a new **Equipment catalogue** (every item, now and later, with its unlock) are grouped in foldable sections. **Group by** switches between *Station* (Ovens, Prep stations, Dough tools, Cold storage, Washing, Pass and plates, Delivery) and *Quality line* (Basic, Volume, Quality, Hybrid, Artisan). Open all and Fold all sit next to it; folds are remembered per browser. Inside a group, unlocked items come first, cheapest first.
 
+
+## 12. Tuning for speed, quality or both (as built, M0.7)
+
+Founder request: "invent more kitchen upgrades to tune for quality, or speed, or both."
+
+Every new item has a clear lean, so the player picks a direction rather than just the next price step. **Speed** gear sits in the Volume line, **quality** gear in Quality or Artisan, and gear that does **both** sits in Hybrid and costs the most. All reuse existing roles, so the sim reads them generically, and none is in a reference build, so `balance.md` 3.1 is unchanged.
+
+**8 new stations** (`src/data/equipment.ts`):
+
+| Item | Lean | Role, family | Price | Key numbers | Unlock | Upgrade from |
+|---|---|---|---|---|---|---|
+| Air Impinger Oven | speed | oven, volume, 2x2 | $6,800 | 3 slots, bake x0.45, quality -2, tend 0.3 | serve 1,000 | Conveyor |
+| Double Sided Make Table | speed | counter, volume, 3x1 | $5,200 | prep x1.45, quality -1 | serve 1,000 | Prep Counter, Stainless |
+| Rack Conveyor Dishwasher | speed | dish machine, volume, 3x1 | $14,000 | dishwashing x3.2, 3 washers, 2 wash points | rank Restaurateur | Hood Type |
+| Mother Dough Cellar | quality | proving, artisan, 2x2 | $12,000 | quality +7, cold, dough for 150 | rep 75 | Retarder Prover |
+| Dual Fuel Brick Oven | both | oven, hybrid, 3x3 | $26,000 | 7 slots, bake x0.75, quality +8, skill 6 | rep 75 | Gas Stone, Rotating Stone |
+| Pizzaiolo Station | both | counter, hybrid, 3x1 | $11,500 | prep x1.35, quality +4, cold, dough for 120 | rep 70 | Make Line |
+| Cold Press Sheeter | both | sheeter, hybrid | $8,500 | prep x1.4, quality +1 | rep 65 | Dough Press, Divider |
+| Expo Pass with Ticket Screen | both | pass, hybrid | $6,500 | serving x0.55, quality +1 | serve 2,000 | Heat Lamp, Heated Stone |
+
+**9 new add-ons** (`src/data/addons.ts`). Two are deliberate trades: the add-on quality cap (`T.addons.qualityCap`) still applies, and a negative quality counts against it.
+
+| Add-on | Lean | Fits | Price | Effect | Unlock |
+|---|---|---|---|---|---|
+| Convection Fan Kit | speed for quality | deck ovens, air impinger | $900 | bakes 15% faster, -1 quality | serve 500 |
+| Pizza Screen Rack | speed | conveyors, air impinger | $700 | +1 pizza at a time | serve 1,000 |
+| Sauce Dispenser | speed | prep stations | $450 | prep 12% faster | serve 500 |
+| Kitchen Ticket Screen | speed | passes | $1,100 | serves 15% faster | serve 1,000 |
+| Glass and Plate Racks | speed | wash stations | $600 | washes 15% faster | serve 1,000 |
+| Biscotto Stone Floor | quality | stone and brick ovens | $1,400 | +2 quality | rep 50 |
+| Fresh Basil Pots | quality for speed | prep stations | $300 | prep 3% slower, +2 quality | rep 45 |
+| Infrared Top Heater | both | deck, stone and brick ovens | $1,800 | bakes 10% faster, +1 quality | rep 60 |
+| Overhead Gantry Shelf | both | prep stations | $800 | prep 5% faster, +1 quality | rep 55 |
+
+Existing add-ons that fit the same kind of station fit the new ones too (the smoke box and firebrick liner on the dual fuel oven, humidity control on the dough cellar, and so on). The add-on text now reads negative effects plainly ("Prep 3% slower", "-1 pizza quality").
+
+Tests: `tests/speedQualityGear.test.ts`.

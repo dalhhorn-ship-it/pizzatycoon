@@ -18,7 +18,7 @@ import { wineListScore } from '../sim/day';
 import { addonProblem, type Command, fireSafetyUnlocked, isUnlocked, seatLimit, loanPayment, RANK_NAMES, suppliersFor, tiersFor, unlockText } from '../sim/game';
 import { buyPrice, sellPrice } from '../sim/economy';
 import { kitchenDims, layoutProblem } from '../sim/kitchen';
-import type { GameState, OwnedEquipment, Recipe } from '../sim/state';
+import { type Bookings, type FloorPolicy, floorOf, type GameState, type OwnedEquipment, type Recipe, type ServiceStyle } from '../sim/state';
 import { locationName, managerOf } from '../sim/chain';
 import { ovr } from '../sim/staff';
 import { act, h, meter, money, signed, toast } from './dom';
@@ -625,11 +625,13 @@ export function roomPanel(ctx: PanelCtx): HTMLElement {
     h('div', { class: 'card' },
       h('div', { class: 'kv' },
         h('span', null, 'Seats'), h('b', null, `${r.seats} at ${r.tables} tables (fire safety allows ${seatLimit(state.premisesId, state.fireSafety)})`),
+        r.standing ? h('span', null, 'Standing places') : null, r.standing ? h('b', null, `${r.standing} for quick bites (count as ${r.standing * T.floor.standingFireShare} seats)`) : null,
         h('span', null, 'Ambience'), h('b', null, r.ambience.toFixed(0)),
         h('span', null, 'Decor points'), h('b', null, `${r.decorPoints} (lighting ${Math.min(10, r.lighting)}/10)`),
         h('span', null, 'Squeezed tables'), h('b', { class: r.crowdedTables ? 'warn' : '' }, String(r.crowdedTables))),
       meter(r.ambience, 100, r.ambience > 70 ? 'warm' : ''),
       h('div', { class: 'small muted' }, 'Ambience lifts satisfaction and how many guests add drinks, starters and desserts. Every table needs a free tile beside it.')),
+    floorServiceCard(ctx),
     roomTouchesCard(ctx),
     fireSafetyCard(ctx),
     h('div', { class: 'row' },
@@ -649,7 +651,45 @@ export function roomPanel(ctx: PanelCtx): HTMLElement {
     },
     h('b', null, h('span', { class: 'swatch', style: `background:${f.color}` }), f.name),
     h('span', { class: 'small muted' }, `${money(buyPrice(state, f.price))} · ${f.w}x${f.h}`),
-    h('span', { class: 'small' }, f.kind === 'table' ? `${f.seats} seats` : `+${f.decorPoints} decor${f.lighting ? `, +${f.lighting} light` : ''}`)))));
+    h('span', { class: 'small' }, f.kind === 'table' ? `${f.seats} seats` : f.kind === 'standing' ? `${f.seats} standing, quick bites` : `+${f.decorPoints} decor${f.lighting ? `, +${f.lighting} light` : ''}`)))));
+}
+
+const STYLE_TEXT: Record<ServiceStyle, [string, string]> = {
+  table: ['Table service', 'Servers take the order and the bill at the table. Guests linger and add starters, desserts and a digestivo.'],
+  counter: ['Counter service', 'Guests order and pay at the till; servers bring the food and clear. Much quicker turns and each server covers more guests, but guests feel less looked after and add fewer extras.'],
+};
+/** Short labels for the switch buttons. */
+const BOOKING_SHORT: Record<Bookings, string> = { reservations: 'Booked', mixed: 'Mixed', walkIn: 'Walk in' };
+const BOOKING_TEXT: Record<Bookings, [string, string]> = {
+  mixed: ['Bookings and walk ins', 'A few tables held for bookings, the rest first come, first served.'],
+  reservations: ['Reservations', 'Seniors, professionals and foodies love a booked table and nobody gives up at the door, but held tables sit empty for a while.'],
+  walkIn: ['No reservations', 'Every table turns the moment it is free. Students and tourists drop in, but the queue at the door is longer and guests feel it.'],
+};
+
+/** How the room runs (floor-service.md): table or counter service, and bookings. */
+function floorServiceCard(ctx: PanelCtx): HTMLElement {
+  const { state } = ctx;
+  const now = floorOf(state);
+  const option = (label: string, on: boolean, change: Partial<FloorPolicy>): HTMLElement =>
+    h('button', { class: on ? 'on' : '', onclick: () => act(ctx, { type: 'setFloorPolicy', ...change }, 'Changes apply from the next service') }, label);
+  // Measurable impact of each other choice (prd.md 5.8), on the real day model.
+  const preview = (label: string, change: Partial<FloorPolicy>): HTMLElement[] => {
+    const hyp = structuredClone(state);
+    hyp.floorPolicy = { ...now, ...change };
+    return [h('div', { class: 'small muted' }, `${label}:`), impactLine(compare(state, hyp))];
+  };
+  const otherStyle: ServiceStyle = now.style === 'table' ? 'counter' : 'table';
+  return h('div', { class: 'card' },
+    h('h3', null, h('span', null, 'Service style'), h('span', { class: 'small muted' }, `${STYLE_TEXT[now.style][0]} · ${BOOKING_TEXT[now.bookings][0]}`)),
+    h('div', { class: 'small muted' }, 'How guests are seated, order and pay. Faster turns fit more guests through the same seats; slower ones sell more extras and please guests who like to be looked after. Standing places (below) take guests who only want a quick bite.'),
+    h('div', { class: 'small', style: 'margin-top:6px' }, h('b', null, 'Ordering')),
+    h('div', { class: 'seg' }, ...(['table', 'counter'] as const).map((k) => option(STYLE_TEXT[k][0], now.style === k, { style: k }))),
+    h('div', { class: 'small muted' }, STYLE_TEXT[now.style][1]),
+    ...preview(`Switch to ${STYLE_TEXT[otherStyle][0].toLowerCase()}`, { style: otherStyle }),
+    h('div', { class: 'small', style: 'margin-top:6px' }, h('b', null, 'Bookings')),
+    h('div', { class: 'seg' }, ...(['reservations', 'mixed', 'walkIn'] as const).map((k) => option(BOOKING_SHORT[k], now.bookings === k, { bookings: k }))),
+    h('div', { class: 'small muted' }, BOOKING_TEXT[now.bookings][1]),
+    ...(['reservations', 'mixed', 'walkIn'] as const).filter((k) => k !== now.bookings).flatMap((k) => preview(`Switch to ${BOOKING_TEXT[k][0].toLowerCase()}`, { bookings: k })));
 }
 
 /** Decoration that takes no floor tile (balance.md 4.8): walls, tables, ceiling. */

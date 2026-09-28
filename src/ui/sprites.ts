@@ -242,6 +242,11 @@ export function drawDoormat(g: CanvasRenderingContext2D, x: number, y: number, w
  */
 export function seatSpots(itemId: string, w: number, h: number, seats: number, tile: number): [number, number][] {
   const out: [number, number][] = [];
+  // Guests stand along the front of a bar counter or a window ledge.
+  if (itemId === 'standingBar' || itemId === 'windowLedge') {
+    for (let i = 0; i < seats; i++) out.push([((i + 0.5) / seats) * w, h - tile * 0.12]);
+    return out;
+  }
   const perSide = Math.ceil(seats / 2);
   const horizontal = w >= h;
   const inset = itemId === 'booth4' ? tile * 0.42 : tile * 0.12;
@@ -351,6 +356,35 @@ function table(P: Pen, W: number, H: number, seats: number): void {
     candleBottle(P, 8, Math.round(H / 2));
     for (const [sx, sy] of spots) if (sx >= W / 2) sideChair(P, Math.round(sy), 'right', W - 5);
   }
+}
+
+/** A bar counter (dark wood, brass rail) or a light window ledge, guests standing along the front. */
+function barCounter(P: Pen, W: number, places: number, bar: boolean): void {
+  P.r(2, 11, W - 3, 1, P_.shadow);
+  P.r(1, 2, W - 2, 9, P_.ink);
+  P.r(2, 3, W - 4, 2, bar ? P_.woodLt : P_.cream);
+  P.r(2, 5, W - 4, 4, bar ? P_.wood : P_.creamDk);
+  P.r(2, 9, W - 4, 1, bar ? P_.woodXDk : P_.woodLt);
+  if (bar) P.r(2, 12, W - 4, 1, P_.gold);
+  for (let i = 0; i < places; i++) {
+    const cu = Math.round(((i + 0.5) / places) * W);
+    plate(P, cu, 5);
+    if (bar && i % 2 === 0) {
+      P.r(cu + 2, 3, 1, 2, P_.bottleGreen);
+      P.px(cu + 2, 2, P_.ink);
+    }
+  }
+}
+
+/** A round standing table on a single leg. */
+function highTable(P: Pen, W: number, H: number): void {
+  const cu = W / 2;
+  const cv = H / 2;
+  P.ell(cu + 1, cv + 2, 5, 4, P_.shadow);
+  P.ell(cu, cv, 5.5, 4.5, P_.ink);
+  P.ell(cu, cv, 4.5, 3.5, P_.woodLt);
+  P.ell(cu, cv - 1, 3, 2, P_.woodHi);
+  plate(P, Math.round(cu), Math.round(cv));
 }
 
 function booth(P: Pen, W: number, H: number): void {
@@ -562,6 +596,9 @@ export function drawFurniture(g: CanvasRenderingContext2D, itemId: string, x: nu
     case 'table4': return table(P, W, H, 4);
     case 'table6': return table(P, W, H, 6);
     case 'booth4': return booth(P, W, H);
+    case 'standingBar': return barCounter(P, W, 5, true);
+    case 'windowLedge': return barCounter(P, W, 3, false);
+    case 'highTable': return highTable(P, W, H);
     case 'plant': return plant(P);
     case 'lamp': return lamp(P, t);
     case 'painting': return painting(P);

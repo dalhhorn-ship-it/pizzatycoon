@@ -8,8 +8,8 @@ Playable in the browser, with everything below built and tested. What each docum
 
 * **Menu:** 13 pizzas, 15 primi, 9 secondi plus antipasti, drinks and desserts; ingredient quality tiers (Basic, Standard, Premium, Artisan) and supplier choice; custom dishes; pricing against a fair price band; menu complexity that loads the prep line
 * **The bar:** an Italian wine list, aperitivi and digestivi
-* **Kitchen:** a floor plan with stations, flow and a service pipeline; 41 pieces of equipment from a second hand deck oven to a Neapolitan dome, in a foldable catalogue grouped by station or quality line, with add-ons and upgrade paths; bottlenecks (ovens need tending, cooks need wash points, sinks, dough in the fridges) and a capacity view per service
-* **Dining room:** build mode with tables, booths, decor, lighting, room touches and fire safety
+* **Kitchen:** a floor plan with stations, flow and a service pipeline; 49 pieces of equipment from a second hand deck oven to a dual fuel brick oven, in a foldable catalogue grouped by station or quality line, with 27 add-ons and upgrade paths that tune a station for speed, quality or both; bottlenecks (ovens need tending, cooks need wash points, sinks, dough in the fridges) and a capacity view per service
+* **Dining room:** build mode with tables, booths, standing bars and ledges for quick bites, decor, lighting, room touches and fire safety; table or counter service, and reservations or walk ins
 * **The Squad:** four attributes and an OVR per person, composure under pressure, courses and coaching, a staff market, personalities and mood, each person's value in the day and week reports; restaurant managers run the team by policy
 * **City:** Porto Verde with 7 neighbourhoods and 72 rentable venues, moving between venues, more than one restaurant with managers
 * **Live market:** rival pizzerias that compete on price, quality or marketing, open, grow into small chains and close; ten marketing campaigns with audiences; a Rivals tab with market share, rival cards and a coach
