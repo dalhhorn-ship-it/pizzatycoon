@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest';
 import { T } from '../src/data/tunables';
 import { analyse } from '../src/sim/analysis';
 import { simulateDay } from '../src/sim/day';
-import { dealTerms, deliveryWeeklyCosts, fleetOf, ridersToday } from '../src/sim/delivery';
+import { dealTerms, deliveryMenu, deliveryMenuSize, deliveryWeeklyCosts, fleetOf, menuEffect, menuMains, nextAudience, ridersToday } from '../src/sim/delivery';
 import { deliveryScorecard, gradeOf } from '../src/sim/deliveryScore';
 import { apply, type Command } from '../src/sim/game';
 import { autoLayout } from '../src/sim/kitchen';
@@ -65,6 +65,68 @@ describe('Menu & deals: deal days and minimum order', () => {
     expect(apply(s, { type: 'setDelivery', zone: 'moon' as never }).error).toBeTruthy();
     expect(apply(s, { type: 'setDelivery', minOrder: 'huge' as never }).error).toBeTruthy();
     expect(apply(s, { type: 'setDelivery', dealDays: 'sometimes' as never }).error).toBeTruthy();
+  });
+});
+
+describe('Standard delivery menu', () => {
+  const full = (s: GameState) => simulateDay(s, analyse(s), { noise: false });
+
+  test('AC-337: a menu that was never set plays like the standard, and the slider is clamped to the mains on the menu', () => {
+    const s = delivering();
+    const mains = menuMains(s).length;
+    const std = step(s, { type: 'setDelivery', menuSize: Math.min(T.delivery.menu.ref, mains) });
+    expect(day(std).wanted).toBeCloseTo(day(s).wanted, 9);
+    expect(day(std).scores!.food).toBeCloseTo(day(s).scores!.food, 9);
+    const big = step(s, { type: 'setDelivery', menuSize: 99 });
+    expect(big.delivery!.menuSize).toBe(T.delivery.menu.max);
+    expect(deliveryMenuSize(big).size).toBe(Math.min(mains, T.delivery.menu.max));
+    expect(apply(s, { type: 'setDelivery', menuSize: Number.NaN }).error).toBeTruthy();
+  });
+
+  test('AC-338: more dishes bring more orders and more kitchen work per order, and cost food on arrival', () => {
+    expect(menuEffect(12).reach).toBeGreaterThan(1);
+    expect(menuEffect(12).work).toBeGreaterThan(1);
+    expect(menuEffect(12).food).toBeLessThan(1);
+    expect(menuEffect(4).reach).toBeLessThan(1);
+    expect(menuEffect(4).work).toBeLessThan(1);
+    expect(menuEffect(4).food).toBe(1);
+    const s = delivering();
+    const small = day(step(s, { type: 'setDelivery', menuSize: 3 }));
+    const wide = day(step(s, { type: 'setDelivery', menuSize: T.delivery.menu.max }));
+    expect(wide.wanted).toBeGreaterThan(small.wanted);
+    // Food on arrival only suffers above the standard size, so the build needs more mains than that.
+    if (deliveryMenuSize(s).max > deliveryMenuSize(s).std) expect(wide.scores!.food).toBeLessThan(small.scores!.food);
+    else expect(wide.scores!.food).toBeCloseTo(small.scores!.food, 9);
+    // A short dining menu: every main on the app is the standard, fewer costs orders.
+    expect(menuEffect(5, 5).reach).toBe(1);
+    expect(menuEffect(3, 5).reach).toBeLessThan(1);
+  });
+
+  test('AC-339: a wider menu grows the delivery audience faster by word of mouth', () => {
+    const d = delivering().delivery!;
+    const narrow = nextAudience(d, 0, 20, menuEffect(3).audience);
+    const wide = nextAudience(d, 0, 20, menuEffect(16).audience);
+    expect(wide.organic).toBeGreaterThan(narrow.organic);
+  });
+
+  test('AC-340: delivery orders only sell dishes on the delivery menu, the best sellers first', () => {
+    const s = step(delivering(), { type: 'setDelivery', menuSize: 3 });
+    const menu = deliveryMenu(s)!.map((r) => r.id);
+    expect(menu).toHaveLength(3);
+    const dineOnly = { ...s, delivery: { ...s.delivery!, on: false } };
+    const withDelivery = full(s).dishSales;
+    const without = full(dineOnly).dishSales;
+    const extra = Object.keys(withDelivery).filter((id) => (withDelivery[id] ?? 0) - (without[id] ?? 0) > 1e-6);
+    expect(extra.every((id) => menu.includes(id))).toBe(true);
+  });
+});
+
+describe('Cooks and capacity count delivery', () => {
+  test('AC-341: each service reports its delivery load in guest equivalents for the capacity cards', () => {
+    const r = simulateDay(delivering(), analyse(delivering()), { noise: false });
+    const dinner = r.services.find((x) => x.service === 'dinner')!;
+    expect(dinner.deliveryPerHour!).toBeGreaterThan(0);
+    expect(dinner.deliveryCovers!).toBeCloseTo(r.delivery!.byService!.dinner.accepted * r.delivery!.byService!.dinner.mains * T.delivery.work, 6);
   });
 });
 

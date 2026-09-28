@@ -4,7 +4,7 @@ import { CAMPAIGNS, type CampaignId } from '../data/campaigns';
 import { T } from '../data/tunables';
 import { forecastSaturday, forecastWeek } from '../sim/forecast';
 import {
-  audienceOf, catchment, DEAL_DAYS_NAMES, deliveryMissing, fleetOf, hasPacking, MIN_ORDER_NAMES, minOrderOf, MODE_BLURB, MODE_NAMES,
+  audienceOf, catchment, DEAL_DAYS_NAMES, deliveryMenu, deliveryMenuSize, deliveryMissing, fleetOf, menuEffect, hasPacking, MIN_ORDER_NAMES, minOrderOf, MODE_BLURB, MODE_NAMES,
   ridersNeeded, ridersToday, VEHICLE_KINDS, vehicleCount, vehicleSpec, ZONE_BLURB, ZONE_NAMES, zoneOf, dealDaysOf,
 } from '../sim/delivery';
 import { DELIVERY_DEAL_IDS, DELIVERY_DEALS } from '../data/deliveryDeals';
@@ -310,8 +310,45 @@ function menuTab(ctx: PanelCtx, d: DeliveryState): HTMLElement[] {
       { v: 'eco', label: `Insulated eco ${money(t.packaging.eco, true)}` },
     ], d.packaging, (v) => act(ctx, { type: 'setDelivery', packaging: v })),
     h('div', { class: 'small muted' }, `Per main. Insulated boxes keep food ${Math.round((t.ecoPackaging - 1) * 100)}% better on the way.`));
-  return compact([unpacked(lastDay(state)), markup, deals, dealDays, minOrder, packaging]);
+  return compact([unpacked(lastDay(state)), deliveryMenuCard(ctx, now), markup, deals, dealDays, minOrder, packaging]);
 }
+
+/** The standard delivery menu with its size slider (delivery-tab.md 5.2). */
+function deliveryMenuCard(ctx: PanelCtx, now: Busy): HTMLElement {
+  const state = ctx.state;
+  const s = deliveryMenuSize(state);
+  const effectText = (n: number): string => {
+    const e = menuEffect(n, s.std);
+    return `${n} dishes: ${signed((e.reach - 1) * 100, 0, '%')} orders, word of mouth ${signed((e.audience - 1) * 100, 0, '%')}, ` +
+      `kitchen work per order ${signed((e.work - 1) * 100, 0, '%')}${e.food < 1 ? `, food on arrival ${signed((e.food - 1) * 100, 1, '%')}` : ''} against the standard ${s.std}.`;
+  };
+  const label = h('b', null, `${s.size} dish${s.size === 1 ? '' : 'es'}`);
+  const effect = h('div', { class: 'small' }, effectText(s.size));
+  const slider = h('input', {
+    type: 'range', min: s.min, max: s.max, step: 1, value: s.size, 'aria-label': 'Dishes on the delivery menu', disabled: s.max <= s.min,
+    oninput: (e: Event) => {
+      const n = Number((e.target as HTMLInputElement).value);
+      label.textContent = `${n} dish${n === 1 ? '' : 'es'}`;
+      effect.textContent = effectText(n);
+    },
+    onchange: (e: Event) => act(ctx, { type: 'setDelivery', menuSize: Number((e.target as HTMLInputElement).value) }, 'Delivery menu updated from the next service'),
+  });
+  const dishes = deliveryMenu({ ...state, delivery: { ...(state.delivery as DeliveryState), menuSize: s.size } }) ?? [];
+  const previews = [s.size - 2, s.size + 2].filter((n) => n >= s.min && n <= s.max).map((n) => {
+    const f = busyDay(state, { menuSize: n });
+    return f.day && now.day ? h('div', { class: 'small muted' },
+      `${n} dishes: ${Math.round(f.day.delivered)} orders (${signed(f.day.delivered - now.day.delivered, 0)}), ${Math.round(f.day.time.dinner)} min at dinner, ${signedMoney(f.profit - now.profit)} on a Saturday.`) : null;
+  });
+  return h('div', { class: 'card' }, h('h3', null, h('span', null, '📋 Delivery menu'), h('span', { class: 'small' }, `standard menu, ${s.size} of ${menuMainsCount(state)} mains`)),
+    h('div', { class: 'small muted' }, 'Your best selling mains go on the app. More dishes bring more orders and let word of mouth grow your delivery audience faster, but every extra dish makes each order more work for the kitchen and a little more likely to arrive wrong or cold.'),
+    h('label', { class: 'slider' }, h('span', { class: 'spread' }, h('span', null, 'Dishes on the delivery menu'), label), slider),
+    effect,
+    !s.set ? h('div', { class: 'small muted' }, `Not set yet: plays like the standard ${s.std} dishes with your whole menu on the app.`) : null,
+    ...previews,
+    dishes.length ? h('div', { class: 'chips' }, ...dishes.map((r) => h('span', { class: 'chip' }, r.name))) : null);
+}
+
+const menuMainsCount = (state: GameState): number => deliveryMenuSize(state).max;
 
 // ---------- Fleet (5.3) ----------
 

@@ -343,6 +343,8 @@ These shipped with their numbers in the balance tuning log; the log section is t
 | F-231 | Delivery scorecard | Seven graded KPIs over 7 delivery days and an overall score | Must | Built | delivery-tab.md 5.4 | tests/deliveryTab.test.ts |
 | F-232 | Delivery focus and tips | The lowest KPI with a button to the tab that fixes it; tips for zone, fleet, deal days, minimum | Should | Built | delivery-tab.md 5.4 | tests/deliveryTab.test.ts |
 | F-233 | Delivery summary in Money | One line and a button to the Delivery tab | Must | Built | delivery-tab.md 4 | manual |
+| F-234 | Standard delivery menu | The best selling mains, a slider for how many: more orders and audience, more kitchen work | Should | Built | delivery-tab.md 5.2 | tests/deliveryTab.test.ts |
+| F-235 | Delivery counts for cooks and capacity | Delivery load on the capacity cards and in the cooks warning | Must | Built | delivery-tab.md 5.3 | tests/deliveryTab.test.ts |
 
 ## Dependency map (critical path)
 

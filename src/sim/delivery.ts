@@ -3,6 +3,7 @@
 import { ADJACENT, DISTRICTS } from '../data/districts';
 import { DELIVERY_DEALS } from '../data/deliveryDeals';
 import { EQUIPMENT } from '../data/equipment';
+import { isMain } from '../data/recipes';
 import type { EquipmentItem } from '../data/types';
 import type { Service } from '../data/types';
 import { T } from '../data/tunables';
@@ -11,7 +12,7 @@ import { SEGMENTS } from '../data/segments';
 import type { SegmentId } from '../data/types';
 import { queueDelay, valueScore } from './formulas';
 import { onRota } from './staff';
-import type { DealDays, DeliveryDay, DeliveryMode, DeliveryState, DeliveryZone, GameState, MinOrder, Staff, VehicleKind } from './state';
+import type { DealDays, DeliveryDay, DeliveryMode, DeliveryState, DeliveryZone, GameState, MinOrder, Recipe, Staff, VehicleKind } from './state';
 import { activeRivals } from './rivals';
 
 const clamp = (x: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, x));
@@ -40,6 +41,60 @@ export const DEAL_DAYS_NAMES: Record<DealDays, string> = { all: 'Every day', wee
 export const zoneOf = (d: Pick<DeliveryState, 'zone'> | null | undefined): DeliveryZone => d?.zone ?? 'standard';
 export const minOrderOf = (d: Pick<DeliveryState, 'minOrder'> | null | undefined): MinOrder => d?.minOrder ?? 'none';
 export const dealDaysOf = (d: Pick<DeliveryState, 'dealDays'> | null | undefined): DealDays => d?.dealDays ?? 'all';
+
+// ---------- The standard delivery menu (delivery-tab.md 5.2) ----------
+
+/** Mains on the dining menu, the pool the delivery menu is drawn from. */
+export const menuMains = (state: Pick<GameState, 'recipes'>): Recipe[] => state.recipes.filter((r) => r.onMenu && isMain(r.kind));
+
+/** Slider range and the size in play: never more dishes than the dining menu has mains. */
+export function deliveryMenuSize(state: Pick<GameState, 'recipes' | 'delivery'>): { size: number; min: number; max: number; std: number; set: boolean } {
+  const m = T.delivery.menu;
+  const max = Math.max(1, Math.min(m.max, menuMains(state).length));
+  const min = Math.min(m.min, max);
+  // The standard: 8 dishes, or the whole menu when it has fewer mains.
+  const std = Math.min(m.ref, max);
+  const set = state.delivery?.menuSize !== undefined;
+  return { size: clamp(Math.round(state.delivery?.menuSize ?? std), min, max), min, max, std, set };
+}
+
+/** What a delivery menu of this many dishes does: orders, word of mouth, kitchen work per order and food on arrival. */
+export interface MenuEffect {
+  reach: number;
+  audience: number;
+  work: number;
+  food: number;
+}
+
+/** Against the standard size `std` (8, or the whole menu when it has fewer mains). */
+export function menuEffect(size: number, std: number = T.delivery.menu.ref): MenuEffect {
+  const m = T.delivery.menu;
+  const f = Math.max(1, size) / Math.max(1, std);
+  return {
+    reach: Math.pow(f, m.reachExp),
+    audience: Math.pow(f, m.audienceExp),
+    work: Math.max(0.5, 1 + m.workPerDish * (size - std)),
+    food: 1 - m.foodPerDish * Math.max(0, size - std),
+  };
+}
+
+const NEUTRAL: MenuEffect = { reach: 1, audience: 1, work: 1, food: 1 };
+
+/** The effect in play: a restaurant that never set its delivery menu plays like the standard (older saves, AC-336). */
+export function menuEffectOf(state: Pick<GameState, 'recipes' | 'delivery'>): MenuEffect {
+  const s = deliveryMenuSize(state);
+  return s.set ? menuEffect(s.size, s.std) : NEUTRAL;
+}
+
+/** The standard delivery menu: the best selling mains of the last 7 days, then in menu order. Null when not set (the whole menu). */
+export function deliveryMenu(state: Pick<GameState, 'recipes' | 'delivery' | 'history'>): Recipe[] | null {
+  const s = deliveryMenuSize(state);
+  if (!s.set) return null;
+  const sold: Record<string, number> = {};
+  for (const r of state.history.slice(-7)) for (const [id, n] of Object.entries(r.dishSales ?? {})) sold[id] = (sold[id] ?? 0) + n;
+  const mains = menuMains(state);
+  return mains.map((r, i) => ({ r, i })).sort((a, b) => (sold[b.r.id] ?? 0) - (sold[a.r.id] ?? 0) || a.i - b.i).slice(0, s.size).map((x) => x.r);
+}
 
 /** The four vehicles (delivery-tab.md 5.3): minutes a ride, orders a trip, price and weekly upkeep. */
 export interface VehicleSpec {
@@ -160,12 +215,13 @@ export function deliveryReachMult(d: DeliveryState, _day: number): number {
  * The delivery audience after a day (6.13): word of mouth from a good delivery rating grows it slowly, delivery campaigns
  * grow it fast, and it fades a little every day. Growth only fills the part of the catchment that does not know you yet.
  */
-export function nextAudience(d: DeliveryState, campaignLift: number, delivered: number): { after: number; organic: number; campaigns: number } {
+export function nextAudience(d: DeliveryState, campaignLift: number, delivered: number, menuMult = 1): { after: number; organic: number; campaigns: number } {
   const t = T.delivery;
   const a = audienceOf(d);
   const room = 1 - a;
   // Word of mouth needs orders going out: nobody talks about a restaurant they never ordered from.
-  const talk = delivered >= 1 ? t.audienceOrganic * (d.drep / 100) * (d.topRated ? t.audienceTopRated : 1) : 0;
+  // A wider delivery menu gives more people a dish to tell others about (delivery-tab.md 5.2).
+  const talk = delivered >= 1 ? t.audienceOrganic * (d.drep / 100) * (d.topRated ? t.audienceTopRated : 1) * menuMult : 0;
   const organic = talk * room;
   const campaigns = ((t.audienceFromLift * campaignLift) / 7) * room;
   const after = clamp(a + organic + campaigns - t.audienceFade * a, 0, 1);
@@ -295,6 +351,8 @@ export interface DeliveryInput {
   packingFood?: number;
   /** Delivery orders rivals nearby took yesterday, weighted by distance. */
   rivalOrders?: number;
+  /** Food on arrival from the size of the delivery menu (1 at the standard size). */
+  menuFood?: number;
 }
 
 export interface DeliverySettlement {
@@ -322,7 +380,7 @@ export function settleDelivery(i: DeliveryInput): DeliverySettlement {
     const sumW = segs.reduce((x, s) => x + s.w, 0);
     return sumW > 0 ? segs.reduce((x, s) => x + s.w * f(s), 0) / sumW : 0;
   };
-  const travel = (t.travel + (i.packingFood ?? 0) + (d.mode === 'platform' ? 0 : 0.0006 * (i.riders.quality - 50))) * t.zones[zoneOf(d)].food;
+  const travel = (t.travel + (i.packingFood ?? 0) + (d.mode === 'platform' ? 0 : 0.0006 * (i.riders.quality - 50))) * t.zones[zoneOf(d)].food * (i.menuFood ?? 1);
   const pack = d.packaging === 'eco' ? t.ecoPackaging : 1;
   const food = clamp(SERVICES.reduce((x, sv) => x + weightOf(sv) * segAvg(sv, (s) => s.food), 0) * travel * pack, 0, 1);
   const value = SERVICES.reduce((x, sv) => x + weightOf(sv) * segAvg(sv, (s) => valueScore(s.rD, SEGMENTS[s.id].elasticity)), 0);

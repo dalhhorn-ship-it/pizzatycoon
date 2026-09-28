@@ -263,6 +263,13 @@ export const T = {
       standard: { adjacent: 0.5, ride: 1, food: 1 },
       wide: { adjacent: 0.9, ride: 1.3, food: 0.96 },
     },
+    /**
+     * The standard delivery menu (delivery-tab.md 5.2): the best selling mains, as many as the player sets. Against the
+     * standard of `ref` dishes, orders scale with (size / ref)^reachExp and word of mouth with (size / ref)^audienceExp;
+     * every dish above or below ref adds or takes workPerDish of the kitchen work per order, and every dish above ref
+     * costs foodPerDish of the food on arrival (more boxes, more mistakes). A save that never set it plays like ref.
+     */
+    menu: { ref: 8, min: 3, max: 24, reachExp: 0.35, audienceExp: 0.5, workPerDish: 0.025, foodPerDish: 0.004 },
     /** Minimum order (delivery-tab.md 5.2): fewer orders, bigger baskets. */
     minOrder: {
       none: { orders: 1, mains: 0, drinks: 0 },

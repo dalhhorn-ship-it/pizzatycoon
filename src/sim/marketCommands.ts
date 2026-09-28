@@ -82,6 +82,11 @@ export function marketCommand(input: GameState, state: GameState, cmd: Command, 
       if (!T.delivery.minOrder[cmd.minOrder]) return fail(input, 'Unknown minimum order.');
       d.minOrder = cmd.minOrder;
     }
+    if (cmd.menuSize !== undefined) {
+      const m = T.delivery.menu;
+      if (!Number.isFinite(cmd.menuSize)) return fail(input, 'Pick how many dishes the delivery menu has.');
+      d.menuSize = Math.round(Math.min(m.max, Math.max(m.min, cmd.menuSize)));
+    }
     if (cmd.dealDays) {
       if (!['all', 'weekdays', 'weekend'].includes(cmd.dealDays)) return fail(input, 'Unknown deal days.');
       d.dealDays = cmd.dealDays;

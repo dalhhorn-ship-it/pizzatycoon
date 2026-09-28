@@ -95,6 +95,8 @@ export interface DeliveryState {
   zone?: DeliveryZone;
   /** Minimum order; missing means none (delivery-tab.md 5.2). */
   minOrder?: MinOrder;
+  /** Dishes on the standard delivery menu; missing plays like T.delivery.menu.ref (delivery-tab.md 5.2). */
+  menuSize?: number;
   /** Days the deal runs; missing means every day (delivery-tab.md 5.2). */
   dealDays?: DealDays;
 }
@@ -310,6 +312,9 @@ export interface ServiceReport {
   stages: { prep: number; oven: number; seats: number; plates: number; cold?: number; cooks?: number; delivery?: number };
   /** Demand per hour of effective service time. */
   demandPerHour: number;
+  /** Delivery load at this service in guest equivalents (a main x kitchen work): wanted per hour, and taken in all. */
+  deliveryPerHour?: number;
+  deliveryCovers?: number;
 }
 
 export interface SegmentReport {

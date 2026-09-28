@@ -14,7 +14,7 @@ import { stateLocation } from './location';
 import { Rng } from './rng';
 import { hasTalent, onRota } from './staff';
 import { awarenessGain, discountFor, hasLoyalty, mktDelivery, mktFor, runSpendToday } from './marketing';
-import { audienceOf, catchment, dealTerms, minOrderOf, zoneOf, deliveryCompetition, type DeliveryInput, deliveryLive, deliveryMinutes, deliveryReachMult, nextAudience, packingOf, ridersToday, rivalDeliveryOrders, settleDelivery } from './delivery';
+import { audienceOf, catchment, dealTerms, deliveryMenu, menuEffectOf, minOrderOf, zoneOf, deliveryCompetition, type DeliveryInput, deliveryLive, deliveryMinutes, deliveryReachMult, nextAudience, packingOf, ridersToday, rivalDeliveryOrders, settleDelivery } from './delivery';
 import { playerCompetition } from './rivals';
 import { followingDemand, nextFollowing, queueDelay, valueScore } from './formulas';
 
@@ -283,11 +283,14 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     lunch: { orderValue: 0, foodPerOrder: 0, mains: dt.mainsPerOrder, given: 0, feeWaived: false, segs: [] },
     dinner: { orderValue: 0, foodPerOrder: 0, mains: dt.mainsPerOrder, given: 0, feeWaived: false, segs: [] },
   };
+  // The standard delivery menu (delivery-tab.md 5.2): more dishes bring more orders and more work per order.
+  const dMenu = dlv ? menuEffectOf(state) : null;
+  const dMenuIds = dlv ? deliveryMenu(state)?.map((r) => r.id) ?? null : null;
   if (dlv && riders) {
     const markup = dlv.markup;
     const soft = onMenu.filter((r) => r.id === 'softDrink');
     const minOrder = dt.minOrder[minOrderOf(dlv)];
-    const base = catchment(district.district.id, district.footTraffic, dt.zones[zoneOf(dlv)].adjacent) * minOrder.orders * dt.orderRate * deliveryReachMult(dlv, state.day) * weekdayMult *
+    const base = catchment(district.district.id, district.footTraffic, dt.zones[zoneOf(dlv)].adjacent) * minOrder.orders * (dMenu?.reach ?? 1) * dt.orderRate * deliveryReachMult(dlv, state.day) * weekdayMult *
       mktDelivery(campaigns, state.day, district.shares) * (1 - 0.5 * deliveryCompetition(state, district.district.id, dlv.drep)) * economyOf(state).demand;
     for (const sv of SERVICES) {
       const deal = dealTerms(dlv, sv, weekday);
@@ -375,7 +378,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     let kitchenForDine = kitchenPerHour;
     let dServedPH = 0;
     if (dlv && dWanted[sv] > 0) {
-      const perOrder = dBasket[sv].mains * dt.work;
+      const perOrder = dBasket[sv].mains * dt.work * (dMenu?.work ?? 1);
       const need = (dWanted[sv] / (hours * U)) * perOrder;
       const dineNeed = Math.min(demand / (hours * U), seatPerHour);
       const ridersOk = dlv.mode === 'platform' || (riders?.onShift ?? 0) > 0;
@@ -436,9 +439,14 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
         prep: prepPerHour, oven: Number.isFinite(ovenCoversPerHour) ? ovenCoversPerHour : k.ovenPerHour, seats: seatPerHour, plates: plateCap / (hours * T.service.utilisation[sv]),
         cold: Number.isFinite(coldStage) ? coldStage : 999,
         cooks: cookPerHour,
-        ...(dlv ? { delivery: dServedPH / dt.work } : {}),
+        ...(dlv ? { delivery: dServedPH / (dt.work * (dMenu?.work ?? 1)) } : {}),
       },
       demandPerHour: demand / (hours * T.service.utilisation[sv]),
+      // Delivery shares prep, oven, dough and cooks with the dining room: its load in guest equivalents.
+      ...(dlv ? {
+        deliveryPerHour: (dWanted[sv] / (hours * U)) * dBasket[sv].mains * dt.work * (dMenu?.work ?? 1),
+        deliveryCovers: dAccepted[sv] * dBasket[sv].mains * dt.work * (dMenu?.work ?? 1),
+      } : {}),
     });
   }
 
@@ -551,20 +559,27 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   if (dlv && riders) {
     const basketOut = (sv: Service): DeliveryInput['basket'][Service] => {
       const b = dBasket[sv];
-      return { ...b, segs: b.segs.map((x) => ({ id: x.id, w: x.w, rD: x.rD, food: foodBy[x.id] ?? 0.5, probs: x.choice.probs.map((p) => ({ id: p.recipe.id, p: p.p })) })) };
+      // Delivery guests pick from the delivery menu only: the dining choice, kept to those dishes.
+      const probsOf = (c: Choice): { id: string; p: number }[] => {
+        const all = c.probs.map((p) => ({ id: p.recipe.id, p: p.p }));
+        const on = dMenuIds ? all.filter((p) => dMenuIds.includes(p.id)) : all;
+        const sum = on.reduce((x, p) => x + p.p, 0);
+        return sum > 0 ? on.map((p) => ({ id: p.id, p: p.p / sum })) : all;
+      };
+      return { ...b, segs: b.segs.map((x) => ({ id: x.id, w: x.w, rD: x.rD, food: foodBy[x.id] ?? 0.5, probs: probsOf(x.choice) })) };
     };
     const settled = settleDelivery({
       d: dlv, riders, staff: state.staff, economy: economyOf(state),
       basket: { lunch: basketOut('lunch'), dinner: basketOut('dinner') },
       wanted: dWanted, accepted: dAccepted, delivered: dDelivered, time: dTime, covers,
-      packingFood: packingOf(state)?.deliveryFood ?? 0, rivalOrders: rivalDeliveryOrders(state, district.district.id),
+      packingFood: packingOf(state)?.deliveryFood ?? 0, rivalOrders: rivalDeliveryOrders(state, district.district.id), menuFood: dMenu?.food ?? 1,
     });
     pnl.deliverySales = settled.deliverySales;
     pnl.ingredients += settled.foodCost;
     pnl.deliveryCosts = settled.deliveryCosts;
     for (const [id, n] of Object.entries(settled.dishSales)) dishSales[id] = (dishSales[id] ?? 0) + n;
     // The delivery audience grows slowly by word of mouth and fast with delivery campaigns (6.13).
-    const aud = nextAudience(dlv, mktDelivery(campaigns, state.day, district.shares) - 1, settled.day.delivered);
+    const aud = nextAudience(dlv, mktDelivery(campaigns, state.day, district.shares) - 1, settled.day.delivered, dMenu?.audience ?? 1);
     delivery = { ...settled.day, audienceBefore: audienceOf(dlv), audienceAfter: aud.after, audienceOrganic: aud.organic, audienceCampaigns: aud.campaigns };
   }
   // Card fees, cleaning, linen and supplies grow with dining sales; delivery has its own cost lines and the app takes payment.

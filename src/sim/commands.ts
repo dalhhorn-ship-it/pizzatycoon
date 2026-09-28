@@ -51,7 +51,7 @@ export type Command =
   | { type: 'startDelivery'; mode: DeliveryMode }
   | {
     type: 'setDelivery'; mode?: DeliveryMode; markup?: number; packaging?: 'basic' | 'eco'; throttle?: number | null; deal?: DeliveryDealId | null;
-    zone?: DeliveryZone; minOrder?: MinOrder; dealDays?: DealDays;
+    zone?: DeliveryZone; minOrder?: MinOrder; dealDays?: DealDays; menuSize?: number;
   }
   | { type: 'stopDelivery' }
   | { type: 'buyVehicle'; kind: VehicleKind }

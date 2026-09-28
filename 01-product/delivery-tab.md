@@ -2,7 +2,7 @@
 
 Food delivery grows from one card in the Money tab into its own place in the game: a **Delivery** tab with four sub tabs, reached through a second layer of tabs on the right side of the screen. The delivery game also goes deeper: a delivery zone, a fleet of four vehicle types, a minimum order, deals that run on chosen days, and a weekly scorecard with graded KPIs and tips.
 
-* Features: F-222 to F-233. Acceptance criteria: AC-311 to AC-336.
+* Features: F-222 to F-235. Acceptance criteria: AC-311 to AC-341.
 * Builds on `competition.md` 6 (delivery), 6.13 (deals, delivery marketing, tips). Numbers here are start values; `src/data/tunables.ts` is what the game uses.
 
 ## 1. Problem
@@ -25,7 +25,7 @@ Delivery became a full business inside the game (three modes, riders, vehicles, 
 
 **Non goals**
 
-* A separate delivery menu with its own dishes (dish choice stays shared with the dining room; see open question Q1).
+* Hand picking the dishes on the delivery menu (it is the standard menu: the best selling mains, as many as the player sets; see Q1).
 * Rider routing on a map, individual orders or live tracking.
 * Dark kitchens as a separate venue type (already possible by renting a small venue and delivering from it).
 * New save format version: every new field is optional.
@@ -68,13 +68,23 @@ How people learn that you deliver.
 * **Delivery campaigns** inline: Promoted listing, Welcome voucher, Door hangers, Food influencer and Street flyers, each with its cost, its effect and a Saturday preview (orders and profit against now, after its cost). Start and stop renewing from the card. Slots are shared with dining campaigns.
 * **Top rated on Scoot**: days at 80 so far, the boost, and what it takes to keep it.
 
-### 5.2 Menu & deals (F-225, F-226, F-227)
+### 5.2 Menu & deals (F-225, F-226, F-227, F-234)
 
 What an order costs, what it contains and what it earns.
 
 * **App prices**: the markup above the menu (0 to 20% in steps of 5), with the Saturday effect of the next step.
 * **Deals** (existing six) with the Saturday preview each.
 * **Deal days** (new): *Every day*, *Mon to Thu* (quiet days) or *Fri to Sun* (busy days). A deal on quiet days fills the oven when it has room and leaves full weekends at full price.
+* **Delivery menu** (F-234): one standard delivery menu made of the best selling mains of the last 7 days (then in menu order). A slider sets how many dishes it has, from 3 up to the mains on the dining menu (at most 24). The standard is 8 dishes, or every main when the dining menu has fewer (so a full short menu is never worse than leaving the slider alone); against the standard of 8:
+
+  | Effect | Formula | 4 dishes | 8 dishes | 12 dishes | 16 dishes |
+  |---|---|---|---|---|---|
+  | Orders | (size / 8)^0.35 | x0.78 | x1.00 | x1.15 | x1.27 |
+  | Word of mouth (audience growth) | (size / 8)^0.5 | x0.71 | x1.00 | x1.22 | x1.41 |
+  | Kitchen work per order | 1 + 0.025 x (size - 8) | x0.90 | x1.00 | x1.10 | x1.20 |
+  | Food on arrival | 1 - 0.004 x (size above 8) | x1.00 | x1.00 | x0.98 | x0.97 |
+
+  More dishes find more people something they want and give them more to tell others about, but every dish is another box, another set of ingredients kept ready for the app, and another chance to get an order wrong. Delivery guests only order dishes on the delivery menu. A restaurant that never set the slider plays like the standard with its whole menu on the app. The card shows the effects while dragging, the Saturday result two dishes either side, and the dishes on the menu.
 * **Minimum order** (new): *None*, *Low minimum* or *High minimum*. A minimum makes each order bigger (more mains and drinks) and loses some small orders.
 
   | Minimum | Orders | Mains an order | Drinks an order |
@@ -87,6 +97,9 @@ What an order costs, what it contains and what it earns.
 * **One order, unpacked** (F-227): the average order of the last day split into food, commission, packaging, rider and vehicle cost, deal given away, and what is left. Shows at a glance whether a deal or the app eats the margin.
 
 ### 5.3 Fleet (F-228, F-229, F-230)
+
+**Cooks and capacity count delivery (F-235).** Delivery orders share prep, oven, dough and cooks with the dining room: an order counts as its mains x 1.1 (x the delivery menu's kitchen work) guests. The capacity cards under the Kitchen tab show that load as a blue band on top of the dining marker on the four shared stages (tables and dishwashing are dining only), and the number turns red when dining plus delivery is more than the stage handles. The "cooks" warning counts guests in the room plus delivery at the busiest service.
+
 
 How orders reach the door.
 
@@ -168,6 +181,8 @@ All pure, in `src/sim/delivery.ts` and the day model, and all optional on the sa
 | F-231 | Delivery scorecard with grades and overall score | Must |
 | F-232 | Focus this week and tips linked to the tab that fixes them | Should |
 | F-233 | Money tab delivery summary and links to the Delivery tab | Must |
+| F-234 | Standard delivery menu with a dish count slider | Should |
+| F-235 | Cooks and the capacity cards count delivery orders | Must |
 
 ## 8. Acceptance criteria
 
@@ -198,7 +213,12 @@ All pure, in `src/sim/delivery.ts` and the day model, and all optional on the sa
 | AC-333 | With fewer than 3 delivery days the scorecard says it needs more days |
 | AC-334 | The Money tab shows a delivery summary line with a button to the Delivery tab |
 | AC-335 | The delivery intro and the coach's delivery answer open the Delivery tab |
-| AC-336 | Saves from before M0.7 load without migration; missing fields read as standard zone, no minimum, deals every day, no e-bikes or cars |
+| AC-336 | Saves from before M0.7 load without migration; missing fields read as standard zone, no minimum, deals every day, no e-bikes or cars, the standard delivery menu |
+| AC-337 | The delivery menu slider runs from 3 to the mains on the dining menu (at most 24); a menu never set, or set to the standard (8, or every main when fewer), plays the same |
+| AC-338 | More dishes on the delivery menu bring more orders and more kitchen work per order; above 8 they cost food on arrival |
+| AC-339 | A wider delivery menu grows the delivery audience faster by word of mouth |
+| AC-340 | Delivery orders only sell dishes on the delivery menu, the best sellers of the last 7 days first |
+| AC-341 | Each service reports its delivery load; the capacity cards show it on prep, oven, cooks and dough, and the cooks warning counts it |
 
 ## 9. Balance notes
 
@@ -210,6 +230,6 @@ All pure, in `src/sim/delivery.ts` and the day model, and all optional on the sa
 
 ## 10. Open questions
 
-* Q1. A separate delivery menu (dishes that travel badly left off) would deepen Menu & deals; it needs a second dish choice model. Proposed for M0.8.
+* Q1. Hand picking the delivery dishes (leaving off ones that travel badly) on top of the standard menu: proposed for M0.8 if players ask for it.
 * Q2. Should Top rated need a minimum on time share as well as the rating?
 * Q3. Rider shifts (lunch only, dinner only) as a cheaper alternative to full riders.

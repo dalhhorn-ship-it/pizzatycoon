@@ -5,7 +5,7 @@ import { DELIVERY_DEALS } from '../data/deliveryDeals';
 import { SEGMENTS } from '../data/segments';
 import { T } from '../data/tunables';
 import type { SegmentId } from '../data/types';
-import { audienceOf, dealDaysOf, minOrderOf, packingOf, ridersNeeded, ridersToday, vehicleCount, zoneOf } from './delivery';
+import { audienceOf, dealDaysOf, deliveryMenuSize, menuEffect, minOrderOf, packingOf, ridersNeeded, ridersToday, vehicleCount, zoneOf } from './delivery';
 import { campaignUnlocked, isActive } from './marketing';
 import type { DeliveryDay, GameState } from './state';
 
@@ -108,6 +108,14 @@ export function deliveryTips(state: GameState, d: DeliveryDay | undefined, max =
   }
   if (d && s && minOrderOf(dl) === 'none' && s.value > 0.8 && d.delivered > 5 && d.profit / d.delivered < 3) {
     tips.push({ weight: 32, text: `Guests find you good value (${Math.round(s.value * 100)}) but each order leaves little. A low minimum order makes baskets bigger for a few lost small orders.` });
+  }
+  // The standard delivery menu (delivery-tab.md 5.2): wider for audience, narrower for a busy kitchen.
+  const menu = deliveryMenuSize(state);
+  const busy = !!d && (!!lateSv || d.refused > 0.15 * d.wanted);
+  if (busy && menu.size > menu.std) {
+    tips.push({ weight: 48, text: `Your delivery menu has ${menu.size} dishes: every order is ${Math.round((menuEffect(menu.size, menu.std).work - 1) * 100)}% more kitchen work than on the standard ${menu.std}. With a full kitchen, fewer dishes get more orders out on time.` });
+  } else if (!busy && audienceOf(dl) < 0.4 && menu.size < menu.max) {
+    tips.push({ weight: 34, text: `Only ${menu.size} dishes on the delivery menu. More choice brings more orders and faster word of mouth; your kitchen has room for it. Move the slider under Menu & deals.` });
   }
   if (dl.mode === 'own' && d && d.wanted < 15) tips.push({ weight: 30, text: 'Your own ordering page reaches only the people who already know you (40% of the app). Listing on Scoot with your own riders reaches everyone for 14% commission.' });
   if (dl.mode === 'platform' && d && d.profit < 0 && d.delivered > 20) tips.push({ weight: 45, text: 'The app takes 30% of every order. With your own riders on Scoot it takes 14% and you keep the delivery fee: worth it from about 25 orders a day.' });
