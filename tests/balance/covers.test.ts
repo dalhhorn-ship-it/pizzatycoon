@@ -1,4 +1,4 @@
-// fresh-start.md 6: realistic covers per service (AC-169, AC-170).
+// fresh-start.md 13: realistic covers per service (AC-169, AC-170).
 import { beforeAll, describe, expect, test } from 'vitest';
 import { FURNITURE } from '../../src/data/furniture';
 import { SEGMENTS } from '../../src/data/segments';

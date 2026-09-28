@@ -63,12 +63,16 @@ export function stationIssues(state: GameState, a: Analysis = analyse(state), la
     });
   }
   // Cooks cook for a limited number of guests a service (founder rule): warn from 85% of what they can handle.
-  const busiest = lastDay?.open ? Math.max(0, ...lastDay.services.map((s) => s.served)) : 0;
+  // Delivery orders count too (delivery-tab.md 5.3): each one is its mains in guest equivalents.
+  const load = (s: DayReport['services'][number]): number => s.served + (s.deliveryCovers ?? 0);
+  const peak = lastDay?.open ? [...lastDay.services].sort((x, y) => load(y) - load(x))[0] : undefined;
+  const busiest = peak ? load(peak) : 0;
   const cookCap = a.kitchen.cookGuests;
   if (cookCap > 0 && busiest > 0.85 * cookCap) {
+    const dl = peak?.deliveryCovers ?? 0;
     out.push({
       id: 'cooks', severity: Math.min(1, busiest / cookCap - 0.85 + 0.2),
-      text: `${a.kitchen.kitchenStaff} cook${a.kitchen.kitchenStaff === 1 ? '' : 's'} cooked for ${Math.round(busiest)} guests at the busiest service; together they handle about ${Math.round(cookCap)}.`,
+      text: `${a.kitchen.kitchenStaff} cook${a.kitchen.kitchenStaff === 1 ? '' : 's'} cooked for ${Math.round(busiest)} guests at the busiest service${dl >= 1 ? ` (${Math.round(peak?.served ?? 0)} in the room and delivery worth ${Math.round(dl)})` : ''}; together they handle about ${Math.round(cookCap)}.`,
       fix: 'Hire another cook, or train Speed: a cook at Speed 50 handles 50 guests a service, a top cook up to 75.',
     });
   }

@@ -13,7 +13,7 @@ Playable in the browser, with everything below built and tested. What each docum
 * **The Squad:** four attributes and an OVR per person, composure under pressure, courses and coaching, a staff market, personalities and mood, each person's value in the day and week reports; restaurant managers run the team by policy
 * **City:** Porto Verde with 7 neighbourhoods and 72 rentable venues, moving between venues, more than one restaurant with managers
 * **Live market:** rival pizzerias that compete on price, quality or marketing, open, grow into small chains and close; ten marketing campaigns with audiences; a Rivals tab with market share, rival cards and a coach
-* **Food delivery:** from 3 stars, three modes, a kitchen shared with the dining room, riders and vehicles, its own delivery rating and Top rated; deals (second pizza 25% off and more), delivery marketing, a detailed delivery day report and tips to grow it
+* **Food delivery:** from 3 stars, three modes, a kitchen shared with the dining room, riders and vehicles, its own delivery rating and Top rated; deals (second pizza 25% off and more), delivery marketing, a detailed delivery day report and tips to grow it; its own Delivery section (Promotion, Menu & deals, Fleet with bikes, e-bikes, scooters and cars, delivery zones, Scorecard with graded KPIs), reached through a second layer of tabs
 * **Money:** daily and weekly P&L, starter loan, a safety net (no game over), and a weekly business review of every restaurant over 6 or 12 weeks
 * **Saves:** local first with a previous save slot, cloud sync on Cloudflare D1, device linking with a 6 character code, conflict chooser; fonts and code served from the site only
 

@@ -17,6 +17,8 @@ const STAGES: { id: StageId; name: string; icon: string; tip: string }[] = [
 ];
 
 const stage = (r: ServiceReport | undefined, id: StageId): number => r?.stages[id] ?? 0;
+/** Stages delivery orders share with the dining room (competition.md 6.4); seats and plates are dining only. */
+const SHARED: readonly StageId[] = ['prep', 'oven', 'cooks', 'cold'];
 
 /** Capacity now (after any changes) and demand from the last service. */
 export function pipelineData(state: GameState): { now: ServiceReport[]; last: ServiceReport[] | null } {
@@ -32,7 +34,7 @@ export function pipelineStrip(state: GameState, onStage?: (id: StageId) => void)
   }
   const by = (sv: Service): ServiceReport | undefined => now.find((x) => x.service === sv);
   const lastBy = (sv: Service): ServiceReport | undefined => last?.find((x) => x.service === sv);
-  const max = Math.max(1, ...now.flatMap((r) => STAGES.map((st) => Math.min(stage(r, st.id), 400))), ...(last ?? []).map((r) => r.demandPerHour));
+  const max = Math.max(1, ...now.flatMap((r) => STAGES.map((st) => Math.min(stage(r, st.id), 400))), ...(last ?? []).map((r) => r.demandPerHour + (r.deliveryPerHour ?? 0)));
   // The bottleneck is the slowest stage at dinner, the busiest service.
   const dinner = by('dinner');
   const worst = dinner ? STAGES.reduce((a, b) => (stage(dinner, b.id) < stage(dinner, a.id) ? b : a)) : null;
@@ -42,17 +44,25 @@ export function pipelineStrip(state: GameState, onStage?: (id: StageId) => void)
       const bar = (sv: Service): HTMLElement => {
         const cap = stage(by(sv), st.id);
         const demand = lastBy(sv)?.demandPerHour;
+        const dlv = SHARED.includes(st.id) ? lastBy(sv)?.deliveryPerHour ?? 0 : 0;
+        const at = (x: number): number => Math.min(100, (x / max) * 100);
+        const title = demand === undefined ? undefined
+          : `Last ${sv}: ${demand.toFixed(0)} guests per hour wanted in${dlv >= 0.5 ? ` plus delivery worth ${dlv.toFixed(0)} guests, ${(demand + dlv).toFixed(0)} in all` : ''}`;
         return h('div', { class: 'pbar' },
           h('span', { class: 'plabel' }, sv === 'lunch' ? 'L' : 'D'),
-          h('div', { class: 'ptrack' },
-            h('div', { class: 'pfill', style: `width:${Math.min(100, (cap / max) * 100)}%` }),
-            demand !== undefined ? h('div', { class: 'pdemand', title: `Last ${sv}: ${demand.toFixed(0)} guests per hour wanted in`, style: `left:${Math.min(100, (demand / max) * 100)}%` }) : null),
-          h('b', null, cap.toFixed(0)));
+          h('div', { class: 'ptrack', title },
+            h('div', { class: 'pfill', style: `width:${at(cap)}%` }),
+            demand !== undefined && dlv >= 0.5 ? h('div', { class: 'pdelivery', style: `left:${at(demand)}%;width:${at(demand + dlv) - at(demand)}%` }) : null,
+            demand !== undefined ? h('div', { class: 'pdemand', style: `left:${at(demand)}%` }) : null,
+            demand !== undefined && dlv >= 0.5 ? h('div', { class: 'pdemand total', style: `left:${at(demand + dlv)}%` }) : null),
+          h('b', { class: demand !== undefined && demand + dlv > cap ? 'bad' : '' }, cap.toFixed(0)));
       };
       return h('button', { class: `pstage ${isWorst ? 'worst' : ''}`, onclick: () => onStage?.(st.id) },
         h('div', { class: 'phead' }, h('span', null, `${st.icon} ${st.name}`), i < STAGES.length - 1 ? h('span', { class: 'parrow' }, '→') : null),
         bar('lunch'), bar('dinner'),
         isWorst ? h('div', { class: 'ptip' }, `Bottleneck. ${st.tip}`) : null);
     }),
-    h('div', { class: 'plegend small muted' }, 'Guests per hour each stage can handle. The marker shows how many wanted in at the last service.'));
+    h('div', { class: 'plegend small muted' }, last?.some((r) => (r.deliveryPerHour ?? 0) >= 0.5)
+      ? 'Guests per hour each stage can handle. The marker shows how many wanted in at the last service; the blue band on prep, oven, cooks and dough adds the delivery orders, counted as guests.'
+      : 'Guests per hour each stage can handle. The marker shows how many wanted in at the last service.'));
 }

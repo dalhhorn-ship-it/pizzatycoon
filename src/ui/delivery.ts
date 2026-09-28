@@ -1,16 +1,27 @@
-// The delivery panel (competition.md 6.11): setup, status, settings, riders and vehicles.
+// The Delivery tab (delivery-tab.md 5): status strip and setup, then Promotion, Menu & deals, Fleet and Scorecard.
 
+import { CAMPAIGNS, type CampaignId } from '../data/campaigns';
 import { T } from '../data/tunables';
-import { forecastSaturday } from '../sim/forecast';
-import { audienceOf, deliveryMissing, hasPacking, MODE_BLURB, MODE_NAMES, ridersNeeded, ridersToday } from '../sim/delivery';
+import { forecastSaturday, forecastWeek } from '../sim/forecast';
+import {
+  audienceOf, catchment, DEAL_DAYS_NAMES, deliveryMenu, deliveryMenuSize, deliveryMissing, fleetOf, menuEffect, hasPacking, MIN_ORDER_NAMES, minOrderOf, MODE_BLURB, MODE_NAMES,
+  ridersNeeded, ridersToday, VEHICLE_KINDS, vehicleCount, vehicleSpec, ZONE_BLURB, ZONE_NAMES, zoneOf, dealDaysOf,
+} from '../sim/delivery';
 import { DELIVERY_DEAL_IDS, DELIVERY_DEALS } from '../data/deliveryDeals';
 import { SEGMENTS } from '../data/segments';
 import type { SegmentId, Service } from '../data/types';
 import { deliveryTips } from '../sim/deliveryAdvice';
-import type { DeliveryDay, DeliveryMode, DeliveryState, GameState, ServiceReport } from '../sim/state';
+import { deliveryDays, deliveryScorecard, type DeliveryTabId, type Grade, SCORE_MIN_DAYS } from '../sim/deliveryScore';
+import { stateLocation } from '../sim/location';
+import { campaignCost, campaignUnlocked, campaignUnlockText, fatigueOf, isActive, newCampaign, slotsUsed } from '../sim/marketing';
+import { onRota } from '../sim/staff';
+import type { DealDays, DeliveryDay, DeliveryMode, DeliveryState, DeliveryZone, GameState, MinOrder, ServiceReport } from '../sim/state';
 import { act, h, money, pct, signed, signedMoney, stars } from './dom';
 import type { PanelCtx } from './panels';
-import { openMarketing } from './rivals';
+
+export type { DeliveryTabId };
+
+export const DELIVERY_TABS: [DeliveryTabId, string][] = [['promotion', 'Promotion'], ['menu', 'Menu & deals'], ['fleet', 'Fleet'], ['score', 'Scorecard']];
 
 const MODES: DeliveryMode[] = ['platform', 'marketplace', 'own'];
 /** Three presets instead of a slider (cleanup sprint 5): what each protects, in words. */
@@ -19,11 +30,27 @@ const PRESETS: { throttle: number | null; name: string; blurb: string }[] = [
   { throttle: 0.8, name: 'Balanced', blurb: 'The app pauses at 80% kitchen load: the default.' },
   { throttle: null, name: 'Max orders', blurb: 'The app never pauses: every order is taken, and a busy kitchen gets slow, late and refunded.' },
 ];
+/** Campaigns that bring delivery orders, in the order the Promotion tab shows them. */
+const PROMO_CAMPAIGNS: CampaignId[] = ['promotedListing', 'appVoucher', 'doorHangers', 'foodInfluencer', 'flyers'];
+
+type Busy = { day: DeliveryDay | undefined; profit: number; services: ServiceReport[] };
 
 /** A busy day (Saturday) with these delivery settings, for the previews. */
-function busyDay(state: GameState, d: Partial<DeliveryState>): { day: DeliveryDay | undefined; profit: number; services: ServiceReport[] } {
-  const r = forecastSaturday({ ...state, delivery: { ...(state.delivery as DeliveryState), ...d } });
+function busyDay(state: GameState, d: Partial<DeliveryState>, extra: Partial<GameState> = {}): Busy {
+  const r = forecastSaturday({ ...state, ...extra, delivery: { ...(state.delivery as DeliveryState), ...d } });
   return { day: r.delivery, profit: r.pnl.profit, services: r.services };
+}
+
+/** A whole week with these delivery settings, for settings that change by weekday (deal days). */
+function busyWeek(state: GameState, d: Partial<DeliveryState>): { delivered: number; profit: number } {
+  const rs = forecastWeek({ ...state, delivery: { ...(state.delivery as DeliveryState), ...d } });
+  return { delivered: rs.reduce((x, r) => x + (r.delivery?.delivered ?? 0), 0), profit: rs.reduce((x, r) => x + r.pnl.profit, 0) };
+}
+
+/** "On a Saturday: 42 orders (+5), 31 min at dinner, +$40 profit against now." */
+function vsNow(f: Busy, now: Busy): string | null {
+  if (!f.day || !now.day) return null;
+  return `On a Saturday: ${Math.round(f.day.delivered)} orders (${signed(f.day.delivered - now.day.delivered, 0)}), ${Math.round(f.day.time.dinner)} min at dinner, ${signedMoney(f.profit - now.profit)} profit against now.`;
 }
 
 const STAGE_FIX: Record<string, string> = {
@@ -33,7 +60,7 @@ const STAGE_FIX: Record<string, string> = {
 };
 
 /** When the app turns many orders away on a busy day, name the kitchen stage that limits it (competition.md 6.11). */
-function kitchenLimitLine(b: { day: DeliveryDay | undefined; services: ServiceReport[] }): string | null {
+function kitchenLimitLine(b: Busy): string | null {
   const d = b.day;
   if (!d || d.wanted < 5 || d.refused < 0.2 * d.wanted) return null;
   const dinner = b.services.find((x) => x.service === 'dinner');
@@ -43,68 +70,210 @@ function kitchenLimitLine(b: { day: DeliveryDay | undefined; services: ServiceRe
   return `Your kitchen is the limit: on a Saturday the app wanted ${Math.round(d.wanted)} orders and you could take ${Math.round(d.accepted)}. The ${limit === 'cold' ? 'dough supply' : limit} sets the pace; ${STAGE_FIX[limit]} would take more.`;
 }
 
+const compact = (xs: readonly (HTMLElement | null)[]): HTMLElement[] => xs.filter((x): x is HTMLElement => !!x);
 
-export function deliveryCard(ctx: PanelCtx): HTMLElement {
+const lastDay = (state: GameState): DeliveryDay | undefined => [...state.history].reverse().find((r) => r.open && r.delivery)?.delivery;
+
+/** A segmented choice with a title (the Saturday preview) on every option. */
+function choice<X extends string | number | null>(items: { v: X; label: string; title?: string }[], cur: X, pick: (x: X) => void): HTMLElement {
+  return h('div', { class: 'seg wrap' }, ...items.map((it) => h('button', {
+    class: cur === it.v ? 'on' : '', 'aria-pressed': cur === it.v ? 'true' : 'false', title: it.title, onclick: () => pick(it.v),
+  }, it.label)));
+}
+
+// ---------- Status strip and setup ----------
+
+/** Mode, rating, audience, Top rated and last profit, with Pause (delivery-tab.md 5). */
+function statusStrip(ctx: PanelCtx, d: DeliveryState): HTMLElement {
+  const last = lastDay(ctx.state);
+  const trend = last ? last.drepAfter - last.drepBefore : 0;
+  const t = T.delivery;
+  return h('div', { class: 'card dstatus' },
+    h('div', { class: 'dstat-row' },
+      h('div', { class: 'dstat' }, h('span', { class: 'small muted' }, 'Rating'), h('b', null, `${d.drep.toFixed(0)} ${trend > 0.05 ? '↑' : trend < -0.05 ? '↓' : ''}`), h('span', { class: 'small stars' }, stars(d.drep))),
+      h('div', { class: 'dstat' }, h('span', { class: 'small muted' }, 'Audience'), h('b', { class: audienceOf(d) < 0.25 ? 'warn' : '' }, pct(audienceOf(d))), h('span', { class: 'small muted' }, 'know you deliver')),
+      h('div', { class: 'dstat' }, h('span', { class: 'small muted' }, 'Top rated'), h('b', { class: d.topRated ? 'good' : '' }, d.topRated ? 'Yes' : `${d.topRatedDays}/${t.topRatedDays}`),
+        h('span', { class: 'small muted' }, d.topRated ? `+${Math.round((t.topRatedBoost - 1) * 100)}% orders` : `days at ${t.topRatedDrep}`)),
+      h('div', { class: 'dstat' }, h('span', { class: 'small muted' }, 'Last day'), h('b', { class: last ? (last.profit >= 0 ? 'good' : 'bad') : '' }, last ? money(last.profit) : '·'),
+        h('span', { class: 'small muted' }, last ? `${Math.round(last.delivered)} orders` : 'no orders yet'))),
+    h('div', { class: 'spread' },
+      h('span', { class: 'small' }, `${MODE_NAMES[d.mode]} · zone ${ZONE_NAMES[zoneOf(d)].toLowerCase()}${d.deal ? ` · ${DELIVERY_DEALS[d.deal].name}` : ''}`),
+      h('button', { class: 'small', onclick: () => act(ctx, { type: 'stopDelivery' }) }, 'Pause delivery')));
+}
+
+/** Before delivery runs: what is missing, the packing station, then the three modes (AC-315). */
+function setupView(ctx: PanelCtx): HTMLElement | null {
   const state = ctx.state;
   const d = state.delivery;
+  if (d?.on && hasPacking(state)) return null;
   const missing = deliveryMissing(state);
-  // Staged reveal (cleanup sprint 5): delivery shows up from two and a half stars.
-  if (missing.length && !d && state.rep < 50) return h('div');
-  if (missing.length && !d) {
-    return h('div', { class: 'card' }, h('h3', null, '🛵 Delivery'),
-      h('div', { class: 'small' }, `Delivery: ${missing.join(', ')}.`),
-      h('div', { class: 'small muted' }, 'Delivery brings orders from the whole neighbourhood and the ones next to it, without using a seat. It shares your oven and prep line with the dining room.'));
+  const steps = [
+    { done: state.rep >= T.delivery.unlockRep, text: `Reach 3 stars (reputation ${T.delivery.unlockRep}); you are at ${state.rep.toFixed(0)}` },
+    { done: state.daysOpen >= T.delivery.unlockDays, text: `Be open ${T.delivery.unlockDays} days; ${state.daysOpen} so far` },
+    { done: hasPacking(state), text: `Place a Packing Station (${money(T.delivery.packingStation)}) in the kitchen` },
+    { done: !!d?.on, text: 'Choose how orders reach the door' },
+  ];
+  return h('div', { class: 'stack' },
+    h('div', { class: 'card' }, h('h3', null, '🛵 Start delivering'),
+      h('div', { class: 'small muted' }, 'Delivery brings orders from your neighbourhood and the ones next to it, without using a seat. It shares your oven and prep line with the dining room and has its own rating.'),
+      h('div', { class: 'stack', style: 'gap:4px' }, ...steps.map((s) => h('div', { class: `small ${s.done ? 'good' : ''}` }, `${s.done ? '✓' : '○'} ${s.text}`))),
+      d && !d.on ? h('div', { class: 'small muted' }, `Paused. Delivery rating ${stars(d.drep)} (${d.drep.toFixed(0)}).`) : null),
+    !missing.length && hasPacking(state)
+      ? h('div', { class: 'card' }, h('h3', null, 'How orders reach the door'),
+        ...MODES.map((m) => h('div', { class: 'line mode spread' },
+          h('div', null, h('b', null, MODE_NAMES[m]), h('div', { class: 'small muted' }, MODE_BLURB[m])),
+          h('button', { class: 'small primary', onclick: () => act(ctx, { type: 'startDelivery', mode: m }, 'Delivery starts today') }, 'Start'))))
+      : h('div', { class: 'small muted' }, 'Students, families and professionals order in most; foodies and tourists rarely do.'));
+}
+
+// ---------- Promotion (5.1) ----------
+
+function funnel(state: GameState, d: DeliveryState, last: DeliveryDay | undefined): HTMLElement {
+  const facts = stateLocation(state);
+  const reach = catchment(facts.district.id, facts.footTraffic, T.delivery.zones[zoneOf(d)].adjacent);
+  const aud = audienceOf(d);
+  const steps: { label: string; n: number; note: string; weak: boolean }[] = [
+    { label: 'People in your zone', n: reach, note: ZONE_NAMES[zoneOf(d)], weak: false },
+    { label: 'Know you deliver', n: reach * aud, note: pct(aud), weak: aud < 0.25 },
+  ];
+  if (last) {
+    steps.push(
+      { label: 'Wanted to order', n: last.wanted, note: 'last day', weak: false },
+      { label: 'Accepted', n: last.accepted, note: last.wanted > 0 ? pct(last.accepted / last.wanted) : '', weak: last.wanted > 0 && last.refused > 0.15 * last.wanted },
+      { label: 'Delivered', n: last.delivered, note: last.accepted > 0 ? pct(last.delivered / last.accepted) : '', weak: last.accepted > 0 && last.cancelled > 0.05 * last.accepted },
+    );
   }
-  if (!hasPacking(state)) {
-    return h('div', { class: 'card' }, h('h3', null, '🛵 Delivery'),
-      h('div', { class: 'small' }, `Delivery is unlocked. Place a Packing Station (${money(T.delivery.packingStation)}) in the kitchen to start.`),
-      h('div', { class: 'small muted' }, 'Students, families and professionals order in most; foodies and tourists rarely do.'));
-  }
-  if (!d?.on) {
-    return h('div', { class: 'card' }, h('h3', null, '🛵 Delivery'),
-      d ? h('div', { class: 'small muted' }, `Paused. Delivery rating ${stars(d.drep)} (${d.drep.toFixed(0)}).`) : h('div', { class: 'small' }, 'Choose how orders reach the door. You can change this any morning.'),
-      ...MODES.map((m) => h('div', { class: 'line mode' },
-        h('div', null, h('b', null, MODE_NAMES[m]), h('div', { class: 'small muted' }, MODE_BLURB[m])),
-        h('button', { class: 'small primary', onclick: () => act(ctx, { type: 'startDelivery', mode: m }, 'Delivery starts today') }, 'Start'))));
-  }
-  const last = [...state.history].reverse().find((r) => r.open && r.delivery)?.delivery;
-  const trend = last ? last.drepAfter - last.drepBefore : 0;
-  const riders = ridersToday(state);
-  const own = d.mode !== 'platform';
-  const peak = last ? last.accepted * (1 - T.delivery.lunchShare) / (T.time.dinnerHours * T.service.utilisation.dinner) : 0;
-  const need = own ? ridersNeeded(peak, riders.ride) : 0;
-  const riderCount = state.staff.filter((s) => s.role === 'rider').length;
+  const max = Math.max(1, ...steps.map((s) => s.n));
+  const weak = steps.find((s) => s.weak);
+  const noRiders = d.mode !== 'platform' && ridersToday(state).onShift === 0;
+  return h('div', { class: 'card' }, h('h3', null, h('span', null, 'Audience funnel'), h('span', { class: 'small' }, 'from people to orders')),
+    h('div', { class: 'funnel' }, ...steps.map((s) => h('div', { class: `fstep ${s.weak ? 'weak' : ''}` },
+      h('span', { class: 'small' }, s.label),
+      h('div', { class: 'fbar' }, h('i', { style: `width:${Math.max(2, Math.sqrt(s.n / max) * 100)}%` })),
+      h('b', { class: 'small' }, Math.round(s.n).toLocaleString('en-US')),
+      h('span', { class: 'small muted' }, s.note)))),
+    weak ? h('div', { class: 'small warn' }, weak.label === 'Know you deliver'
+      ? 'The weakest step: too few people know you deliver. Delivery campaigns below build the audience fast.'
+      : noRiders ? 'The weakest step: no rider with a vehicle is on shift, so no order can be taken. Hire riders and buy vehicles under Fleet.'
+        : weak.label === 'Accepted' ? 'The weakest step: the kitchen turns orders away. See the kitchen limit under Fleet.'
+        : 'The weakest step: accepted orders are cancelled. More riders or a lower kitchen limit under Fleet.') : null,
+    h('div', { class: 'small muted' }, 'The audience starts tiny, grows slowly by word of mouth and fast with delivery campaigns, and fades a little every day when nobody hears from you.'));
+}
+
+function promoCampaigns(ctx: PanelCtx, now: Busy): HTMLElement {
+  const state = ctx.state;
+  const facts = stateLocation(state);
+  const active = (state.campaigns ?? []).filter((a) => isActive(a, state.day) || a.renew);
+  const slots = slotsUsed(state.campaigns, state.day);
+  return h('div', { class: 'card' }, h('h3', null, h('span', null, '📣 Delivery campaigns'), h('span', { class: 'small' }, `${slots} of ${T.marketing.maxActive} campaign slots used`)),
+    ...PROMO_CAMPAIGNS.map((id) => {
+      const c = CAMPAIGNS[id];
+      const running = active.find((a) => a.id === id);
+      const unlocked = campaignUnlocked(state, c);
+      const cost = campaignCost(c, facts.footTraffic);
+      let preview: string | null = null;
+      if (unlocked && !running) {
+        const hyp = [...(state.campaigns ?? []).filter((y) => y.id !== id), { ...newCampaign(id, [], state.day, facts), startDay: state.day - 1, endsDay: state.day + 30, spent: 0 }];
+        preview = vsNow(busyDay(state, {}, { campaigns: hyp }), now);
+      }
+      return h('div', { class: `fit ${running ? 'installed' : ''}` },
+        h('div', { class: 'spread' }, h('b', null, c.name), h('span', { class: 'small' }, `${money(cost)}${c.runDays === 7 && c.renews ? ' a week' : ` for ${c.runDays} days`}`)),
+        h('div', { class: 'small' }, c.effect),
+        h('div', { class: 'small muted' }, c.blurb),
+        preview ? h('div', { class: 'small muted' }, `${preview} Before its cost.`) : null,
+        running
+          ? h('div', { class: 'row' },
+            h('span', { class: 'small good' }, `Running, ${Math.max(0, running.endsDay - state.day)} days left${fatigueOf(running.weeksRunning) < 1 ? ` · seen a lot: x${fatigueOf(running.weeksRunning)}` : ''}`),
+            running.renew ? h('button', { class: 'small', onclick: () => act(ctx, { type: 'stopCampaign', campaignId: id }, `${c.name} stops after this run`) }, 'Stop renewing') : h('span', { class: 'small muted' }, 'ends after this run'))
+          : h('button', {
+            class: 'small primary',
+            disabled: !unlocked || state.cash < cost || (!c.everyRestaurant && slots >= T.marketing.maxActive),
+            onclick: () => act(ctx, { type: 'startCampaign', campaignId: id, audience: [] }, `${c.name} starts today`),
+          }, !unlocked ? campaignUnlockText(c) : state.cash < cost ? `Need ${money(cost - state.cash)} more`
+            : !c.everyRestaurant && slots >= T.marketing.maxActive ? `${T.marketing.maxActive} running, stop one first` : `Start for ${money(cost)}`));
+    }));
+}
+
+function promotionTab(ctx: PanelCtx, d: DeliveryState): HTMLElement[] {
+  const state = ctx.state;
+  const t = T.delivery;
+  const last = lastDay(state);
   const now = busyDay(state, {});
-  const throttleRow = h('div', { class: 'stack', style: 'gap:4px' },
-    h('span', { class: 'small' }, 'How busy may the app make your kitchen?'),
-    h('div', { class: 'seg wrap' }, ...PRESETS.map((p) => {
-      const f = busyDay(state, { throttle: p.throttle });
-      return h('button', {
-        class: d.throttle === p.throttle ? 'on' : '',
-        title: `${p.blurb}${f.day ? ` On a Saturday: ${Math.round(f.day.accepted)} orders taken, ${Math.round(f.day.refused)} refused, ${Math.round(f.day.time.dinner)} min at dinner, ${signedMoney(f.profit - now.profit)} against now.` : ''}`,
-        onclick: () => act(ctx, { type: 'setDelivery', throttle: p.throttle }),
-      }, p.name);
-    })),
-    h('div', { class: 'small muted' }, PRESETS.find((p) => p.throttle === d.throttle)?.blurb ?? `The app pauses at ${Math.round((d.throttle ?? 1) * 100)}% kitchen load.`),
-    now.day ? h('div', { class: 'small muted' }, `On a Saturday: about ${Math.round(now.day.refused)} orders refused, deliveries ${Math.round(now.day.time.dinner)} min at dinner.`) : null,
-    kitchenLimitLine(now) ? h('div', { class: 'small warn' }, kitchenLimitLine(now)) : null);
-  const markupRow = h('div', { class: 'row' },
-    h('span', { class: 'small' }, `App prices ${Math.round(d.markup * 100)}% above the menu`),
-    h('button', { class: 'small', disabled: d.markup <= 0, onclick: () => act(ctx, { type: 'setDelivery', markup: d.markup - 0.05 }) }, '−5%'),
-    h('button', { class: 'small', disabled: d.markup >= 0.2, onclick: () => act(ctx, { type: 'setDelivery', markup: d.markup + 0.05 }) }, '+5%'),
-    (() => {
-      const up = d.markup < 0.2 ? busyDay(state, { markup: Math.min(0.2, d.markup + 0.05) }) : null;
-      return up && now.day && up.day ? h('span', { class: 'small muted' }, `+5%: ${signed(up.day.delivered - now.day.delivered, 1)} orders, ${signedMoney(up.profit - now.profit)} on a Saturday`) : null;
-    })());
-  const late = last ? Math.max(last.time.lunch, last.time.dinner) > T.delivery.promise : false;
+  return [
+    funnel(state, d, last),
+    h('div', { class: 'card' }, h('h3', null, h('span', null, 'Where you are listed'), h('span', { class: 'small' }, 'reach and commission')),
+      ...MODES.map((m) => {
+        const on = d.mode === m;
+        const f = on ? null : vsNow(busyDay(state, { mode: m }), now);
+        return h('div', { class: `fit ${on ? 'installed' : ''}` },
+          h('div', { class: 'spread' }, h('b', null, MODE_NAMES[m]),
+            on ? h('span', { class: 'small good' }, '✓ Now') : h('button', { class: 'small', onclick: () => act(ctx, { type: 'setDelivery', mode: m }, `${MODE_NAMES[m]} from the next service`) }, 'Switch')),
+          h('div', { class: 'small' }, `Reach ${pct(t.reach[m])} · commission ${pct(t.commission[m])}`),
+          h('div', { class: 'small muted' }, MODE_BLURB[m]),
+          f ? h('div', { class: 'small muted' }, f) : null);
+      })),
+    promoCampaigns(ctx, now),
+    h('div', { class: 'card' }, h('h3', null, '⭐ Top rated on Scoot'),
+      h('div', { class: 'small' }, d.topRated
+        ? `You are Top rated: ${Math.round((t.topRatedBoost - 1) * 100)}% more orders, and word of mouth spreads ${t.audienceTopRated}x as fast. It is lost below a rating of ${t.topRatedLoseBelow}.`
+        : `Hold a delivery rating of ${t.topRatedDrep} for ${t.topRatedDays} days: ${d.drep >= t.topRatedDrep ? `${d.topRatedDays} of ${t.topRatedDays} days so far.` : `you are at ${d.drep.toFixed(0)}.`}`),
+      h('div', { class: 'small muted' }, 'The rating follows food on arrival (45%), time to the door (35%) and value (20%). The Scorecard shows which one holds it back.')),
+  ];
+}
+
+// ---------- Menu & deals (5.2) ----------
+
+/** One average order split into what it pays for (F-227); the lines add up to the profit per order. */
+function unpacked(last: DeliveryDay | undefined): HTMLElement {
+  if (!last || last.delivered < 1) return h('div', { class: 'card' }, h('h3', null, 'One order, unpacked'), h('div', { class: 'small muted' }, 'After the first day with orders, this shows where the money of one order goes.'));
+  const n = last.delivered;
+  const value = last.orderValue ?? 0;
+  const fee = (last.sales ?? 0) / n + (last.refunds ?? 0) / n - value;
+  const lines: { label: string; v: number; cls: string }[] = [
+    { label: 'Food', v: (last.food ?? 0) / n, cls: 'c-food' },
+    { label: 'App commission', v: (last.commission ?? 0) / n, cls: 'c-app' },
+    { label: 'Packaging', v: (last.packaging ?? 0) / n, cls: 'c-pack' },
+    { label: 'Riders', v: (last.riderWages ?? 0) / n, cls: 'c-rider' },
+    { label: 'Vehicles, web shop, utilities', v: (last.other ?? 0) / n, cls: 'c-other' },
+    { label: 'Late refunds', v: (last.refunds ?? 0) / n, cls: 'c-refund' },
+  ];
+  const profit = last.profit / n;
+  const gross = Math.max(0.01, value + Math.max(0, fee));
+  const given = ((last.dealGiven ?? 0) + (last.feesWaived ?? 0)) / n;
+  return h('div', { class: 'card' }, h('h3', null, h('span', null, 'One order, unpacked'), h('span', { class: 'small' }, `last day, ${Math.round(n)} orders`)),
+    h('div', { class: 'stack-bar order-bar', title: 'Where the money of one order goes' },
+      ...lines.filter((l) => l.v > 0).map((l) => h('div', { class: l.cls, title: `${l.label} ${money(l.v, true)}`, style: `width:${(l.v / gross) * 100}%` })),
+      profit > 0 ? h('div', { class: 'c-profit', title: `Profit ${money(profit, true)}`, style: `width:${(profit / gross) * 100}%` }) : null),
+    h('div', { class: 'kv' },
+      h('span', null, 'Order value (after the deal)'), h('b', null, money(value, true)),
+      Math.abs(fee) >= 0.01 ? h('span', null, fee >= 0 ? 'Delivery fee you keep' : 'Delivery fee you pay') : null,
+      Math.abs(fee) >= 0.01 ? h('b', { class: fee >= 0 ? '' : 'warn' }, signedMoney(fee).replace('$', '$')) : null,
+      ...lines.filter((l) => l.v >= 0.005).flatMap((l) => [h('span', null, h('i', { class: `swatch ${l.cls}` }), ` ${l.label}`), h('b', null, money(-l.v, true))]),
+      h('span', { class: 'total' }, h('i', { class: 'swatch c-profit' }), ' Profit per order'), h('b', { class: `total ${profit >= 0 ? 'good' : 'bad'}` }, money(profit, true))),
+    given >= 0.01 ? h('div', { class: 'small muted' }, `The deal gave away ${money(given, true)} an order, already out of the order value.`) : null);
+}
+
+function menuTab(ctx: PanelCtx, d: DeliveryState): HTMLElement[] {
+  const state = ctx.state;
+  const t = T.delivery;
+  const now = busyDay(state, {});
+  const up = d.markup < 0.2 ? busyDay(state, { markup: Math.min(0.2, d.markup + 0.05) }) : null;
+  const down = d.markup > 0 ? busyDay(state, { markup: Math.max(0, d.markup - 0.05) }) : null;
+  const markup = h('div', { class: 'card' }, h('h3', null, h('span', null, 'App prices'), h('span', { class: 'small' }, `${Math.round(d.markup * 100)}% above the menu`)),
+    h('div', { class: 'row' },
+      h('button', { class: 'small', disabled: d.markup <= 0, onclick: () => act(ctx, { type: 'setDelivery', markup: d.markup - 0.05 }) }, '−5%'),
+      h('b', null, `${Math.round(d.markup * 100)}%`),
+      h('button', { class: 'small', disabled: d.markup >= 0.2, onclick: () => act(ctx, { type: 'setDelivery', markup: d.markup + 0.05 }) }, '+5%')),
+    down && now.day && down.day ? h('div', { class: 'small muted' }, `−5%: ${signed(down.day.delivered - now.day.delivered, 1)} orders, ${signedMoney(down.profit - now.profit)} on a Saturday`) : null,
+    up && now.day && up.day ? h('div', { class: 'small muted' }, `+5%: ${signed(up.day.delivered - now.day.delivered, 1)} orders, ${signedMoney(up.profit - now.profit)} on a Saturday`) : null,
+    h('div', { class: 'small muted' }, 'Most restaurants price the app a little above the menu to cover commission. Steep app prices lower value for money and the rating.'));
   const current = d.deal ? DELIVERY_DEALS[d.deal] : null;
-  const dealRow = h('details', { class: 'stack deals', open: !d.deal },
-    h('summary', null, h('b', { class: 'small' }, `Deals: ${current ? current.name : 'none running'}`)),
+  const deals = h('div', { class: 'card' }, h('h3', null, h('span', null, 'Deals'), h('span', { class: 'small' }, current ? current.name : 'none running')),
     h('div', { class: 'small muted' }, 'A standing offer on every delivery order. Prices go down, orders and baskets go up: the app pushes deals to the top, and price hungry crowds order more.'),
     h('div', { class: 'fitlist' }, ...[null, ...DELIVERY_DEAL_IDS].map((id) => {
       const deal = id ? DELIVERY_DEALS[id] : null;
       const on = (d.deal ?? null) === id;
-      const f = on ? now : busyDay(state, { deal: id });
+      const f = on ? now : busyDay(state, { deal: id, dealDays: 'all' });
       return h('div', { class: `fit ${on ? 'installed' : ''}` },
         h('div', { class: 'spread' }, h('b', null, deal?.name ?? 'No deal'),
           on ? h('span', { class: 'small good' }, '✓ Running')
@@ -112,52 +281,210 @@ export function deliveryCard(ctx: PanelCtx): HTMLElement {
         deal ? h('div', { class: 'small' }, deal.effect) : h('div', { class: 'small' }, 'Full price on every order.'),
         deal ? h('div', { class: 'small muted' }, deal.blurb) : null,
         !on && f.day && now.day ? h('div', { class: 'small muted' },
-          `On a Saturday: ${Math.round(f.day.delivered)} orders (${signed(f.day.delivered - now.day.delivered, 0)}), ${money(f.day.orderValue ?? 0, true)} an order, ${signedMoney(f.profit - now.profit)} profit against now.`) : null);
+          `On a Saturday, every day: ${Math.round(f.day.delivered)} orders (${signed(f.day.delivered - now.day.delivered, 0)}), ${money(f.day.orderValue ?? 0, true)} an order, ${signedMoney(f.profit - now.profit)} profit against now.`) : null);
     })));
-  const tips = deliveryTips(state, last);
-  const growRow = h('div', { class: 'stack', style: 'gap:4px' },
-    h('div', { class: 'spread' }, h('b', { class: 'small' }, '💡 How to grow delivery'), h('button', { class: 'small', onclick: () => openMarketing(ctx) }, '📣 Delivery marketing')),
+  const daysNow = d.deal ? busyWeek(state, {}) : null;
+  const dealDays = d.deal ? h('div', { class: 'card' }, h('h3', null, h('span', null, 'Deal days'), h('span', { class: 'small' }, DEAL_DAYS_NAMES[dealDaysOf(d)])),
+    h('div', { class: 'small muted' }, 'Run the deal every day, only on the quiet days (Mon to Thu, to fill the oven), or only at the busy weekend.'),
+    choice((['all', 'weekdays', 'weekend'] as DealDays[]).map((v) => {
+      const w = v === dealDaysOf(d) || !daysNow ? null : busyWeek(state, { dealDays: v });
+      return { v, label: DEAL_DAYS_NAMES[v], title: w && daysNow ? `A week: ${signed(w.delivered - daysNow.delivered, 0)} orders, ${signedMoney(w.profit - daysNow.profit)} profit against now.` : undefined };
+    }), dealDaysOf(d), (v) => act(ctx, { type: 'setDelivery', dealDays: v }, `The deal runs ${DEAL_DAYS_NAMES[v].toLowerCase()}`)),
+    ...(daysNow ? (['all', 'weekdays', 'weekend'] as DealDays[]).filter((v) => v !== dealDaysOf(d)).map((v) => {
+      const w = busyWeek(state, { dealDays: v });
+      return h('div', { class: 'small muted' }, `${DEAL_DAYS_NAMES[v]}: ${signed(w.delivered - daysNow.delivered, 0)} orders and ${signedMoney(w.profit - daysNow.profit)} profit a week against now.`);
+    }) : [])) : null;
+  const minOrder = h('div', { class: 'card' }, h('h3', null, h('span', null, 'Minimum order'), h('span', { class: 'small' }, MIN_ORDER_NAMES[minOrderOf(d)])),
+    h('div', { class: 'small muted' }, 'A minimum makes every order bigger and loses some small ones. Families and professionals fill a basket easily; students feel it.'),
+    choice((['none', 'low', 'high'] as MinOrder[]).map((v) => {
+      const m = t.minOrder[v];
+      return { v, label: MIN_ORDER_NAMES[v], title: `${Math.round((m.orders - 1) * 100)}% orders, +${m.mains} mains and +${m.drinks} drinks an order` };
+    }), minOrderOf(d), (v) => act(ctx, { type: 'setDelivery', minOrder: v }, `${MIN_ORDER_NAMES[v]} from the next service`)),
+    ...(['none', 'low', 'high'] as MinOrder[]).filter((v) => v !== minOrderOf(d)).map((v) => {
+      const f = busyDay(state, { minOrder: v });
+      return f.day && now.day ? h('div', { class: 'small muted' }, `${MIN_ORDER_NAMES[v]}: ${Math.round(f.day.delivered)} orders (${signed(f.day.delivered - now.day.delivered, 0)}), ${money(f.day.orderValue ?? 0, true)} an order, ${signedMoney(f.profit - now.profit)} on a Saturday.`) : null;
+    }));
+  const packaging = h('div', { class: 'card' }, h('h3', null, 'Packaging'),
+    choice<'basic' | 'eco'>([
+      { v: 'basic', label: `Basic ${money(t.packaging.basic, true)}` },
+      { v: 'eco', label: `Insulated eco ${money(t.packaging.eco, true)}` },
+    ], d.packaging, (v) => act(ctx, { type: 'setDelivery', packaging: v })),
+    h('div', { class: 'small muted' }, `Per main. Insulated boxes keep food ${Math.round((t.ecoPackaging - 1) * 100)}% better on the way.`));
+  return compact([unpacked(lastDay(state)), deliveryMenuCard(ctx, now), markup, deals, dealDays, minOrder, packaging]);
+}
+
+/** The standard delivery menu with its size slider (delivery-tab.md 5.2). */
+function deliveryMenuCard(ctx: PanelCtx, now: Busy): HTMLElement {
+  const state = ctx.state;
+  const s = deliveryMenuSize(state);
+  const effectText = (n: number): string => {
+    const e = menuEffect(n, s.std);
+    return `${n} dishes: ${signed((e.reach - 1) * 100, 0, '%')} orders, word of mouth ${signed((e.audience - 1) * 100, 0, '%')}, ` +
+      `kitchen work per order ${signed((e.work - 1) * 100, 0, '%')}${e.food < 1 ? `, food on arrival ${signed((e.food - 1) * 100, 1, '%')}` : ''} against the standard ${s.std}.`;
+  };
+  const label = h('b', null, `${s.size} dish${s.size === 1 ? '' : 'es'}`);
+  const effect = h('div', { class: 'small' }, effectText(s.size));
+  const slider = h('input', {
+    type: 'range', min: s.min, max: s.max, step: 1, value: s.size, 'aria-label': 'Dishes on the delivery menu', disabled: s.max <= s.min,
+    oninput: (e: Event) => {
+      const n = Number((e.target as HTMLInputElement).value);
+      label.textContent = `${n} dish${n === 1 ? '' : 'es'}`;
+      effect.textContent = effectText(n);
+    },
+    onchange: (e: Event) => act(ctx, { type: 'setDelivery', menuSize: Number((e.target as HTMLInputElement).value) }, 'Delivery menu updated from the next service'),
+  });
+  const dishes = deliveryMenu({ ...state, delivery: { ...(state.delivery as DeliveryState), menuSize: s.size } }) ?? [];
+  const previews = [s.size - 2, s.size + 2].filter((n) => n >= s.min && n <= s.max).map((n) => {
+    const f = busyDay(state, { menuSize: n });
+    return f.day && now.day ? h('div', { class: 'small muted' },
+      `${n} dishes: ${Math.round(f.day.delivered)} orders (${signed(f.day.delivered - now.day.delivered, 0)}), ${Math.round(f.day.time.dinner)} min at dinner, ${signedMoney(f.profit - now.profit)} on a Saturday.`) : null;
+  });
+  return h('div', { class: 'card' }, h('h3', null, h('span', null, '📋 Delivery menu'), h('span', { class: 'small' }, `standard menu, ${s.size} of ${menuMainsCount(state)} mains`)),
+    h('div', { class: 'small muted' }, 'Your best selling mains go on the app. More dishes bring more orders and let word of mouth grow your delivery audience faster, but every extra dish makes each order more work for the kitchen and a little more likely to arrive wrong or cold.'),
+    h('label', { class: 'slider' }, h('span', { class: 'spread' }, h('span', null, 'Dishes on the delivery menu'), label), slider),
+    effect,
+    !s.set ? h('div', { class: 'small muted' }, `Not set yet: plays like the standard ${s.std} dishes with your whole menu on the app.`) : null,
+    ...previews,
+    dishes.length ? h('div', { class: 'chips' }, ...dishes.map((r) => h('span', { class: 'chip' }, r.name))) : null);
+}
+
+const menuMainsCount = (state: GameState): number => deliveryMenuSize(state).max;
+
+// ---------- Fleet (5.3) ----------
+
+function fleetTab(ctx: PanelCtx, d: DeliveryState): HTMLElement[] {
+  const state = ctx.state;
+  const t = T.delivery;
+  const own = d.mode !== 'platform';
+  const last = lastDay(state);
+  const riders = ridersToday(state);
+  const peak = last ? last.accepted * (1 - t.lunchShare) / (T.time.dinnerHours * T.service.utilisation.dinner) : 0;
+  const need = own ? ridersNeeded(peak, riders.ride) : 0;
+  const now = busyDay(state, {});
+  const payroll = state.staff.filter((s) => s.role === 'rider').sort((a, b) => b.attrs.speed - a.attrs.speed);
+  const rota = new Set(onRota(state.staff, state.day).map((s) => s.id));
+  const fleet = fleetOf(d);
+  let slot = 0;
+  const riderCard = own ? h('div', { class: 'card' }, h('h3', null, h('span', null, '🧑 Riders'), h('span', { class: 'small' }, `${riders.onShift} riding today · about ${need} needed at the dinner peak`)),
+    payroll.length ? h('div', { class: 'rtable', role: 'table' },
+      ...payroll.map((s) => {
+        const rides = rota.has(s.id);
+        const v = rides ? fleet[slot++] : undefined;
+        return h('div', { class: 'rt-row', role: 'row' },
+          h('span', { role: 'cell' }, h('b', null, s.name)),
+          h('span', { role: 'cell', class: 'small' }, `speed ${s.attrs.speed} · quality ${s.attrs.quality}`),
+          h('span', { role: 'cell', class: `small ${rides && !v ? 'warn' : ''}` }, !rides ? 'off today' : v ? `on a ${v.name.toLowerCase()}` : 'no vehicle'),
+          h('span', { role: 'cell', class: 'small muted' }, `${money(s.salary)}/wk`));
+      })) : h('div', { class: 'small warn' }, 'No riders yet: orders are taken but nobody rides them out.'),
+    ...state.candidates.filter((c) => c.role === 'rider').slice(0, 4).map((c) => h('div', { class: 'spread' },
+      h('span', { class: 'small' }, h('b', null, c.name), ` speed ${c.attrs.speed} · quality ${c.attrs.quality} · ${money(c.salary)}/wk`),
+      h('button', { class: 'small primary', onclick: () => act(ctx, { type: 'hire', candidateId: c.id }, `${c.name} joins as a rider`) }, 'Hire'))),
+    h('div', { class: 'small muted' }, 'Fast riders ride faster; careful riders keep the food nicer. More rider candidates show up in the Squad tab market.'))
+    : h('div', { class: 'card' }, h('h3', null, '🧑 Riders'), h('div', { class: 'small' }, `The Scoot riders deliver for you: about ${Math.round(riders.ride)} min a ride, no wages, no vehicles. Switch to your own riders under Promotion to run a fleet.`));
+  const vehicles = own ? h('div', { class: 'card' }, h('h3', null, h('span', null, '🛵 Vehicles'), h('span', { class: 'small' }, `${fleet.length} in the fleet`)),
+    h('div', { class: 'vtable', role: 'table' },
+      h('div', { class: 'vt-row vt-head', role: 'row' }, ...['Vehicle', 'Ride', 'A trip', 'Upkeep', 'Own', ''].map((x) => h('span', { role: 'columnheader' }, x))),
+      ...VEHICLE_KINDS.map((k) => {
+        const v = vehicleSpec(k);
+        const n = vehicleCount(d, k);
+        return h('div', { class: 'vt-row', role: 'row' },
+          h('b', { role: 'cell' }, v.name),
+          h('span', { role: 'cell' }, `${v.ride} min`),
+          h('span', { role: 'cell' }, `${v.trip}`),
+          h('span', { role: 'cell' }, `${money(v.upkeep)}/wk`),
+          h('b', { role: 'cell' }, `${n}`),
+          h('span', { role: 'cell', class: 'row' },
+            h('button', { class: 'small', onclick: () => act(ctx, { type: 'buyVehicle', kind: k }, `${v.name} bought`) }, `Buy ${money(v.price)}`),
+            n ? h('button', { class: 'small', onclick: () => act(ctx, { type: 'sellVehicle', kind: k }, `${v.name} sold`) }, 'Sell') : null));
+      })),
+    h('div', { class: `small ${fleet.length < payroll.length ? 'warn' : 'muted'}` }, fleet.length < payroll.length
+      ? `${payroll.length - fleet.length} rider${payroll.length - fleet.length === 1 ? '' : 's'} without a vehicle: a rider without a vehicle does not ride.`
+      : 'Riders take the vehicle that moves the most orders an hour first. Vehicles sell back at 80%.')) : null;
+  const zone = h('div', { class: 'card' }, h('h3', null, h('span', null, '🗺 Delivery zone'), h('span', { class: 'small' }, ZONE_NAMES[zoneOf(d)])),
+    choice((['tight', 'standard', 'wide'] as DeliveryZone[]).map((v) => ({ v, label: ZONE_NAMES[v], title: ZONE_BLURB[v] })), zoneOf(d),
+      (v) => act(ctx, { type: 'setDelivery', zone: v }, `Zone ${ZONE_NAMES[v].toLowerCase()} from the next service`)),
+    h('div', { class: 'small muted' }, ZONE_BLURB[zoneOf(d)]),
+    ...(['tight', 'standard', 'wide'] as DeliveryZone[]).filter((v) => v !== zoneOf(d)).map((v) => {
+      const f = vsNow(busyDay(state, { zone: v }), now);
+      return f ? h('div', { class: 'small muted' }, `${ZONE_NAMES[v]}: ${f.replace('On a Saturday: ', '')}`) : null;
+    }));
+  const throttle = h('div', { class: 'card' }, h('h3', null, 'Kitchen limit'),
+    h('span', { class: 'small' }, 'How busy may the app make your kitchen?'),
+    choice(PRESETS.map((p) => {
+      const f = busyDay(state, { throttle: p.throttle });
+      return { v: p.throttle, label: p.name, title: `${p.blurb}${f.day ? ` On a Saturday: ${Math.round(f.day.accepted)} orders taken, ${Math.round(f.day.refused)} refused, ${Math.round(f.day.time.dinner)} min at dinner, ${signedMoney(f.profit - now.profit)} against now.` : ''}` };
+    }), d.throttle, (v) => act(ctx, { type: 'setDelivery', throttle: v })),
+    h('div', { class: 'small muted' }, PRESETS.find((p) => p.throttle === d.throttle)?.blurb ?? `The app pauses at ${Math.round((d.throttle ?? 1) * 100)}% kitchen load.`),
+    now.day ? h('div', { class: 'small muted' }, `On a Saturday: about ${Math.round(now.day.refused)} orders refused, deliveries ${Math.round(now.day.time.dinner)} min at dinner (promise ${t.promise}).`) : null,
+    kitchenLimitLine(now) ? h('div', { class: 'small warn' }, kitchenLimitLine(now)) : null);
+  return compact([riderCard, vehicles, zone, throttle]);
+}
+
+// ---------- Scorecard (5.4) ----------
+
+const gradeBadge = (g: Grade): HTMLElement => h('span', { class: `grade g-${g}` }, g);
+
+function scoreTab(ctx: PanelCtx, go: (tab: DeliveryTabId) => void): HTMLElement[] {
+  const state = ctx.state;
+  const sc = deliveryScorecard(state.history);
+  const last = lastDay(state);
+  const tips = deliveryTips(state, last, 6);
+  const tipsCard = h('div', { class: 'card' }, h('h3', null, '💡 How to grow delivery'),
     ...(tips.length ? tips.map((x) => h('div', { class: 'small' }, `• ${x}`)) : [h('div', { class: 'small muted' }, 'Delivery is running well. Tips show up here after each day.')]));
-  return h('div', { class: 'card' },
-    h('h3', null, h('span', null, '🛵 Delivery'), h('span', { class: 'small' }, MODE_NAMES[d.mode])),
-    h('div', { class: 'kv' },
-      h('span', null, 'Delivery rating'), h('b', null, `${stars(d.drep)} ${d.drep.toFixed(0)} ${trend > 0.05 ? '↑' : trend < -0.05 ? '↓' : ''}`),
-      h('span', null, 'Delivery audience'), h('b', { class: audienceOf(d) < 0.25 ? 'warn' : audienceOf(d) > 0.6 ? 'good' : '' },
-        `${pct(audienceOf(d))} of the neighbourhood${last?.audienceAfter !== undefined && last.audienceBefore !== undefined ? ` (${signed((last.audienceAfter - last.audienceBefore) * 100, 1)} pts a day)` : ''}`),
-      h('span', null, 'Top rated on Scoot'), h('b', { class: d.topRated ? 'good' : '' }, d.topRated
-        ? `Yes: ${Math.round((T.delivery.topRatedBoost - 1) * 100)}% more orders, lost below ${T.delivery.topRatedLoseBelow}`
-        : d.drep >= T.delivery.topRatedDrep ? `${d.topRatedDays} of ${T.delivery.topRatedDays} days at ${T.delivery.topRatedDrep}` : `needs ${T.delivery.topRatedDrep} for ${T.delivery.topRatedDays} days`),
-      ...(last ? [
-        h('span', null, 'Last day'), h('b', null, `${Math.round(last.delivered)} delivered of ${Math.round(last.wanted)} wanted`),
-        h('span', null, 'Refused, cancelled'), h('b', { class: last.refused + last.cancelled > 1 ? 'warn' : '' }, `${Math.round(last.refused)} refused · ${Math.round(last.cancelled)} cancelled`),
-        h('span', null, 'Time to the door'), h('b', { class: late ? 'bad' : 'good' }, `${Math.round(last.time.lunch)} min lunch · ${Math.round(last.time.dinner)} min dinner (promise ${T.delivery.promise})`),
-        h('span', null, 'Kitchen used by delivery'), h('b', null, `${Math.round(last.kitchenShare * 100)}%`),
-        h('span', null, 'Average order'), h('b', null, `${money(last.orderValue ?? 0, true)} · ${(last.mainsPerOrder ?? T.delivery.mainsPerOrder).toFixed(1)} mains`),
-        h('span', null, 'Delivery profit'), h('b', { class: last.profit >= 0 ? 'good' : 'bad' }, `${money(last.profit)} a day`),
-      ] : [h('span', null, 'Orders'), h('b', null, 'The first orders come in at the next service')])),
-    h('div', { class: 'seg wrap' }, ...MODES.map((m) => h('button', { class: d.mode === m ? 'on' : '', title: MODE_BLURB[m], onclick: () => act(ctx, { type: 'setDelivery', mode: m }) }, MODE_NAMES[m]))),
-    h('div', { class: 'small muted' }, 'Only people who know you deliver can order. The audience starts tiny, grows slowly by word of mouth and fast with delivery campaigns, and fades when nobody hears from you.'),
-    h('div', { class: 'small muted' }, MODE_BLURB[d.mode]),
-    markupRow,
-    dealRow,
-    h('div', { class: 'row' }, h('span', { class: 'small' }, 'Packaging'),
-      h('div', { class: 'seg' },
-        h('button', { class: d.packaging === 'basic' ? 'on' : '', onclick: () => act(ctx, { type: 'setDelivery', packaging: 'basic' }) }, `Basic ${money(T.delivery.packaging.basic, true)}`),
-        h('button', { class: d.packaging === 'eco' ? 'on' : '', onclick: () => act(ctx, { type: 'setDelivery', packaging: 'eco' }) }, `Insulated eco ${money(T.delivery.packaging.eco, true)}`))),
-    throttleRow,
-    own ? h('div', { class: 'stack', style: 'gap:4px' },
-      h('b', { class: 'small' }, 'Riders and vehicles'),
-      h('div', { class: `small ${riders.onShift < need ? 'warn' : ''}` }, `${riders.onShift} riders on shift today with a vehicle; about ${need} needed at the dinner peak. ${riderCount} on the payroll.`),
-      h('div', { class: 'small muted' }, `Bikes ${d.vehicles.bike} · scooters ${d.vehicles.scooter}. A rider without a vehicle does not ride.`),
-      h('div', { class: 'row' },
-        h('button', { class: 'small', onclick: () => act(ctx, { type: 'buyVehicle', kind: 'bike' }, 'Bike bought') }, `Buy bike ${money(T.delivery.bike.price)}`),
-        h('button', { class: 'small', onclick: () => act(ctx, { type: 'buyVehicle', kind: 'scooter' }, 'Scooter bought') }, `Buy scooter ${money(T.delivery.scooter.price)}`),
-        d.vehicles.bike ? h('button', { class: 'small', onclick: () => act(ctx, { type: 'sellVehicle', kind: 'bike' }) }, 'Sell a bike') : null,
-        d.vehicles.scooter ? h('button', { class: 'small', onclick: () => act(ctx, { type: 'sellVehicle', kind: 'scooter' }) }, 'Sell a scooter') : null),
-      h('div', { class: 'small muted' }, 'Hire riders in the Squad tab (Delivery row).')) : null,
-    growRow,
-    h('div', { class: 'small muted' }, 'Delivery rating is separate from your dining reputation. It rises with hot food, fair app prices and deliveries under the promise.'),
-    h('div', { class: 'row', style: 'justify-content:flex-end' }, h('button', { class: 'small', onclick: () => act(ctx, { type: 'stopDelivery' }) }, 'Pause delivery')));
+  if (!sc) return [h('div', { class: 'card' }, h('h3', null, 'Scorecard'), h('div', { class: 'small muted' }, 'The scorecard grades your delivery after the first days with orders.')), tipsCard];
+  const week = deliveryWeek(deliveryDays(state.history).slice(-7));
+  return compact([
+    h('div', { class: 'card' },
+      h('h3', null, h('span', null, 'Delivery score'), h('span', { class: 'small' }, `last ${sc.days} delivery day${sc.days === 1 ? '' : 's'}`)),
+      h('div', { class: 'score-head' }, h('span', { class: 'big' }, `${sc.overall}`), gradeBadge(sc.grade),
+        h('div', { class: 'small muted' }, 'Out of 100: on time and food 20 each, orders fulfilled, rating and profit 15 each, value 10, audience 5.')),
+      sc.days < SCORE_MIN_DAYS ? h('div', { class: 'small warn' }, `Only ${sc.days} delivery day${sc.days === 1 ? '' : 's'} so far: the grades settle after ${SCORE_MIN_DAYS} or more.`) : null,
+      h('div', { class: 'scoretable', role: 'table' },
+        h('div', { class: 'st-row st-head', role: 'row' }, ...['KPI', 'Now', 'A at', 'Grade', 'Week', ''].map((x) => h('span', { role: 'columnheader' }, x))),
+        ...sc.kpis.map((k) => h('div', { class: 'st-row', role: 'row', title: k.why },
+          h('span', { role: 'cell' }, k.label),
+          h('b', { role: 'cell' }, k.shown),
+          h('span', { role: 'cell', class: 'muted' }, k.target),
+          h('span', { role: 'cell' }, gradeBadge(k.grade)),
+          h('span', { role: 'cell', class: `small ${k.change === null ? 'muted' : k.change > 0 ? 'good' : k.change < 0 ? 'bad' : ''}` },
+            k.change === null ? '·' : k.change > 1e-3 ? '↑' : k.change < -1e-3 ? '↓' : '→'),
+          k.grade !== 'A' && k.fix !== 'score' ? h('button', { role: 'cell', class: 'small ghost', onclick: () => go(k.fix) }, DELIVERY_TABS.find(([id]) => id === k.fix)?.[1] ?? '') : h('span', { role: 'cell' }))))),
+    sc.focus ? h('div', { class: 'card focus' }, h('h3', null, h('span', null, '🎯 Focus this week'), gradeBadge(sc.focus.grade)),
+      h('div', null, h('b', null, `${sc.focus.label}: ${sc.focus.shown}`), ` (A from ${sc.focus.target}).`),
+      h('div', { class: 'small' }, sc.focus.why),
+      sc.focus.fix !== 'score' ? h('div', { class: 'row' }, h('button', { class: 'small primary', onclick: () => go(sc.focus?.fix ?? 'score') }, `Open ${DELIVERY_TABS.find(([id]) => id === sc.focus?.fix)?.[1] ?? ''}`)) : null)
+      : h('div', { class: 'card' }, h('div', { class: 'good' }, 'Every KPI is at A. Delivery is running like a top restaurant.')),
+    tipsCard,
+    week,
+  ]);
+}
+
+// ---------- The tab ----------
+
+/** The Delivery tab's content for one of its four tabs (delivery-tab.md 5). */
+export function deliveryPanel(ctx: PanelCtx, tab: DeliveryTabId, go: (tab: DeliveryTabId) => void): HTMLElement {
+  const state = ctx.state;
+  const d = state.delivery;
+  const title = DELIVERY_TABS.find(([id]) => id === tab)?.[1] ?? 'Delivery';
+  const setup = setupView(ctx);
+  if (setup || !d) return h('div', { class: 'stack' }, h('h2', null, `Delivery · ${title}`), setup ?? h('div'));
+  const body = tab === 'promotion' ? promotionTab(ctx, d) : tab === 'menu' ? menuTab(ctx, d) : tab === 'fleet' ? fleetTab(ctx, d) : scoreTab(ctx, go);
+  return h('div', { class: 'stack' }, h('h2', null, `Delivery · ${title}`), statusStrip(ctx, d), ...body);
+}
+
+/** The Money tab's delivery line (F-233): one sentence and a way to the Delivery tab. */
+export function deliverySummaryCard(state: GameState, open: () => void): HTMLElement | null {
+  const d = state.delivery;
+  const missing = deliveryMissing(state);
+  if (!d && state.rep < 50) return null;
+  const last = lastDay(state);
+  const sc = d?.on ? deliveryScorecard(state.history) : null;
+  const text = !d?.on
+    ? (missing.length ? `Delivery: ${missing.join(', ')}.` : d ? 'Delivery is paused.' : 'Delivery is unlocked: place a packing station and choose a mode.')
+    : last ? `${Math.round(last.delivered)} orders, ${money(last.profit)} on the last day · rating ${d.drep.toFixed(0)}${sc ? ` · score ${sc.overall} (${sc.grade})` : ''}`
+      : `${MODE_NAMES[d.mode]}: the first orders come in at the next service.`;
+  return h('div', { class: 'card' }, h('div', { class: 'spread' }, h('span', null, h('b', null, '🛵 Delivery '), h('span', { class: 'small' }, text)),
+    h('button', { class: 'small', onclick: open }, 'Open Delivery')));
 }
 
 /** The day report's delivery section: headline, then orders, time, money, crowds and tips (folded open). */

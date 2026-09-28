@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'vitest';
 import { T } from '../src/data/tunables';
 import { ovr, staffFromSkill } from '../src/sim/staff';
-import { apply, type Command, depositFor, newGame } from '../src/sim/game';
+import { apply, type Command, depositFor, newGame, venueDeposit } from '../src/sim/game';
 import type { GameState, Staff } from '../src/sim/state';
 
 const hireable = (id: number, role: Staff['role'], skill: number): Staff => staffFromSkill(id, `${role} ${id}`, role, skill, { potential: skill + 2, morale: 50 });
@@ -124,10 +124,14 @@ describe('fresh start', () => {
 
   test('moving premises refunds the deposit, pays the new one and keeps equipment (AC-167)', () => {
     const s = cheapestOpening();
-    s.cash = 20000;
+    s.cash = 30000;
     const r = apply(s, { type: 'movePremises', districtId: 'canal', premisesId: 'cosy' });
     expect(r.error).toBeUndefined();
-    expect(r.state.cash).toBeCloseTo(20000 + s.deposit - depositFor('canal', 'cosy'), 5);
+    // A cosy room is over 150 m²: the new deposit is the down payment when rent alone asks less (fresh-start.md 13).
+    const venue = r.state.venueId;
+    const newDeposit = venue ? venueDeposit(venue, s) : depositFor('canal', 'cosy');
+    expect(r.state.deposit).toBe(newDeposit);
+    expect(r.state.cash).toBeCloseTo(30000 + s.deposit - newDeposit, 5);
     expect(r.state.equipment.length).toBe(s.equipment.length);
     expect(r.state.furniture.length).toBe(s.furniture.length);
     expect(r.state.premisesId).toBe('cosy');
