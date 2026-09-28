@@ -11,7 +11,7 @@ import { SEGMENTS } from '../data/segments';
 import type { SegmentId } from '../data/types';
 import { queueDelay, valueScore } from './formulas';
 import { onRota } from './staff';
-import type { DeliveryDay, DeliveryMode, DeliveryState, GameState, Staff } from './state';
+import type { DealDays, DeliveryDay, DeliveryMode, DeliveryState, DeliveryZone, GameState, MinOrder, Staff, VehicleKind } from './state';
 import { activeRivals } from './rivals';
 
 const clamp = (x: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, x));
@@ -27,6 +27,46 @@ export const MODE_BLURB: Record<DeliveryMode, string> = {
   marketplace: 'Listed on the app, delivered by your riders. 14% commission, you keep the fee.',
   own: 'No commission, but only people who already know you order: 40% of the reach, plus a web shop at $150 a week.',
 };
+
+export const ZONE_NAMES: Record<DeliveryZone, string> = { tight: 'Close by', standard: 'Standard', wide: 'Wide' };
+export const ZONE_BLURB: Record<DeliveryZone, string> = {
+  tight: 'Mostly your own neighbourhood: short rides, hot food, fewer orders.',
+  standard: 'Your neighbourhood and half of the ones next to it.',
+  wide: 'Deep into the neighbouring districts: more orders, longer rides, colder food.',
+};
+export const MIN_ORDER_NAMES: Record<MinOrder, string> = { none: 'No minimum', low: 'Low minimum', high: 'High minimum' };
+export const DEAL_DAYS_NAMES: Record<DealDays, string> = { all: 'Every day', weekdays: 'Mon to Thu', weekend: 'Fri to Sun' };
+
+export const zoneOf = (d: Pick<DeliveryState, 'zone'> | null | undefined): DeliveryZone => d?.zone ?? 'standard';
+export const minOrderOf = (d: Pick<DeliveryState, 'minOrder'> | null | undefined): MinOrder => d?.minOrder ?? 'none';
+export const dealDaysOf = (d: Pick<DeliveryState, 'dealDays'> | null | undefined): DealDays => d?.dealDays ?? 'all';
+
+/** The four vehicles (delivery-tab.md 5.3): minutes a ride, orders a trip, price and weekly upkeep. */
+export interface VehicleSpec {
+  kind: VehicleKind;
+  name: string;
+  ride: number;
+  trip: number;
+  price: number;
+  upkeep: number;
+}
+
+export function vehicleSpec(kind: VehicleKind): VehicleSpec {
+  const t = T.delivery;
+  switch (kind) {
+    case 'bike': return { kind, name: 'Bike', ride: t.bikeRide, trip: t.ordersPerTrip, ...t.bike };
+    case 'ebike': return { kind, name: 'E-bike', ride: t.ebikeRide, trip: t.ordersPerTrip, ...t.ebike };
+    case 'scooter': return { kind, name: 'Scooter', ride: t.scooterRide, trip: t.ordersPerTrip, ...t.scooter };
+    case 'car': return { kind, name: 'Delivery car', ride: t.carRide, trip: t.carOrdersPerTrip, ...t.car };
+  }
+}
+
+export const VEHICLE_KINDS: readonly VehicleKind[] = ['bike', 'ebike', 'scooter', 'car'];
+
+export const vehicleCount = (d: Pick<DeliveryState, 'vehicles'>, kind: VehicleKind): number => d.vehicles[kind] ?? 0;
+
+/** Orders an hour one rider moves with this vehicle, before rider speed. */
+export const vehiclePerHour = (v: VehicleSpec): number => (60 / (2 * v.ride + 4)) * v.trip;
 
 /** What is missing before this restaurant can deliver (6.1). */
 export function deliveryMissing(state: Pick<GameState, 'rep' | 'daysOpen' | 'equipment'>): string[] {
@@ -60,9 +100,16 @@ export interface DealTerms {
 
 const NO_DEAL: DealTerms = { mainsDiscount: 0, sidesDiscount: 0, extraMains: 0, extraDrinks: 0, extraDesserts: 0, orderLift: 0, feeWaived: false };
 
-export function dealTerms(d: Pick<DeliveryState, 'deal'> | null | undefined, sv: Service): DealTerms {
+/** Does the deal run on this weekday (Mon = 0)? Without a weekday it always does. */
+export function dealRunsOn(d: Pick<DeliveryState, 'dealDays'> | null | undefined, weekday?: number): boolean {
+  const days = dealDaysOf(d);
+  if (weekday === undefined || days === 'all') return true;
+  return days === 'weekdays' ? weekday <= 3 : weekday >= 4;
+}
+
+export function dealTerms(d: Pick<DeliveryState, 'deal' | 'dealDays'> | null | undefined, sv: Service, weekday?: number): DealTerms {
   const deal = d?.deal ? DELIVERY_DEALS[d.deal] : undefined;
-  if (!deal || (deal.lunchOnly && sv === 'dinner')) return NO_DEAL;
+  if (!deal || (deal.lunchOnly && sv === 'dinner') || !dealRunsOn(d, weekday)) return NO_DEAL;
   return {
     mainsDiscount: deal.mainsDiscount, sidesDiscount: deal.sidesDiscount, extraMains: deal.extraMains, extraDrinks: deal.extraDrinks,
     extraDesserts: deal.extraDesserts, orderLift: deal.orderLift, feeWaived: !!deal.feeWaived,
@@ -73,16 +120,17 @@ export function newDelivery(day: number, mode: DeliveryMode): DeliveryState {
   const d = T.delivery;
   return {
     on: true, mode, markup: d.markupDefault, packaging: 'basic', throttle: d.throttleDefault, drep: d.startDRep, since: day,
-    vehicles: { bike: 0, scooter: 0 }, topRatedDays: 0, topRated: false, deal: null, audience: d.audienceStart,
+    vehicles: { bike: 0, scooter: 0, ebike: 0, car: 0 }, topRatedDays: 0, topRated: false, deal: null, audience: d.audienceStart,
+    zone: 'standard', minOrder: 'none', dealDays: 'all',
   };
 }
 
 /** Is delivery taking orders today? */
 export const deliveryLive = (state: Pick<GameState, 'delivery' | 'equipment'>): boolean => !!state.delivery?.on && hasPacking(state);
 
-/** People who can order: the district plus half of the neighbouring ones (6.3). */
-export function catchment(districtId: string, footTraffic: number): number {
-  return footTraffic + T.delivery.adjacentWeight * (ADJACENT[districtId] ?? []).reduce((x, id) => x + (DISTRICTS[id]?.footTraffic ?? 0), 0);
+/** People who can order: the district plus a share of the neighbouring ones, half in the standard zone (6.3, delivery-tab.md 5.3). */
+export function catchment(districtId: string, footTraffic: number, adjacent: number = T.delivery.adjacentWeight): number {
+  return footTraffic + adjacent * (ADJACENT[districtId] ?? []).reduce((x, id) => x + (DISTRICTS[id]?.footTraffic ?? 0), 0);
 }
 
 /** Delivery competition (6.3): a background of 0.3 plus rivals that deliver nearby. */
@@ -132,19 +180,32 @@ export interface Riders {
   quality: number;
 }
 
-/** Riders on shift today with a vehicle each (scooters first) (6.5, 6.8). */
+/** The fleet, the vehicle that moves the most orders an hour first (delivery-tab.md 5.3). */
+export function fleetOf(d: Pick<DeliveryState, 'vehicles'>): VehicleSpec[] {
+  return VEHICLE_KINDS.map(vehicleSpec).sort((a, b) => vehiclePerHour(b) - vehiclePerHour(a))
+    .flatMap((v) => Array<VehicleSpec>(vehicleCount(d, v.kind)).fill(v));
+}
+
+/**
+ * Riders on shift today with a vehicle each, the best vehicles first (6.5, 6.8, delivery-tab.md 6). The ride is the mean of
+ * the vehicles in use times the riders' speed and the zone; orders a trip the mean of those vehicles, so bikes and scooters
+ * alone give the same numbers as before.
+ */
 export function ridersToday(state: Pick<GameState, 'staff' | 'day' | 'delivery'>): Riders {
   const d = state.delivery;
   const t = T.delivery;
-  if (!d || d.mode === 'platform') return { onShift: 0, capPerHour: Infinity, ride: t.platformRide, quality: 50 };
+  const zone = t.zones[zoneOf(d)];
+  if (!d || d.mode === 'platform') return { onShift: 0, capPerHour: Infinity, ride: t.platformRide * zone.ride, quality: 50 };
   const riders = onRota(state.staff, state.day).filter((s) => s.role === 'rider').sort((a, b) => b.attrs.speed - a.attrs.speed);
-  const vehicles = [...Array(d.vehicles.scooter).fill(t.scooterRide), ...Array(d.vehicles.bike).fill(t.bikeRide)] as number[];
+  const vehicles = fleetOf(d);
   const n = Math.min(riders.length, vehicles.length);
-  if (!n) return { onShift: 0, capPerHour: 0, ride: t.bikeRide, quality: 50 };
+  if (!n) return { onShift: 0, capPerHour: 0, ride: t.bikeRide * zone.ride, quality: 50 };
   const used = riders.slice(0, n);
+  const inUse = vehicles.slice(0, n);
   const spd = used.reduce((x, s) => x + s.attrs.speed, 0) / n;
-  const ride = (vehicles.slice(0, n).reduce((x, v) => x + v, 0) / n) * (1.15 - 0.003 * spd);
-  return { onShift: n, capPerHour: (n * 60 / (2 * ride + 4)) * t.ordersPerTrip, ride, quality: used.reduce((x, s) => x + s.attrs.quality, 0) / n };
+  const ride = (inUse.reduce((x, v) => x + v.ride, 0) / n) * (1.15 - 0.003 * spd) * zone.ride;
+  const trip = inUse.reduce((x, v) => x + v.trip, 0) / n;
+  return { onShift: n, capPerHour: (n * 60 / (2 * ride + 4)) * trip, ride, quality: used.reduce((x, s) => x + s.attrs.quality, 0) / n };
 }
 
 /** Riders needed for a peak of this many orders an hour (6.11). */
@@ -192,7 +253,7 @@ export function applyDeliveryDay(d: DeliveryState | null | undefined, day: Deliv
 /** Weekly running costs that are not wages: web shop and vehicles. */
 export function deliveryWeeklyCosts(d: DeliveryState): number {
   const t = T.delivery;
-  return (d.mode === 'own' ? t.webShopFee : 0) + d.vehicles.bike * t.bike.upkeep + d.vehicles.scooter * t.scooter.upkeep;
+  return (d.mode === 'own' ? t.webShopFee : 0) + VEHICLE_KINDS.reduce((x, k) => x + vehicleCount(d, k) * vehicleSpec(k).upkeep, 0);
 }
 
 export const riderWages = (staff: readonly Staff[]): number => staff.filter((s) => s.role === 'rider').reduce((x, s) => x + s.salary, 0);
@@ -261,7 +322,7 @@ export function settleDelivery(i: DeliveryInput): DeliverySettlement {
     const sumW = segs.reduce((x, s) => x + s.w, 0);
     return sumW > 0 ? segs.reduce((x, s) => x + s.w * f(s), 0) / sumW : 0;
   };
-  const travel = t.travel + (i.packingFood ?? 0) + (d.mode === 'platform' ? 0 : 0.0006 * (i.riders.quality - 50));
+  const travel = (t.travel + (i.packingFood ?? 0) + (d.mode === 'platform' ? 0 : 0.0006 * (i.riders.quality - 50))) * t.zones[zoneOf(d)].food;
   const pack = d.packaging === 'eco' ? t.ecoPackaging : 1;
   const food = clamp(SERVICES.reduce((x, sv) => x + weightOf(sv) * segAvg(sv, (s) => s.food), 0) * travel * pack, 0, 1);
   const value = SERVICES.reduce((x, sv) => x + weightOf(sv) * segAvg(sv, (s) => valueScore(s.rD, SEGMENTS[s.id].elasticity)), 0);

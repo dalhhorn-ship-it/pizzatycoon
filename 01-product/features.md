@@ -331,6 +331,18 @@ These shipped with their numbers in the balance tuning log; the log section is t
 | F-219 | Guests per server | Each server looks after about 35 guests a service, up to 50; a new front of house bottleneck | Must | Built | kitchen-bottlenecks.md 9 | tests/staffLimits.test.ts |
 | F-220 | Delivery audience | Only people who know you deliver order: starts at 5%, grows slowly by word of mouth and fast with delivery campaigns | Must | Built | competition.md 6.14 | tests/staffLimits.test.ts |
 | F-221 | Realistic restaurant economics | Staff cards are positions (wages x2), the owner works shifts, running costs, dearer premium ingredients, narrower difficulty presets; margins 11 to 24% for the reference restaurants | Must | Built | balance.md 5 | tests/staffLimits.test.ts, npm run balance |
+| F-222 | Two layers of tabs | Groups (Restaurant, Delivery, Business) above their tabs on the right side | Must | Built | delivery-tab.md 4 | scripts/smoke.mjs |
+| F-223 | Delivery tab | Status strip and setup view on every Delivery tab | Must | Built | delivery-tab.md 5 | scripts/smoke.mjs |
+| F-224 | Delivery promotion | Audience funnel, listing mode, inline delivery campaigns, Top rated | Must | Built | delivery-tab.md 5.1 | manual |
+| F-225 | Delivery menu and deals | App markup, deals and packaging with Saturday previews | Must | Built | delivery-tab.md 5.2 | tests/deliveryDeals.test.ts |
+| F-226 | Deal days and minimum order | Deals on chosen days; a minimum order for bigger baskets | Should | Built | delivery-tab.md 5.2 | tests/deliveryTab.test.ts |
+| F-227 | One order, unpacked | Where the money of an average order goes | Should | Built | delivery-tab.md 5.2 | manual |
+| F-228 | Delivery fleet | Riders with who rides today, hiring riders, kitchen limit | Must | Built | delivery-tab.md 5.3 | manual |
+| F-229 | E-bike and delivery car | Two more vehicles; a car carries four orders a trip | Should | Built | delivery-tab.md 5.3 | tests/deliveryTab.test.ts |
+| F-230 | Delivery zone | Close by, standard or wide: orders against ride time and food | Should | Built | delivery-tab.md 5.3 | tests/deliveryTab.test.ts |
+| F-231 | Delivery scorecard | Seven graded KPIs over 7 delivery days and an overall score | Must | Built | delivery-tab.md 5.4 | tests/deliveryTab.test.ts |
+| F-232 | Delivery focus and tips | The lowest KPI with a button to the tab that fixes it; tips for zone, fleet, deal days, minimum | Should | Built | delivery-tab.md 5.4 | tests/deliveryTab.test.ts |
+| F-233 | Delivery summary in Money | One line and a button to the Delivery tab | Must | Built | delivery-tab.md 4 | manual |
 
 ## Dependency map (critical path)
 

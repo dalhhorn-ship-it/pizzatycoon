@@ -5,7 +5,7 @@ import { DELIVERY_DEALS } from '../data/deliveryDeals';
 import { SEGMENTS } from '../data/segments';
 import { T } from '../data/tunables';
 import type { SegmentId } from '../data/types';
-import { audienceOf, packingOf, ridersNeeded, ridersToday } from './delivery';
+import { audienceOf, dealDaysOf, minOrderOf, packingOf, ridersNeeded, ridersToday, vehicleCount, zoneOf } from './delivery';
 import { campaignUnlocked, isActive } from './marketing';
 import type { DeliveryDay, GameState } from './state';
 
@@ -26,7 +26,7 @@ export function deliveryTips(state: GameState, d: DeliveryDay | undefined, max =
   const own = dl.mode !== 'platform';
   if (d && d.wanted > 1) {
     const refusedShare = d.refused / d.wanted;
-    if (d.accepted < 0.5 && own) tips.push({ weight: 100, text: 'Orders came in but nobody could ride them out. Put riders with a bike or scooter on the rota, or switch to the Scoot riders.' });
+    if (d.accepted < 0.5 && own && ridersToday(state).onShift === 0) tips.push({ weight: 100, text: 'Orders came in but nobody could ride them out. Put riders with a bike or scooter on the rota, or switch to the Scoot riders.' });
     else if (refusedShare > 0.15) {
       tips.push({
         weight: 80 * refusedShare + 20,
@@ -71,7 +71,7 @@ export function deliveryTips(state: GameState, d: DeliveryDay | undefined, max =
     }
   }
   if (!dl.deal) {
-    tips.push({ weight: 40, text: `No deal is running. ${DELIVERY_DEALS.secondPizza25.name} brings about ${Math.round(DELIVERY_DEALS.secondPizza25.orderLift * 100)}% more orders and bigger baskets; prices go down, volume goes up. Pick one under Deals.` });
+    tips.push({ weight: 40, text: `No deal is running. ${DELIVERY_DEALS.secondPizza25.name} brings about ${Math.round(DELIVERY_DEALS.secondPizza25.orderLift * 100)}% more orders and bigger baskets; prices go down, volume goes up. Pick one under Delivery, Menu & deals.` });
   } else if (d && d.profit < 0 && (d.dealGiven ?? 0) + (d.feesWaived ?? 0) > Math.abs(d.profit)) {
     tips.push({ weight: 65, text: `Delivery lost $${Math.round(-d.profit)} today and the ${DELIVERY_DEALS[dl.deal].name} deal gave away $${Math.round((d.dealGiven ?? 0) + (d.feesWaived ?? 0))}. Try a lighter deal, or raise the app markup a little to pay for it.` });
   }
@@ -88,7 +88,26 @@ export function deliveryTips(state: GameState, d: DeliveryDay | undefined, max =
     });
   } else if (promo) {
     const c = CAMPAIGNS[promo];
-    tips.push({ weight: anyRunning ? 20 : 35, text: `Delivery marketing: ${c.name} (${c.effect.charAt(0).toLowerCase()}${c.effect.slice(1)}). Start it in Marketing.` });
+    tips.push({ weight: anyRunning ? 20 : 35, text: `Delivery marketing: ${c.name} (${c.effect.charAt(0).toLowerCase()}${c.effect.slice(1)}). Start it under Delivery, Promotion.` });
+  }
+  // Delivery tab levers (delivery-tab.md 5.2, 5.3): zone, fleet, deal days and minimum order.
+  const zone = zoneOf(dl);
+  if (d && lateSv && zone === 'wide') {
+    tips.push({ weight: 55, text: `Your delivery zone is wide: every ride is ${Math.round((t.zones.wide.ride - 1) * 100)}% longer and food arrives colder. Standard or Close by gets orders to the door on time.` });
+  } else if (d && !lateSv && zone === 'tight' && d.refused < 0.1 * d.wanted && (s?.food ?? 0) > 0.7) {
+    tips.push({ weight: 30, text: 'Deliveries are on time and hot in the close by zone. A Standard zone reaches more of the neighbouring districts.' });
+  }
+  if (own && d && d.delivered > 40 && vehicleCount(dl, 'car') === 0) {
+    tips.push({ weight: 28, text: `${Math.round(d.delivered)} orders a day: a delivery car carries ${t.carOrdersPerTrip} orders a trip, twice a scooter, so fewer riders move more orders.` });
+  }
+  if (own && d && lateSv && vehicleCount(dl, 'bike') > 0 && vehicleCount(dl, 'scooter') + vehicleCount(dl, 'ebike') === 0) {
+    tips.push({ weight: 45, text: `Your riders are all on bikes (${t.bikeRide} min a ride). An e-bike (${t.ebikeRide} min) or a scooter (${t.scooterRide} min) gets them back sooner.` });
+  }
+  if (dl.deal && dealDaysOf(dl) === 'all' && d && d.refused > 0.2 * d.wanted) {
+    tips.push({ weight: 50, text: `The ${DELIVERY_DEALS[dl.deal].name} deal runs every day while busy days turn orders away. Run it Mon to Thu only: quiet days fill up, full weekends keep full prices.` });
+  }
+  if (d && s && minOrderOf(dl) === 'none' && s.value > 0.8 && d.delivered > 5 && d.profit / d.delivered < 3) {
+    tips.push({ weight: 32, text: `Guests find you good value (${Math.round(s.value * 100)}) but each order leaves little. A low minimum order makes baskets bigger for a few lost small orders.` });
   }
   if (dl.mode === 'own' && d && d.wanted < 15) tips.push({ weight: 30, text: 'Your own ordering page reaches only the people who already know you (40% of the app). Listing on Scoot with your own riders reaches everyone for 14% commission.' });
   if (dl.mode === 'platform' && d && d.profit < 0 && d.delivered > 20) tips.push({ weight: 45, text: 'The app takes 30% of every order. With your own riders on Scoot it takes 14% and you keep the delivery fee: worth it from about 25 orders a day.' });

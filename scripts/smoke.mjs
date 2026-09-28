@@ -70,16 +70,22 @@ await step('an old save loads', async () => {
   await dismiss();
 });
 
+/** Two layers of tabs (delivery-tab.md 4): the group first, then its tab. */
+async function openTab(group, tab) {
+  await page.getByRole('tab', { name: group }).click();
+  await page.getByRole('tab', { name: tab, exact: true }).click();
+  await page.waitForTimeout(150);
+}
+
 await step('every tab opens', async () => {
-  for (const tab of ['Menu', 'Kitchen', 'Room', 'Squad', 'Money']) {
-    await page.getByRole('tab', { name: tab }).click();
-    await page.waitForTimeout(150);
-  }
+  for (const tab of ['Menu', 'Kitchen', 'Room', 'Squad']) await openTab('Restaurant', tab);
+  for (const tab of ['Promotion', 'Menu & deals', 'Fleet', 'Scorecard']) await openTab('Delivery', tab);
+  await openTab('Business', 'Money');
   await page.getByText('Demand and capacity').first().waitFor({ state: 'attached', timeout: 1 }).catch(() => undefined);
 });
 
 await step('the business review opens from Money', async () => {
-  await page.getByRole('tab', { name: 'Money' }).click();
+  await openTab('Business', 'Money');
   await page.getByRole('button', { name: /Business review/ }).first().click();
   await page.getByText('Key metrics').waitFor({ timeout: 5000 });
   await page.getByRole('button', { name: '12 weeks' }).click();
@@ -102,7 +108,7 @@ await step('a week runs and the report shows the top 3', async () => {
 
 await step('the Rivals tab and the Marketing sheet', async () => {
   await dismiss();
-  await page.getByRole('tab', { name: 'Rivals' }).click();
+  await openTab('Business', 'Rivals');
   await page.getByText('Market share').first().waitFor({ timeout: 5000 });
   await page.getByRole('button', { name: /Marketing/ }).first().click();
   await page.getByText('campaign slots used').waitFor({ timeout: 5000 });

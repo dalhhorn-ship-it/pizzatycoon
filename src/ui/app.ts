@@ -26,12 +26,20 @@ import { ROLE_NAMES } from '../data/staff';
 import type { TeamLine } from '../sim/state';
 import { lossLine, rivalsInReach } from '../sim/market';
 import { deliveryUnlocked } from '../sim/delivery';
-import { deliveryDayCard, deliveryWeek } from './delivery';
+import { DELIVERY_TABS, deliveryDayCard, deliveryPanel, type DeliveryTabId, deliveryWeek } from './delivery';
 import { openBusinessReview } from './review';
 import { type Nav, openMarketing, rivalsPanel, weekCompetitionCard } from './rivals';
 
-type Tab = 'menu' | 'kitchen' | 'room' | 'staff' | 'rivals' | 'money';
-const TABS: [Tab, string][] = [['menu', 'Menu'], ['kitchen', 'Kitchen'], ['room', 'Room'], ['staff', 'Squad'], ['rivals', 'Rivals'], ['money', 'Money']];
+type Tab = 'menu' | 'kitchen' | 'room' | 'staff' | 'rivals' | 'money' | `d:${DeliveryTabId}`;
+type Group = 'restaurant' | 'delivery' | 'business';
+/** Two layers of tabs (delivery-tab.md 4): groups on top, their tabs below. */
+const GROUPS: { id: Group; label: string; tabs: [Tab, string][] }[] = [
+  { id: 'restaurant', label: '🍕 Restaurant', tabs: [['menu', 'Menu'], ['kitchen', 'Kitchen'], ['room', 'Room'], ['staff', 'Squad']] },
+  { id: 'delivery', label: '🛵 Delivery', tabs: DELIVERY_TABS.map(([id, label]): [Tab, string] => [`d:${id}`, label]) },
+  { id: 'business', label: '📈 Business', tabs: [['rivals', 'Rivals'], ['money', 'Money']] },
+];
+const TABS: [Tab, string][] = GROUPS.flatMap((g) => g.tabs);
+const groupOf = (t: Tab): Group => GROUPS.find((g) => g.tabs.some(([x]) => x === t))?.id ?? 'restaurant';
 const TAB_KEY = 'pizzad:ui:tab';
 const ECONOMY_KEY = 'pizzad:economy';
 
@@ -141,7 +149,10 @@ export class App {
   private checklistHost = h('div');
   private hud = h('header', { class: 'hud' });
   private panel = h('div', { class: 'panel' });
-  private tabs = h('nav', { class: 'tabs', role: 'tablist' });
+  private groupTabs = h('nav', { class: 'tabs groups', role: 'tablist', 'aria-label': 'Sections' });
+  private tabs = h('nav', { class: 'tabs', role: 'tablist', 'aria-label': 'Tabs' });
+  /** The tab last used in each group, so a group opens where the player left it. */
+  private lastInGroup: Partial<Record<Group, Tab>> = {};
   private bar = h('div', { class: 'bar' });
   private tab: Tab = 'menu';
   /** Set when a new build is waiting (main.ts); calling it switches to the new version. */
@@ -158,6 +169,7 @@ export class App {
     try {
       const saved = localStorage.getItem(TAB_KEY) as Tab | null;
       if (saved && TABS.some(([t]) => t === saved)) this.tab = saved;
+      this.lastInGroup[groupOf(this.tab)] = this.tab;
     } catch {
       // Private mode: default tab.
     }
@@ -171,7 +183,7 @@ export class App {
         this.kitchen.invalidate();
       }
     };
-    const side = h('aside', { class: 'side', style: 'grid-template-rows: auto auto minmax(0, 1fr)' }, this.tabs, this.checklistHost, this.panel);
+    const side = h('aside', { class: 'side', style: 'grid-template-rows: auto auto auto minmax(0, 1fr)' }, this.groupTabs, this.tabs, this.checklistHost, this.panel);
     this.main = h('main', { class: 'main' }, stage, side);
     this.city.el.hidden = true;
     root.append(this.hud, this.main, this.city.el);
@@ -287,12 +299,8 @@ export class App {
 
   /** Where the coach's answers lead (competition.md 7.5). */
   private nav(): Nav {
-    const go = (t: Tab): void => {
-      this.tab = t;
-      this.renderTabs();
-      this.renderPanel();
-    };
-    return { tab: go, delivery: () => go('money') };
+    const go = (t: Tab): void => this.switchTab(t);
+    return { tab: go, delivery: () => go(this.game.state?.delivery?.on ? 'd:fleet' : 'd:promotion') };
   }
 
   private ctx(): PanelCtx {
@@ -377,6 +385,7 @@ export class App {
 
   private switchTab(id: Tab): void {
     this.tab = id;
+    this.lastInGroup[groupOf(id)] = id;
     try {
       localStorage.setItem(TAB_KEY, id);
     } catch {
@@ -444,15 +453,25 @@ export class App {
     const s = this.game.state as GameState | null;
     // Staged reveal (cleanup sprint 5): the Rivals tab arrives with the first rival in reach or the first campaigns.
     const rivalsReady = !!s && (s.day >= 8 || rivalsInReach(s).length > 0 || s.campaigns.length > 0);
-    if (!rivalsReady && this.tab === 'rivals') this.tab = 'menu';
+    if (!rivalsReady && this.tab === 'rivals') this.tab = 'money';
     // One intro at a time, and never while service plays.
     const intro = !s || this.floor.playing ? false : (rivalsReady && this.introOnce('rivals', 'Rivals and marketing', rivalsInReach(s).length
       ? `${rivalsInReach(s).length === 1 ? 'A rival pizzeria is' : `${rivalsInReach(s).length} rival pizzerias are`} close enough to take your guests. The Rivals tab shows who, what they compete on and what each costs you, and your coach suggests an answer.`
       : 'Campaigns are open: flyers, social ads and more, each aimed at the crowds who walk past. The Rivals tab holds marketing, your share of the neighbourhood and the coach.', 'Open Rivals', () => this.switchTab('rivals'))) ||
-      (deliveryUnlocked(s) && !s.delivery && this.introOnce('delivery', 'Delivery is unlocked', 'Three stars and four weeks open: you can sell through the delivery app. It uses no seats but the same oven and prep line, and has its own rating. Place a Packing Station, then choose how orders reach the door in the Money tab.', 'Open Money', () => this.switchTab('money'))) ||
+      (deliveryUnlocked(s) && !s.delivery && this.introOnce('delivery', 'Delivery is unlocked', 'Three stars and four weeks open: you can sell through the delivery app. It uses no seats but the same oven and prep line, and has its own rating. Place a Packing Station, then choose how orders reach the door in the new Delivery section on the right.', 'Open Delivery', () => this.switchTab('d:promotion'))) ||
       ((s.kpis?.length ?? 0) >= 1 && this.introOnce('review', 'Your first business review', 'Every Sunday each restaurant gets a row of KPIs: sales, profit, guests, costs, capacity, market share and team. The Money tab shows the week and opens the full review over 6 or 12 weeks.', 'Open Money', () => this.switchTab('money')));
     void intro;
-    this.tabs.replaceChildren(...TABS.filter(([id]) => id !== 'rivals' || rivalsReady).map(([id, label]) => h('button', {
+    const group = groupOf(this.tab);
+    this.groupTabs.replaceChildren(...GROUPS.map((g) => h('button', {
+      class: `${g.id === group ? 'active' : ''} grp-${g.id}`, role: 'tab', 'aria-selected': g.id === group ? 'true' : 'false',
+      onclick: () => {
+        const tabs = g.tabs.filter(([id]) => id !== 'rivals' || rivalsReady);
+        const last = this.lastInGroup[g.id];
+        this.switchTab(last && tabs.some(([id]) => id === last) ? last : (tabs[0]?.[0] ?? 'menu'));
+      },
+    }, g.label)));
+    const tabs = GROUPS.find((g) => g.id === group)?.tabs ?? [];
+    this.tabs.replaceChildren(...tabs.filter(([id]) => id !== 'rivals' || rivalsReady).map(([id, label]) => h('button', {
       class: this.tab === id ? 'active' : '', role: 'tab', 'aria-selected': this.tab === id ? 'true' : 'false',
       onclick: () => this.switchTab(id),
     }, label)));
@@ -516,7 +535,9 @@ export class App {
       case 'money': content = moneyPanel(ctx, h('div', { class: 'row' },
         h('button', { class: 'small', onclick: () => openBusinessReview(ctx) }, '📊 Business review'),
         h('button', { class: 'small', onclick: () => openMarketing(ctx) }, '📣 Marketing'),
-        h('button', { class: 'small', onclick: () => this.showSettings() }, '⚙ Settings, saves and difficulty'))); break;
+        h('button', { class: 'small', onclick: () => this.showSettings() }, '⚙ Settings, saves and difficulty')),
+        () => this.switchTab(ctx.state.delivery?.on ? 'd:score' : 'd:promotion')); break;
+      default: content = deliveryPanel(ctx, this.tab.slice(2) as DeliveryTabId, (t) => this.switchTab(`d:${t}`));
     }
     this.panel.replaceChildren(content);
     this.panel.scrollTop = scroll;

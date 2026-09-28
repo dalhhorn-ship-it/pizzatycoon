@@ -3,6 +3,7 @@ import './ui/kitchen.css';
 import './ui/city.css';
 import './ui/squad.css';
 import './ui/rivals.css';
+import './ui/delivery.css';
 import { Controller } from './game/controller';
 import { App } from './ui/app';
 

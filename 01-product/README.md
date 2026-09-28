@@ -17,6 +17,7 @@ What each document is the authority for. When two documents disagree, the newer 
 | `kitchen-bottlenecks.md` | M0.4 | Built | Stations, tending, wash points, dough, the capacity view |
 | `competition.md` | M0.5 | Built; balance items open (section 15) | Live rivals, marketing, the coach, delivery |
 | `business-review.md` | M0.6 | Built | Weekly KPIs and the business review |
+| `delivery-tab.md` | M0.7 | Built; balance notes open (section 9) | Two layers of tabs, the Delivery tab (promotion, menu and deals, fleet, scorecard), zone, vehicles, minimum order, deal days |
 | `../cleanup-sprints.md` | M0.6 | In progress | The cleanup backlog and sprint scope |
 
-Numbering: feature IDs run F-01 to F-212 and ACs AC-01 to AC-310 across all documents, with no reuse (the city map moved to F-191 to F-199 and AC-293 to AC-310). A new addendum takes the next free numbers.
+Numbering: feature IDs run F-01 to F-233 and ACs AC-01 to AC-336 across all documents, with no reuse (the city map moved to F-191 to F-199 and AC-293 to AC-310). A new addendum takes the next free numbers.

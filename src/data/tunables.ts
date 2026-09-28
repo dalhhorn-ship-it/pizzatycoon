@@ -251,6 +251,24 @@ export const T = {
     riderBase: 380,
     bike: { price: 600, upkeep: 4 },
     scooter: { price: 1900, upkeep: 12 },
+    /** Delivery tab (delivery-tab.md 5.3): an e-bike and a delivery car that carries four orders a trip. */
+    ebike: { price: 1200, upkeep: 7 },
+    car: { price: 7500, upkeep: 45 },
+    ebikeRide: 13,
+    carRide: 14,
+    carOrdersPerTrip: 4,
+    /** How far you deliver (delivery-tab.md 5.3): neighbouring districts' weight, ride time and food on arrival. */
+    zones: {
+      tight: { adjacent: 0.2, ride: 0.85, food: 1.02 },
+      standard: { adjacent: 0.5, ride: 1, food: 1 },
+      wide: { adjacent: 0.9, ride: 1.3, food: 0.96 },
+    },
+    /** Minimum order (delivery-tab.md 5.2): fewer orders, bigger baskets. */
+    minOrder: {
+      none: { orders: 1, mains: 0, drinks: 0 },
+      low: { orders: 0.93, mains: 0.2, drinks: 0.15 },
+      high: { orders: 0.8, mains: 0.5, drinks: 0.3 },
+    },
     webShopFee: 150,
     packingStation: 900,
     utilitiesPerOrder: 0.4,

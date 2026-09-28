@@ -82,7 +82,8 @@ export interface DeliveryState {
   /** Delivery reputation, separate from the dining reputation. */
   drep: number;
   since: number;
-  vehicles: { bike: number; scooter: number };
+  /** E-bikes and cars are missing on older saves (delivery-tab.md 6). */
+  vehicles: { bike: number; scooter: number; ebike?: number; car?: number };
   /** Days in a row at or above the Top rated threshold, and whether the badge is held. */
   topRatedDays: number;
   topRated: boolean;
@@ -90,7 +91,18 @@ export interface DeliveryState {
   deal?: DeliveryDealId | null;
   /** Share of the catchment that knows you deliver, 0 to 1; missing on older saves (T.delivery.audienceLegacy). */
   audience?: number;
+  /** How far you deliver; missing means standard (delivery-tab.md 5.3). */
+  zone?: DeliveryZone;
+  /** Minimum order; missing means none (delivery-tab.md 5.2). */
+  minOrder?: MinOrder;
+  /** Days the deal runs; missing means every day (delivery-tab.md 5.2). */
+  dealDays?: DealDays;
 }
+
+export type DeliveryZone = 'tight' | 'standard' | 'wide';
+export type MinOrder = 'none' | 'low' | 'high';
+export type DealDays = 'all' | 'weekdays' | 'weekend';
+export type VehicleKind = 'bike' | 'ebike' | 'scooter' | 'car';
 
 export interface RivalCampaign {
   id: CampaignId;

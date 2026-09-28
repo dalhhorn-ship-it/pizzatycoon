@@ -1,7 +1,7 @@
 // Side panels: menu, kitchen, room, staff, money. Each renders from state and dispatches commands.
 
 import { lastWeekCard } from './review';
-import { deliveryCard } from './delivery';
+import { deliverySummaryCard } from './delivery';
 import { DISTRICTS } from '../data/districts';
 import { VENUES } from '../data/venues';
 import { EQUIPMENT } from '../data/equipment';
@@ -736,7 +736,7 @@ function restaurantsCard(ctx: PanelCtx): HTMLElement | null {
 
 // ---------- Money ----------
 
-export function moneyPanel(ctx: PanelCtx, extra: HTMLElement): HTMLElement {
+export function moneyPanel(ctx: PanelCtx, extra: HTMLElement, openDelivery: () => void): HTMLElement {
   const { state } = ctx;
   const a = analyse(state);
   const last = state.history.at(-1);
@@ -770,7 +770,7 @@ export function moneyPanel(ctx: PanelCtx, extra: HTMLElement): HTMLElement {
       ownerShifts(state) > 0 ? h('div', { class: 'small muted' }, `You work about 60 hours a week here yourself, which saves ${money(ownerShifts(state))} in wages. Each staff card covers its role at every lunch and dinner, seven days a week.`) : null,
       state.cash < 0 ? h('div', { class: 'warn small' }, 'Cash is below zero. Payments continue; after 7 days the bank advisor pauses your loan payments. Pizza D never ends your game.') : null),
     lastWeekCard(ctx),
-    deliveryCard(ctx),
+    deliverySummaryCard(state, openDelivery),
     last ? h('div', { class: 'card' }, h('h3', null, `Day ${last.day}`), h('div', { class: 'pnl' }, ...pnlRows(last.pnl))) : null,
     recent.length ? h('div', { class: 'card' }, h('h3', null, 'Profit, last 14 days'),
       h('div', { class: 'bars' }, ...recent.map((d) => h('div', { class: d.pnl.profit < 0 ? 'neg' : '', title: `Day ${d.day}: ${money(d.pnl.profit)}`, style: `height:${(Math.abs(d.pnl.profit) / maxAbs) * 100}%` })))) : null,

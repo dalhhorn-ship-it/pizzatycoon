@@ -22,6 +22,7 @@ import type { PanelCtx } from './panels';
 /** Where coach answers lead. */
 export interface Nav {
   tab: (t: 'menu' | 'kitchen' | 'room' | 'staff' | 'money') => void;
+  /** Opens the Delivery section (delivery-tab.md 4). */
   delivery: () => void;
 }
 

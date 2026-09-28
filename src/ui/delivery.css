@@ -1,0 +1,73 @@
+/* Two layers of tabs and the Delivery section (01-product/delivery-tab.md). */
+
+.tabs.groups {
+  padding-top: 6px; border-bottom-width: 2px;
+  background: repeating-linear-gradient(180deg, var(--wood-2) 0 9px, var(--wood) 9px 10px);
+}
+.tabs.groups button { font-size: 13px; padding: 6px 6px 8px; white-space: nowrap; background: var(--wood-hi); color: var(--title-ink); }
+.tabs.groups button.active, .tabs.groups button[aria-selected='true'] { background: var(--wood); color: var(--lcd-ink); border-bottom-color: var(--wood); box-shadow: inset 2px 2px 0 var(--wood-hi); }
+.tabs.groups + .tabs { padding-top: 6px; background: var(--wood); }
+.tabs.groups + .tabs button { font-size: 15px; }
+@media (max-width: 480px) {
+  .tabs.groups button, .tabs.groups + .tabs button { font-size: 12px; white-space: nowrap; flex: 0 0 auto; }
+}
+
+/* Status strip */
+.dstatus { gap: 6px; }
+.dstat-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.dstat { display: grid; gap: 0; align-content: start; }
+.dstat b { font-size: 18px; font-variant-numeric: tabular-nums; }
+@media (max-width: 420px) { .dstat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Audience funnel */
+.funnel { display: grid; gap: 4px; }
+.fstep { display: grid; grid-template-columns: minmax(110px, 1.3fr) 2fr 56px 44px; gap: 6px; align-items: center; }
+.fstep .fbar { height: 12px; background: var(--panel-2); border: 1px solid var(--line); }
+.fstep .fbar i { display: block; height: 100%; background: var(--basil); }
+.fstep.weak .fbar i { background: var(--bad); }
+.fstep.weak > span:first-child { color: var(--bad); font-weight: 700; }
+.fstep b { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* One order, unpacked */
+.order-bar { height: 18px; }
+.c-food { background: #c98a14; }
+.c-app { background: #1d5fbf; }
+.c-pack { background: #8a5431; }
+.c-rider { background: #6a4c9c; }
+.c-other { background: #6a5242; }
+.c-refund { background: var(--bad); }
+.c-profit { background: var(--good); }
+.swatch { display: inline-block; width: 10px; height: 10px; vertical-align: middle; border: 1px solid var(--edge); }
+
+/* Riders and vehicles */
+.rtable, .vtable, .scoretable { display: grid; gap: 2px; font-size: 13px; }
+.rt-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr) minmax(0, 1fr) 64px; gap: 6px; align-items: center; padding: 4px 6px; background: var(--field); border: 1px solid var(--line); }
+.vt-row { display: grid; grid-template-columns: minmax(64px, 1fr) 46px 40px 50px 32px minmax(96px, auto); gap: 4px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.vt-head, .st-head { color: var(--muted); font-size: 11px; }
+.vt-row .row { gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.vtable { overflow-x: auto; }
+@media (max-width: 600px) {
+  .rt-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .vt-row { grid-template-columns: minmax(70px, 1fr) 46px 40px 44px; }
+  .vt-row > :nth-child(4) { display: none; }
+  .vt-row > :nth-child(6) { grid-column: 1 / -1; }
+  .vt-row .row { justify-content: flex-start; }
+}
+
+/* Scorecard */
+.score-head { display: grid; grid-template-columns: auto auto 1fr; gap: 10px; align-items: center; }
+.score-head .big { font-size: 40px; line-height: 1; }
+.st-row { display: grid; grid-template-columns: minmax(84px, 1.5fr) 56px 44px 40px 28px minmax(64px, 1fr); gap: 6px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.st-row b { font-variant-numeric: tabular-nums; }
+@media (max-width: 480px) {
+  .st-row { grid-template-columns: minmax(80px, 1fr) 56px 40px 30px; }
+  .st-row > :nth-child(3), .st-row > :nth-child(6) { display: none; }
+}
+.grade { display: inline-grid; place-items: center; min-width: 26px; height: 22px; padding: 0 4px; font-family: var(--pixel); font-weight: 700; border: 2px solid var(--edge); color: #fff; }
+.grade.g-A { background: var(--good); }
+.grade.g-B { background: var(--basil); }
+.grade.g-C { background: var(--gold); }
+.grade.g-D { background: var(--warn); }
+.grade.g-E { background: var(--bad); }
+.score-head .grade { font-size: 22px; height: 36px; min-width: 40px; }
+.card.focus { border-color: var(--gold); }

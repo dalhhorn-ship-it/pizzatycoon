@@ -14,7 +14,7 @@ import { stateLocation } from './location';
 import { Rng } from './rng';
 import { hasTalent, onRota } from './staff';
 import { awarenessGain, discountFor, hasLoyalty, mktDelivery, mktFor, runSpendToday } from './marketing';
-import { audienceOf, catchment, dealTerms, deliveryCompetition, type DeliveryInput, deliveryLive, deliveryMinutes, deliveryReachMult, nextAudience, packingOf, ridersToday, rivalDeliveryOrders, settleDelivery } from './delivery';
+import { audienceOf, catchment, dealTerms, minOrderOf, zoneOf, deliveryCompetition, type DeliveryInput, deliveryLive, deliveryMinutes, deliveryReachMult, nextAudience, packingOf, ridersToday, rivalDeliveryOrders, settleDelivery } from './delivery';
 import { playerCompetition } from './rivals';
 import { followingDemand, nextFollowing, queueDelay, valueScore } from './formulas';
 
@@ -286,14 +286,15 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
   if (dlv && riders) {
     const markup = dlv.markup;
     const soft = onMenu.filter((r) => r.id === 'softDrink');
-    const base = catchment(district.district.id, district.footTraffic) * dt.orderRate * deliveryReachMult(dlv, state.day) * weekdayMult *
+    const minOrder = dt.minOrder[minOrderOf(dlv)];
+    const base = catchment(district.district.id, district.footTraffic, dt.zones[zoneOf(dlv)].adjacent) * minOrder.orders * dt.orderRate * deliveryReachMult(dlv, state.day) * weekdayMult *
       mktDelivery(campaigns, state.day, district.shares) * (1 - 0.5 * deliveryCompetition(state, district.district.id, dlv.drep)) * economyOf(state).demand;
     for (const sv of SERVICES) {
-      const deal = dealTerms(dlv, sv);
+      const deal = dealTerms(dlv, sv, weekday);
       const b = dBasket[sv];
-      b.mains = dt.mainsPerOrder + deal.extraMains;
+      b.mains = dt.mainsPerOrder + deal.extraMains + minOrder.mains;
       b.feeWaived = deal.feeWaived;
-      const drinks = dt.drinksPerOrder + deal.extraDrinks;
+      const drinks = dt.drinksPerOrder + deal.extraDrinks + minOrder.drinks;
       const desserts = dt.dessertsPerOrder + deal.extraDesserts;
       let sum = 0;
       for (const p of segPre) {

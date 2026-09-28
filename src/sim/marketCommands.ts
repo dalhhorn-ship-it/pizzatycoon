@@ -5,7 +5,7 @@ import { DELIVERY_DEALS } from '../data/deliveryDeals';
 import { T } from '../data/tunables';
 import { VENUES } from '../data/venues';
 import { type Command, fail, type GameEvent, type Result } from './commands';
-import { deliveryMissing, hasPacking, MODE_NAMES, newDelivery } from './delivery';
+import { deliveryMissing, hasPacking, MODE_NAMES, newDelivery, vehicleCount, vehicleSpec } from './delivery';
 import { ownedVenues } from './chain';
 import { buyPrice, economyOf } from './economy';
 import { locationFacts, stateLocation } from './location';
@@ -74,6 +74,18 @@ export function marketCommand(input: GameState, state: GameState, cmd: Command, 
       if (cmd.deal !== null && !DELIVERY_DEALS[cmd.deal]) return fail(input, 'Unknown deal.');
       d.deal = cmd.deal;
     }
+    if (cmd.zone) {
+      if (!T.delivery.zones[cmd.zone]) return fail(input, 'Unknown delivery zone.');
+      d.zone = cmd.zone;
+    }
+    if (cmd.minOrder) {
+      if (!T.delivery.minOrder[cmd.minOrder]) return fail(input, 'Unknown minimum order.');
+      d.minOrder = cmd.minOrder;
+    }
+    if (cmd.dealDays) {
+      if (!['all', 'weekdays', 'weekend'].includes(cmd.dealDays)) return fail(input, 'Unknown deal days.');
+      d.dealDays = cmd.dealDays;
+    }
     return null;
   }
   if (cmd.type === 'stopDelivery') {
@@ -85,18 +97,20 @@ export function marketCommand(input: GameState, state: GameState, cmd: Command, 
   if (cmd.type === 'buyVehicle') {
     const d = state.delivery;
     if (!d) return fail(input, 'Start delivery first.');
-    const v = T.delivery[cmd.kind];
+    const v = vehicleSpec(cmd.kind);
+    if (!v) return fail(input, 'Unknown vehicle.');
     const price = buyPrice(state, v.price);
-    if (state.cash < price) return fail(input, `A ${cmd.kind} costs $${price}.`);
+    if (state.cash < price) return fail(input, `${v.name === 'E-bike' ? 'An' : 'A'} ${v.name.toLowerCase()} costs $${price}.`);
     state.cash -= price;
-    d.vehicles[cmd.kind] += 1;
+    d.vehicles = { ...d.vehicles, [cmd.kind]: vehicleCount(d, cmd.kind) + 1 };
     return null;
   }
   if (cmd.type === 'sellVehicle') {
     const d = state.delivery;
-    if (!d || d.vehicles[cmd.kind] < 1) return fail(input, `There is no ${cmd.kind} to sell.`);
-    d.vehicles[cmd.kind] -= 1;
-    state.cash += Math.round(buyPrice(state, T.delivery[cmd.kind].price) * 0.8);
+    const v = vehicleSpec(cmd.kind);
+    if (!d || !v || vehicleCount(d, cmd.kind) < 1) return fail(input, `There is no ${v?.name.toLowerCase() ?? 'vehicle'} to sell.`);
+    d.vehicles = { ...d.vehicles, [cmd.kind]: vehicleCount(d, cmd.kind) - 1 };
+    state.cash += Math.round(buyPrice(state, v.price) * 0.8);
     return null;
   }
   if (cmd.type === 'mysteryDiner') {
