@@ -100,13 +100,13 @@ function card(sv: Service, days: readonly DayReport[], main: number): ServiceCar
   const checkA = A.check * main;
   const kpis: ServiceKpi[] = [
     kpi('filled', 'Seats filled', filled / A.filled, pct(filled), pct(A.filled), 25, 'promo',
-      `Guests against what the room and kitchen could serve at ${name}. Empty seats are a demand question: a set menu, ${sv === 'lunch' ? 'lunch flyers or coupons' : 'campaigns'}, prices or quality.`),
+      `Guests against what the room and kitchen could serve at ${name}. Empty seats are a demand question: a set menu, ${sv} flyers or coupons, prices or quality.`),
     kpi('fulfilled', 'Guests served', fulfilled / A.fulfilled, pct(fulfilled), pct(A.fulfilled), 20, FIX_FOR[bottleneck],
       `Guests served out of the guests who came at ${name}. The rest were turned away or left: the limit was ${bottleneck === 'none' ? 'nothing in particular' : bottleneck === 'cold' ? 'dough in the fridges' : `the ${bottleneck}`}.`),
     kpi('ticket', 'Ticket time', ticket > 0 ? A.ticket / ticket : 0, `${ticket.toFixed(0)} min`, `${A.ticket} min`, 15, 'kitchen',
       `Minutes from order to plate at ${name}. ${sv === 'lunch' ? 'Lunch guests are in a hurry: professionals walk off first.' : 'Long waits cost satisfaction.'} Faster stations or more cooks.`),
     kpi('check', 'Check per guest', checkA > 0 ? check / checkA : 0, dollars(check), dollars(checkA), 20, 'promo',
-      `What a guest spends at ${name}, against ${A.check}x your average main. Starters, desserts, the bar and set menus lift it; ${sv === 'lunch' ? 'coupons' : 'discounts'} lower it.`),
+      `What a guest spends at ${name}, against ${A.check}x your average main. Starters, desserts, the bar and set menus lift it; coupons and discounts lower it.`),
     kpi('margin', 'Margin after food', margin / A.margin, pct(margin), pct(A.margin), 20, 'menu',
       'Share of sales left after ingredients. Deep set menu discounts and coupons thin it; prices and ingredient tiers set it.'),
   ];

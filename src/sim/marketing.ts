@@ -56,10 +56,11 @@ export function mktFor(campaigns: readonly ActiveCampaign[] | undefined, s: Segm
     const c = CAMPAIGNS[a.id];
     if (!c || c.lift <= 0) continue;
     if (c.lunchOnly && service === 'dinner') continue;
+    if (c.dinnerOnly && service === 'lunch') continue;
     const w = audienceWeight(c, a.audience, s);
     if (w <= 0) continue;
     const sunday = c.sundayLift && weekday === 6 ? c.sundayLift : 0;
-    const perService = c.lunchOnly && service === undefined ? 0.5 : 1;
+    const perService = (c.lunchOnly || c.dinnerOnly) && service === undefined ? 0.5 : 1;
     lift += (c.lift + sunday) * w * fatigueOf(a.weeksRunning) * perService;
   }
   return Math.min(1 + T.marketing.liftCap, 1 + lift);
@@ -103,13 +104,14 @@ export function discountFor(campaigns: readonly ActiveCampaign[] | undefined, s:
   return d;
 }
 
-/** Lunch coupons: the share of a segment's main price given away at lunch. */
-export function lunchDiscountFor(campaigns: readonly ActiveCampaign[] | undefined, s: SegmentId, day: number): number {
+/** Lunch or dinner coupons: the share of a segment's main price given away at that service. */
+export function couponFor(campaigns: readonly ActiveCampaign[] | undefined, s: SegmentId, day: number, service: Service = 'lunch'): number {
   let d = 0;
   for (const a of campaigns ?? []) {
     if (!isActive(a, day)) continue;
     const c = CAMPAIGNS[a.id];
-    if (c?.lunchDiscount) d = Math.max(d, c.lunchDiscount * audienceWeight(c, a.audience, s));
+    const share = service === 'lunch' ? c?.lunchDiscount : c?.dinnerDiscount;
+    if (c && share) d = Math.max(d, share * audienceWeight(c, a.audience, s));
   }
   return d;
 }

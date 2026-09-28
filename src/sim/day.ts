@@ -13,7 +13,7 @@ import { economyOf } from './economy';
 import { stateLocation } from './location';
 import { Rng } from './rng';
 import { hasTalent, onRota } from './staff';
-import { awarenessGain, discountFor, hasLoyalty, lunchDiscountFor, mktDelivery, mktFor, runSpendToday } from './marketing';
+import { awarenessGain, couponFor, discountFor, hasLoyalty, mktDelivery, mktFor, runSpendToday } from './marketing';
 import { COUNTER_TAKE, MAX_TAKE, roomFit } from '../data/serviceDeals';
 import { liveDeal } from './serviceDeals';
 import { audienceOf, catchment, dealTerms, deliveryMenu, menuEffectOf, minOrderOf, zoneOf, deliveryCompetition, type DeliveryInput, deliveryLive, deliveryMinutes, deliveryReachMult, nextAudience, packingOf, ridersToday, rivalDeliveryOrders, settleDelivery } from './delivery';
@@ -291,7 +291,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
       cost += sideAttach[k] * c.avgCost;
       waste += sideAttach[k] * c.wasteCost;
     }
-    // Set menus and lunch coupons (service-deals.md 3): per service, on top of the plain check.
+    // Set menus and lunch or dinner coupons (service-deals.md 3): per service, on top of the plain check.
     const extraMeal = { lunch: barMinutes('lunch'), dinner: barMinutes('dinner') };
     const svCheck = { lunch: check, dinner: check };
     const svCost = { lunch: cost, dinner: cost };
@@ -300,13 +300,14 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
     const dealLoad = { lunch: 0, dinner: 0 };
     const valueCut = { lunch: 0, dinner: 0 };
     const extraDishes: Record<Service, { c: Choice; n: number }[]> = { lunch: [], dinner: [] };
-    const coupon = lunchDiscountFor(campaigns, id, state.day);
+    const coupon = { lunch: couponFor(campaigns, id, state.day, 'lunch'), dinner: couponFor(campaigns, id, state.day, 'dinner') };
     let primi: Choice | null | undefined;
-    if (coupon > 0) {
-      const off = coupon * choice.avgPrice * (1 - discount);
-      svCheck.lunch -= off;
-      given.lunch += off;
-      valueCut.lunch += coupon;
+    for (const sv of SERVICES) {
+      if (coupon[sv] <= 0) continue;
+      const off = coupon[sv] * choice.avgPrice * (1 - discount);
+      svCheck[sv] -= off;
+      given[sv] += off;
+      valueCut[sv] += coupon[sv];
     }
     for (const sv of SERVICES) {
       const deal = dealBy[sv];
@@ -316,7 +317,7 @@ export function simulateDay(state: GameState, a: Analysis, opts: DayOptions): Da
       if (t <= 0) continue;
       demandBy[sv] *= 1 + deal.lift * appeal;
       let full = choice.avgPrice;
-      let normal = choice.avgPrice * (1 - discount) - (sv === 'lunch' ? coupon * choice.avgPrice * (1 - discount) : 0);
+      let normal = choice.avgPrice * (1 - discount) - coupon[sv] * choice.avgPrice * (1 - discount);
       let extraCost = 0;
       let load = 0;
       for (const k of deal.courses) {

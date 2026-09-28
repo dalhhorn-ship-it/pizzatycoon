@@ -1,4 +1,4 @@
-// The Restaurant Scorecard tab (service-deals.md 5): lunch and dinner graded side by side, set menus and lunch promotions.
+// The Restaurant Scorecard tab (service-deals.md 5): lunch and dinner graded side by side, set menus and promotions per service.
 
 import { CAMPAIGNS, type CampaignId } from '../data/campaigns';
 import { dealsFor, SERVICE_DEALS, type ServiceDealId } from '../data/serviceDeals';
@@ -14,8 +14,11 @@ import type { GameState } from '../sim/state';
 import { act, h, money, pct, signed, signedMoney } from './dom';
 import type { PanelCtx } from './panels';
 
-/** Campaigns that bring guests to lunch, in the order the tab shows them. */
-const LUNCH_CAMPAIGNS: CampaignId[] = ['lunchFlyers', 'lunchCoupons', 'lunchClub'];
+/** Campaigns that bring guests to one service, in the order the tab shows them. */
+const PROMOS: Record<Service, CampaignId[]> = {
+  lunch: ['lunchFlyers', 'lunchCoupons', 'lunchClub'],
+  dinner: ['dinnerFlyers', 'dinnerCoupons', 'dateNight'],
+};
 const SV_NAME: Record<Service, string> = { lunch: 'Lunch', dinner: 'Dinner' };
 /** The Restaurant tab each fix opens; 'promo' stays here. */
 export type RestaurantTab = 'menu' | 'kitchen' | 'room' | 'staff';
@@ -131,16 +134,17 @@ function dealCard(ctx: PanelCtx, sv: Service, now: Week): HTMLElement {
     })));
 }
 
-// ---------- Lunch promotions ----------
+// ---------- Lunch and dinner promotions ----------
 
-function lunchPromos(ctx: PanelCtx, now: Week): HTMLElement {
+function promos(ctx: PanelCtx, sv: Service, now: Week): HTMLElement {
   const state = ctx.state;
   const facts = stateLocation(state);
   const active = (state.campaigns ?? []).filter((a) => isActive(a, state.day) || a.renew);
   const slots = slotsUsed(state.campaigns, state.day);
-  return h('div', { class: 'card' }, h('h3', null, h('span', null, '📣 Lunch promotions'), h('span', { class: 'small' }, `${slots} of ${T.marketing.maxActive} campaign slots used`)),
-    h('div', { class: 'small muted' }, 'Lunch only: they leave dinner as it is. More dinner guests come from the campaigns under Rivals · Marketing.'),
-    ...LUNCH_CAMPAIGNS.map((id) => {
+  const other = sv === 'lunch' ? 'dinner' : 'lunch';
+  return h('div', { class: 'card' }, h('h3', null, h('span', null, `📣 ${SV_NAME[sv]} promotions`), h('span', { class: 'small' }, `${slots} of ${T.marketing.maxActive} campaign slots used`)),
+    h('div', { class: 'small muted' }, `${SV_NAME[sv]} only: they leave ${other} as it is. Campaigns for the whole day are under Rivals · Marketing.`),
+    ...PROMOS[sv].map((id) => {
       const c = CAMPAIGNS[id];
       const running = active.find((a) => a.id === id);
       const unlocked = campaignUnlocked(state, c);
@@ -148,7 +152,7 @@ function lunchPromos(ctx: PanelCtx, now: Week): HTMLElement {
       let preview: string | null = null;
       if (unlocked && !running) {
         const hyp = [...(state.campaigns ?? []).filter((y) => y.id !== id), { ...newCampaign(id, [], state.day, facts), startDay: state.day - 7, endsDay: state.day + 30, spent: 0 }];
-        preview = vsNow('lunch', week(state, { campaigns: hyp }), now);
+        preview = vsNow(sv, week(state, { campaigns: hyp }), now);
       }
       return h('div', { class: `fit ${running ? 'installed' : ''}` },
         h('div', { class: 'spread' }, h('b', null, c.name), h('span', { class: 'small' }, `${money(cost)} a week`)),
@@ -178,6 +182,7 @@ export function scorecardPanel(ctx: PanelCtx, go: (t: RestaurantTab) => void): H
     ...(sc ? [scoreCard(sc, go), focusCard(sc, go), glance(sc)]
       : [h('div', { class: 'card' }, h('h3', null, 'Restaurant score'), h('div', { class: 'small muted' }, 'After the first day open, lunch and dinner are graded here side by side.'))]),
     dealCard(ctx, 'lunch', now),
-    lunchPromos(ctx, now),
-    dealCard(ctx, 'dinner', now));
+    promos(ctx, 'lunch', now),
+    dealCard(ctx, 'dinner', now),
+    promos(ctx, 'dinner', now));
 }

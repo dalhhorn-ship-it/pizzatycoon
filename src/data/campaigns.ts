@@ -4,7 +4,7 @@ import type { SegmentId, Unlock } from './types';
 
 export type CampaignId =
   | 'flyers' | 'social' | 'studentDeal' | 'familySundays' | 'lunchClub' | 'tourGuide' | 'foodiePress' | 'loyalty' | 'radio' | 'promotedListing'
-  | 'appVoucher' | 'doorHangers' | 'foodInfluencer' | 'lunchFlyers' | 'lunchCoupons';
+  | 'appVoucher' | 'doorHangers' | 'foodInfluencer' | 'lunchFlyers' | 'lunchCoupons' | 'dinnerFlyers' | 'dinnerCoupons' | 'dateNight';
 
 export interface Campaign {
   id: CampaignId;
@@ -32,10 +32,14 @@ export interface Campaign {
   effect: string;
   blurb: string;
   lunchOnly?: boolean;
+  /** Brings guests to dinner only; lunch stays as it is. */
+  dinnerOnly?: boolean;
   /** Extra lift on Sundays. */
   sundayLift?: number;
   /** Lunch coupons: guests it reaches pay this share less for mains at lunch (already weighted by how many redeem). */
   lunchDiscount?: number;
+  /** Dinner coupons: the same at dinner. */
+  dinnerDiscount?: number;
   /** Students pay this much less for mains. */
   discount?: { segment: SegmentId; share: number };
   /** Loyalty cards: share of dining sales, following decline x0.5 and target +0.05. */
@@ -114,6 +118,21 @@ export const CAMPAIGNS: Record<CampaignId, Campaign> = {
     id: 'lunchCoupons', name: 'Lunch coupons', cost: 60, scaled: true, runDays: 7, renews: true, lift: 0.25, lunchOnly: true, lunchDiscount: 0.07,
     audience: { students: 1, professionals: 0.9, seniors: 0.9, families: 0.7, tourists: 0.4, foodies: 0.2 }, deliveryLift: 0, awareness: 0.01,
     unlock: { kind: 'day', day: 8 }, effect: '+25% lunch guests; coupon holders pay 20% less for mains at lunch (about 7% across lunch)', blurb: '20% off your pizza before 3pm. Cheap to print, paid for in margin.', rivals: false,
+  },
+  dinnerFlyers: {
+    id: 'dinnerFlyers', name: 'Dinner flyers', cost: 100, scaled: true, runDays: 7, renews: true, lift: 0.1, dinnerOnly: true,
+    audience: { families: 1, seniors: 0.8, foodies: 0.6, tourists: 0.6, professionals: 0.4, students: 0.4 }, deliveryLift: 0, awareness: 0.015,
+    unlock: { kind: 'start' }, effect: '+10% dinner guests, most of all families and neighbours', blurb: 'Tonight\'s specials through the letterboxes of the streets around you.', rivals: false,
+  },
+  dinnerCoupons: {
+    id: 'dinnerCoupons', name: 'Dinner coupons', cost: 80, scaled: true, runDays: 7, renews: true, lift: 0.2, dinnerOnly: true, dinnerDiscount: 0.05,
+    audience: { students: 1, families: 1, seniors: 0.8, professionals: 0.5, tourists: 0.4, foodies: 0.2 }, deliveryLift: 0, awareness: 0.01,
+    unlock: { kind: 'day', day: 8 }, effect: '+20% dinner guests; coupon holders pay 15% less for mains at dinner (about 5% across dinner)', blurb: '15% off your mains from 6pm. Fills the quiet tables, paid for in margin.', rivals: false,
+  },
+  dateNight: {
+    id: 'dateNight', name: 'Date night promotion', cost: 220, scaled: true, runDays: 7, renews: true, lift: 0.16, dinnerOnly: true,
+    audience: { foodies: 1, professionals: 0.8, tourists: 0.7, seniors: 0.4, students: 0.3, families: 0 }, deliveryLift: 0, awareness: 0.02,
+    unlock: { kind: 'rep', rep: 40 }, effect: '+16% dinner guests from couples: foodies, professionals and visitors; no discount', blurb: 'Candles, a glass of prosecco on arrival and a poster in every bar nearby.', rivals: false,
   },
 };
 

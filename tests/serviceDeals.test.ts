@@ -106,6 +106,27 @@ describe('lunch promotions', () => {
   });
 });
 
+describe('dinner promotions', () => {
+  test('dinner flyers and a date night bring dinner guests only', () => {
+    const r0 = day(office);
+    for (const id of ['dinnerFlyers', 'dateNight'] as CampaignId[]) {
+      const r1 = day(withCampaign(office, id));
+      expect(sv(r1, 'dinner').demand, id).toBeGreaterThan(sv(r0, 'dinner').demand * 1.04);
+      expect(sv(r1, 'lunch').demand, id).toBeCloseTo(sv(r0, 'lunch').demand, 6);
+      expect(perGuest(r1, 'dinner'), id).toBeCloseTo(perGuest(r0, 'dinner'), 6);
+    }
+  });
+
+  test('dinner coupons bring dinner guests at a lower dinner check', () => {
+    const r0 = day(office);
+    const r1 = day(withCampaign(office, 'dinnerCoupons'));
+    expect(sv(r1, 'dinner').demand).toBeGreaterThan(sv(r0, 'dinner').demand * 1.08);
+    expect(perGuest(r1, 'dinner')).toBeLessThan(perGuest(r0, 'dinner'));
+    expect(sv(r1, 'dinner').dealGiven).toBeGreaterThan(0);
+    expect(perGuest(r1, 'lunch')).toBeCloseTo(perGuest(r0, 'lunch'), 6);
+  });
+});
+
 describe('scorecard', () => {
   test('grades lunch and dinner side by side and names a focus', () => {
     const s = structuredClone(office);
